@@ -335,16 +335,16 @@ class SSLPrivateKeyInternal : public net::SSLPrivateKey {
   mojo::Remote<mojom::SSLPrivateKey> ssl_private_key_;
 };
 
-bool ShouldNotifyAboutCookie(net::CookieInclusionStatus status) {
+// bool ShouldNotifyAboutCookie(net::CookieInclusionStatus status) {
   // Notify about cookies actually used, and those blocked by preferences ---
   // for purposes of cookie UI --- as well those carrying warnings pertaining to
   // SameSite features, in order to issue a deprecation warning for them.
-  return status.IsInclude() || status.ShouldWarn() ||
-         status.HasExclusionReason(
-             net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES) ||
-         status.HasExclusionReason(
-             net::CookieInclusionStatus::EXCLUDE_INVALID_SAMEPARTY);
-}
+//   return status.IsInclude() || status.ShouldWarn() ||
+//          status.HasExclusionReason(
+//              net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES) ||
+//          status.HasExclusionReason(
+//              net::CookieInclusionStatus::EXCLUDE_INVALID_SAMEPARTY);
+// }
 
 // Concerning headers that consumers probably shouldn't be allowed to set.
 // Gathering numbers on these before adding them to kUnsafeHeaders.
@@ -2119,7 +2119,7 @@ bool URLLoader::DispatchOnRawResponse() {
 
   emitted_devtools_raw_response_ = true;
   devtools_observer->OnRawResponse(
-      devtools_request_id().value(), url_request_->maybe_stored_cookies(),
+      devtools_request_id().value(), /* url_request_->maybe_stored_cookies(), */
       std::move(header_array), raw_response_headers,
       IPEndPointToIPAddressSpace(response_info.remote_endpoint),
       response_headers->response_code());
@@ -2292,24 +2292,24 @@ URLLoader::BlockResponseForCorbResult URLLoader::BlockResponseForCorb(
 void URLLoader::ReportFlaggedResponseCookies() {
   if (auto* cookie_observer = GetCookieAccessObserver()) {
     std::vector<mojom::CookieOrLineWithAccessResultPtr> reported_cookies;
-    for (const auto& cookie_line_and_access_result :
-         url_request_->maybe_stored_cookies()) {
-      if (ShouldNotifyAboutCookie(
-              cookie_line_and_access_result.access_result.status)) {
-        mojom::CookieOrLinePtr cookie_or_line = mojom::CookieOrLine::New();
-        if (cookie_line_and_access_result.cookie.has_value()) {
-          cookie_or_line->set_cookie(
-              cookie_line_and_access_result.cookie.value());
-        } else {
-          cookie_or_line->set_cookie_string(
-              cookie_line_and_access_result.cookie_string);
-        }
+    // for (const auto& cookie_line_and_access_result :
+    //      url_request_->maybe_stored_cookies()) {
+    //   if (ShouldNotifyAboutCookie(
+    //           cookie_line_and_access_result.access_result.status)) {
+    //     mojom::CookieOrLinePtr cookie_or_line = mojom::CookieOrLine::New();
+    //     if (cookie_line_and_access_result.cookie.has_value()) {
+    //       cookie_or_line->set_cookie(
+    //           cookie_line_and_access_result.cookie.value());
+    //     } else {
+    //       cookie_or_line->set_cookie_string(
+    //           cookie_line_and_access_result.cookie_string);
+    //     }
 
-        reported_cookies.push_back(mojom::CookieOrLineWithAccessResult::New(
-            std::move(cookie_or_line),
-            cookie_line_and_access_result.access_result));
-      }
-    }
+    //     reported_cookies.push_back(mojom::CookieOrLineWithAccessResult::New(
+    //         std::move(cookie_or_line),
+    //         cookie_line_and_access_result.access_result));
+    //   }
+    // }
 
     if (!reported_cookies.empty()) {
       cookie_observer->OnCookiesAccessed(mojom::CookieAccessDetails::New(

@@ -363,7 +363,7 @@ int URLRequestHttpJob::NotifyConnectedCallback(
 void URLRequestHttpJob::NotifyHeadersComplete() {
   DCHECK(!response_info_);
   DCHECK_EQ(0, num_cookie_lines_left_);
-  DCHECK(request_->maybe_stored_cookies().empty());
+  // DCHECK(request_->maybe_stored_cookies().empty());
 
   if (override_response_info_) {
     DCHECK(!transaction_);

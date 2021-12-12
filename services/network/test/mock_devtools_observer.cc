@@ -42,14 +42,14 @@ void MockDevToolsObserver::OnRawRequest(
 
 void MockDevToolsObserver::OnRawResponse(
     const std::string& devtools_request_id,
-    const net::CookieAndLineAccessResultList& cookies_with_access_result,
+    // const net::CookieAndLineAccessResultList& cookies_with_access_result,
     std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
     const absl::optional<std::string>& raw_response_headers,
     network::mojom::IPAddressSpace resource_address_space,
     int32_t http_status_code) {
-  raw_response_cookies_.insert(raw_response_cookies_.end(),
-                               cookies_with_access_result.begin(),
-                               cookies_with_access_result.end());
+  // raw_response_cookies_.insert(raw_response_cookies_.end(),
+  //                              cookies_with_access_result.begin(),
+  //                              cookies_with_access_result.end());
   got_raw_response_ = true;
   devtools_request_id_ = devtools_request_id;
   resource_address_space_ = resource_address_space;

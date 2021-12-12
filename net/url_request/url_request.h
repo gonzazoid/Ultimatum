@@ -579,9 +579,9 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   //  return maybe_sent_cookies_;
   // }
   // Populated after the response headers are received.
-  const CookieAndLineAccessResultList& maybe_stored_cookies() const {
-    return maybe_stored_cookies_;
-  }
+  // const CookieAndLineAccessResultList& maybe_stored_cookies() const {
+  //   return maybe_stored_cookies_;
+  // }
 
   // The new flags may change the IGNORE_LIMITS flag only when called
   // before Start() is called, it must only set the flag, and if set,
@@ -957,7 +957,7 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   SecureDnsPolicy secure_dns_policy_;
 
   // CookieAccessResultList maybe_sent_cookies_;
-  CookieAndLineAccessResultList maybe_stored_cookies_;
+  // CookieAndLineAccessResultList maybe_stored_cookies_;
 
 #if BUILDFLAG(ENABLE_REPORTING)
   int reporting_upload_depth_;

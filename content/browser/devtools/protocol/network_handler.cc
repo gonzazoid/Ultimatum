@@ -598,25 +598,25 @@ std::unique_ptr<Network::ResourceTiming> GetTiming(
 //       .Build();
 // }
 
-std::unique_ptr<Object> GetRawHeaders(
-    const std::vector<network::mojom::HttpRawHeaderPairPtr>& headers) {
-  std::unique_ptr<DictionaryValue> headers_dict(DictionaryValue::create());
-  for (const auto& header : headers) {
-    std::string value;
-    bool merge_with_another = headers_dict->getString(header->key, &value);
-    std::string header_value;
-    if (!base::ConvertToUtf8AndNormalize(header->value, base::kCodepageLatin1,
-                                         &header_value)) {
-      // For response headers, the encoding could be anything, so conversion
-      // might fail; in that case this is the most useful thing we can do.
-      header_value = header->value;
-    }
-    headers_dict->setString(header->key, merge_with_another
-                                             ? value + '\n' + header_value
-                                             : header_value);
-  }
-  return Object::fromValue(headers_dict.get(), nullptr);
-}
+// std::unique_ptr<Object> GetRawHeaders(
+//     const std::vector<network::mojom::HttpRawHeaderPairPtr>& headers) {
+//   std::unique_ptr<DictionaryValue> headers_dict(DictionaryValue::create());
+//   for (const auto& header : headers) {
+//     std::string value;
+//     bool merge_with_another = headers_dict->getString(header->key, &value);
+//     std::string header_value;
+//     if (!base::ConvertToUtf8AndNormalize(header->value, base::kCodepageLatin1,
+//                                          &header_value)) {
+//       // For response headers, the encoding could be anything, so conversion
+//       // might fail; in that case this is the most useful thing we can do.
+//       header_value = header->value;
+//     }
+//     headers_dict->setString(header->key, merge_with_another
+//                                              ? value + '\n' + header_value
+//                                              : header_value);
+//   }
+//   return Object::fromValue(headers_dict.get(), nullptr);
+// }
 
 String GetProtocol(const GURL& url,
                    const network::mojom::URLResponseHeadDevToolsInfo& info) {
@@ -703,102 +703,102 @@ std::unique_ptr<Array<Network::SignedExchangeError>> BuildSignedExchangeErrors(
   return signed_exchange_errors;
 }
 
-std::unique_ptr<Array<Network::SetCookieBlockedReason>>
-GetProtocolBlockedSetCookieReason(net::CookieInclusionStatus status) {
-  std::unique_ptr<Array<Network::SetCookieBlockedReason>> blockedReasons =
-      std::make_unique<Array<Network::SetCookieBlockedReason>>();
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SECURE_ONLY)) {
-    blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::SecureOnly);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_STRICT)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(
-          Network::SetCookieBlockedReasonEnum::SchemefulSameSiteStrict);
-    } else {
-      blockedReasons->push_back(
-          Network::SetCookieBlockedReasonEnum::SameSiteStrict);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_LAX)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(
-          Network::SetCookieBlockedReasonEnum::SchemefulSameSiteLax);
-    } else {
-      blockedReasons->push_back(
-          Network::SetCookieBlockedReasonEnum::SameSiteLax);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::
-              EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::
-                                    SchemefulSameSiteUnspecifiedTreatedAsLax);
-    } else {
-      blockedReasons->push_back(
-          Network::SetCookieBlockedReasonEnum::SameSiteUnspecifiedTreatedAsLax);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::SameSiteNoneInsecure);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::UserPreferences);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::SamePartyFromCrossPartyContext);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_FAILURE_TO_STORE)) {
-    blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::SyntaxError);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_NONCOOKIEABLE_SCHEME)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::SchemeNotSupported);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::OverwriteSecure);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_INVALID_DOMAIN)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::InvalidDomain);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_INVALID_PREFIX)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::InvalidPrefix);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_INVALID_SAMEPARTY)) {
-    blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::
-                                  SamePartyConflictsWithOtherAttributes);
-  }
-  if (status.HasExclusionReason(net::CookieInclusionStatus::
-                                    EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::NameValuePairExceedsMaxSize);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR)) {
-    blockedReasons->push_back(
-        Network::SetCookieBlockedReasonEnum::UnknownError);
-  }
+// std::unique_ptr<Array<Network::SetCookieBlockedReason>>
+// GetProtocolBlockedSetCookieReason(net::CookieInclusionStatus status) {
+//   std::unique_ptr<Array<Network::SetCookieBlockedReason>> blockedReasons =
+//       std::make_unique<Array<Network::SetCookieBlockedReason>>();
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SECURE_ONLY)) {
+//     blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::SecureOnly);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_STRICT)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(
+//           Network::SetCookieBlockedReasonEnum::SchemefulSameSiteStrict);
+//     } else {
+//       blockedReasons->push_back(
+//           Network::SetCookieBlockedReasonEnum::SameSiteStrict);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_LAX)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(
+//           Network::SetCookieBlockedReasonEnum::SchemefulSameSiteLax);
+//     } else {
+//       blockedReasons->push_back(
+//           Network::SetCookieBlockedReasonEnum::SameSiteLax);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::
+//               EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::
+//                                     SchemefulSameSiteUnspecifiedTreatedAsLax);
+//     } else {
+//       blockedReasons->push_back(
+//           Network::SetCookieBlockedReasonEnum::SameSiteUnspecifiedTreatedAsLax);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::SameSiteNoneInsecure);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::UserPreferences);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::SamePartyFromCrossPartyContext);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_FAILURE_TO_STORE)) {
+//     blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::SyntaxError);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_NONCOOKIEABLE_SCHEME)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::SchemeNotSupported);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::OverwriteSecure);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_INVALID_DOMAIN)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::InvalidDomain);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_INVALID_PREFIX)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::InvalidPrefix);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_INVALID_SAMEPARTY)) {
+//     blockedReasons->push_back(Network::SetCookieBlockedReasonEnum::
+//                                   SamePartyConflictsWithOtherAttributes);
+//   }
+//   if (status.HasExclusionReason(net::CookieInclusionStatus::
+//                                     EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::NameValuePairExceedsMaxSize);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR)) {
+//     blockedReasons->push_back(
+//         Network::SetCookieBlockedReasonEnum::UnknownError);
+//   }
 
-  return blockedReasons;
-}
+//   return blockedReasons;
+// }
 
 // std::unique_ptr<Array<Network::CookieBlockedReason>>
 // GetProtocolBlockedCookieReason(net::CookieInclusionStatus status) {
@@ -875,29 +875,29 @@ GetProtocolBlockedSetCookieReason(net::CookieInclusionStatus status) {
 //   return blockedReasons;
 // }
 
-std::unique_ptr<Array<Network::BlockedSetCookieWithReason>>
-BuildProtocolBlockedSetCookies(
-    const net::CookieAndLineAccessResultList& net_list) {
-  std::unique_ptr<Array<Network::BlockedSetCookieWithReason>> protocol_list =
-      std::make_unique<Array<Network::BlockedSetCookieWithReason>>();
+// std::unique_ptr<Array<Network::BlockedSetCookieWithReason>>
+// BuildProtocolBlockedSetCookies(
+//     const net::CookieAndLineAccessResultList& net_list) {
+//   std::unique_ptr<Array<Network::BlockedSetCookieWithReason>> protocol_list =
+//       std::make_unique<Array<Network::BlockedSetCookieWithReason>>();
 
-  for (const net::CookieAndLineWithAccessResult& cookie : net_list) {
-    std::unique_ptr<Array<Network::SetCookieBlockedReason>> blocked_reasons =
-        GetProtocolBlockedSetCookieReason(cookie.access_result.status);
-    if (!blocked_reasons->size())
-      continue;
+//   for (const net::CookieAndLineWithAccessResult& cookie : net_list) {
+//     std::unique_ptr<Array<Network::SetCookieBlockedReason>> blocked_reasons =
+//         GetProtocolBlockedSetCookieReason(cookie.access_result.status);
+//     if (!blocked_reasons->size())
+//       continue;
 
-    protocol_list->push_back(
-        Network::BlockedSetCookieWithReason::Create()
-            .SetBlockedReasons(std::move(blocked_reasons))
-            .SetCookieLine(cookie.cookie_string)
-            .SetCookie(cookie.cookie.has_value()
-                           ? BuildCookie(cookie.cookie.value())
-                           : nullptr)
-            .Build());
-  }
-  return protocol_list;
-}
+//     protocol_list->push_back(
+//         Network::BlockedSetCookieWithReason::Create()
+//             .SetBlockedReasons(std::move(blocked_reasons))
+//             .SetCookieLine(cookie.cookie_string)
+//             .SetCookie(cookie.cookie.has_value()
+//                            ? BuildCookie(cookie.cookie.value())
+//                            : nullptr)
+//             .Build());
+//   }
+//   return protocol_list;
+// }
 
 // std::unique_ptr<Array<Network::BlockedCookieWithReason>>
 // BuildProtocolAssociatedCookies(const net::CookieAccessResultList& net_list) {
@@ -2735,10 +2735,10 @@ void NetworkHandler::OnRequestWillBeSentExtraInfo(
   //     GetRawHeaders(request_headers), GetConnectTiming(timestamp),
   //     MaybeBuildClientSecurityState(security_state));
 }
-
+// XXX Remove
 void NetworkHandler::OnResponseReceivedExtraInfo(
     const std::string& devtools_request_id,
-    const net::CookieAndLineAccessResultList& response_cookie_list,
+    // const net::CookieAndLineAccessResultList& response_cookie_list,
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& response_headers,
     const absl::optional<std::string>& response_headers_text,
     network::mojom::IPAddressSpace resource_address_space,
@@ -2746,12 +2746,12 @@ void NetworkHandler::OnResponseReceivedExtraInfo(
   if (!enabled_)
     return;
 
-  frontend_->ResponseReceivedExtraInfo(
-      devtools_request_id, BuildProtocolBlockedSetCookies(response_cookie_list),
-      GetRawHeaders(response_headers),
-      BuildIpAddressSpace(resource_address_space), http_status_code,
-      response_headers_text.has_value() ? response_headers_text.value()
-                                        : Maybe<String>());
+  // frontend_->ResponseReceivedExtraInfo(
+  //     devtools_request_id, BuildProtocolBlockedSetCookies(response_cookie_list),
+  //     GetRawHeaders(response_headers),
+  //     BuildIpAddressSpace(resource_address_space), http_status_code,
+  //     response_headers_text.has_value() ? response_headers_text.value()
+  //                                       : Maybe<String>());
 }
 
 void NetworkHandler::OnLoadNetworkResourceFinished(

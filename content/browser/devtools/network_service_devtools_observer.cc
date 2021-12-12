@@ -65,7 +65,7 @@ void NetworkServiceDevToolsObserver::OnRawRequest(
 
 void NetworkServiceDevToolsObserver::OnRawResponse(
     const std::string& devtools_request_id,
-    const net::CookieAndLineAccessResultList& response_cookie_list,
+    // const net::CookieAndLineAccessResultList& response_cookie_list,
     std::vector<network::mojom::HttpRawHeaderPairPtr> response_headers,
     const absl::optional<std::string>& response_headers_text,
     network::mojom::IPAddressSpace resource_address_space,
@@ -74,7 +74,7 @@ void NetworkServiceDevToolsObserver::OnRawResponse(
   if (!host)
     return;
   DispatchToAgents(host, &protocol::NetworkHandler::OnResponseReceivedExtraInfo,
-                   devtools_request_id, response_cookie_list, response_headers,
+                   devtools_request_id, /* response_cookie_list, */ response_headers,
                    response_headers_text, resource_address_space,
                    http_status_code);
 }

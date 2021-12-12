@@ -75,7 +75,7 @@ interface DevToolsObserver {
   // the URLLoader.
   OnRawResponse(
     string devtool_request_id,
-    array<CookieAndLineWithAccessResult> cookies_with_access_result,
+    // array<CookieAndLineWithAccessResult> cookies_with_access_result,
     array<HttpRawHeaderPair> headers,
     string? raw_response_headers,
     IPAddressSpace resource_address_space,

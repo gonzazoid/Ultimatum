@@ -38,7 +38,7 @@ class MockDevToolsObserver : public mojom::DevToolsObserver {
 
   void OnRawResponse(
       const std::string& devtools_request_id,
-      const net::CookieAndLineAccessResultList& cookies_with_access_result,
+      // const net::CookieAndLineAccessResultList& cookies_with_access_result,
       std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
       const absl::optional<std::string>& raw_response_headers,
       network::mojom::IPAddressSpace resource_address_space,
