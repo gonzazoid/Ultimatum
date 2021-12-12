@@ -58,7 +58,7 @@ namespace {
 bool g_url_requests_started = false;
 
 // True if cookies are accepted by default.
-bool g_default_can_use_cookies = true;
+// bool g_default_can_use_cookies = true;
 
 // When the URLRequest first assempts load timing information, it has the times
 // at which each event occurred.  The API requires the time which the request
@@ -450,10 +450,10 @@ void URLRequest::SetSecureDnsPolicy(SecureDnsPolicy secure_dns_policy) {
 }
 
 // static
-void URLRequest::SetDefaultCookiePolicyToBlock() {
-  CHECK(!g_url_requests_started);
-  g_default_can_use_cookies = false;
-}
+// void URLRequest::SetDefaultCookiePolicyToBlock() {
+//   CHECK(!g_url_requests_started);
+//   g_default_can_use_cookies = false;
+// }
 
 void URLRequest::SetURLChain(const std::vector<GURL>& url_chain) {
   DCHECK(!job_);
@@ -1055,34 +1055,35 @@ void URLRequest::NotifySSLCertificateError(int net_error,
   OnCallToDelegate(NetLogEventType::URL_REQUEST_DELEGATE_SSL_CERTIFICATE_ERROR);
   delegate_->OnSSLCertificateError(this, net_error, ssl_info, fatal);
 }
-
+// XXX remove
 void URLRequest::AnnotateAndMoveUserBlockedCookies(
     CookieAccessResultList& maybe_included_cookies,
     CookieAccessResultList& excluded_cookies) const {
   DCHECK_EQ(privacy_mode_, PrivacyMode::PRIVACY_MODE_DISABLED);
-  bool can_get_cookies = g_default_can_use_cookies;
-  if (network_delegate()) {
-    can_get_cookies = network_delegate()->AnnotateAndMoveUserBlockedCookies(
-        *this, maybe_included_cookies, excluded_cookies,
-        /*allowed_from_caller=*/true);
-  }
+  // bool can_get_cookies = g_default_can_use_cookies;
+  // if (network_delegate()) {
+  //   can_get_cookies = network_delegate()->AnnotateAndMoveUserBlockedCookies(
+  //       *this, maybe_included_cookies, excluded_cookies,
+  //       /*allowed_from_caller=*/true);
+  // }
 
-  if (!can_get_cookies)
-    net_log_.AddEvent(NetLogEventType::COOKIE_GET_BLOCKED_BY_NETWORK_DELEGATE);
+  // if (!can_get_cookies)
+  //   net_log_.AddEvent(NetLogEventType::COOKIE_GET_BLOCKED_BY_NETWORK_DELEGATE);
 }
-
+// XXX remove
 bool URLRequest::CanSetCookie(const net::CanonicalCookie& cookie,
                               CookieOptions* options) const {
   DCHECK(!(load_flags_ & LOAD_DO_NOT_SAVE_COOKIES));
-  bool can_set_cookies = g_default_can_use_cookies;
-  if (network_delegate()) {
-    can_set_cookies =
-        network_delegate()->CanSetCookie(*this, cookie, options,
-                                         /*allowed_from_caller=*/true);
-  }
-  if (!can_set_cookies)
-    net_log_.AddEvent(NetLogEventType::COOKIE_SET_BLOCKED_BY_NETWORK_DELEGATE);
-  return can_set_cookies;
+  // bool can_set_cookies = g_default_can_use_cookies;
+  // if (network_delegate()) {
+  //   can_set_cookies =
+  //       network_delegate()->CanSetCookie(*this, cookie, options,
+  //                                        /*allowed_from_caller=*/true);
+  // }
+  // if (!can_set_cookies)
+  //   net_log_.AddEvent(NetLogEventType::COOKIE_SET_BLOCKED_BY_NETWORK_DELEGATE);
+  // return can_set_cookies;
+  return false;
 }
 
 PrivacyMode URLRequest::DeterminePrivacyMode() const {
@@ -1100,7 +1101,7 @@ PrivacyMode URLRequest::DeterminePrivacyMode() const {
   // |g_default_can_use_cookies| if not.
   // TODO(mmenke): Looks like |g_default_can_use_cookies| is not too useful,
   // with the network service - remove it.
-  bool enable_privacy_mode = !g_default_can_use_cookies;
+  bool enable_privacy_mode = true; // !g_default_can_use_cookies;
   if (network_delegate()) {
     enable_privacy_mode = network_delegate()->ForcePrivacyMode(
         url(), site_for_cookies_, isolation_info_.top_frame_origin(),

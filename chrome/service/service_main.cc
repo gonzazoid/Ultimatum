@@ -29,7 +29,7 @@ int CloudPrintServiceProcessMain(content::MainFunctionParams parameters) {
 
   // Chrome disallows cookies by default. All code paths that want to use
   // cookies should go through the browser process.
-  net::URLRequest::SetDefaultCookiePolicyToBlock();
+  // net::URLRequest::SetDefaultCookiePolicyToBlock();
 
   base::PlatformThread::SetName("CrServiceMain");
 
