@@ -404,12 +404,12 @@ void URLRequestJob::NotifySSLCertificateError(int net_error,
                                               bool fatal) {
   request_->NotifySSLCertificateError(net_error, ssl_info, fatal);
 }
-
+// XXX remove
 void URLRequestJob::AnnotateAndMoveUserBlockedCookies(
     CookieAccessResultList& maybe_included_cookies,
     CookieAccessResultList& excluded_cookies) const {
-  request_->AnnotateAndMoveUserBlockedCookies(maybe_included_cookies,
-                                              excluded_cookies);
+  // request_->AnnotateAndMoveUserBlockedCookies(maybe_included_cookies,
+  //                                             excluded_cookies);
 }
 
 // bool URLRequestJob::CanSetCookie(const net::CanonicalCookie& cookie,

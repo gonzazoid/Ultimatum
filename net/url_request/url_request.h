@@ -894,9 +894,9 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // These functions delegate to the NetworkDelegate if it is not nullptr.
   // Otherwise, cookies can be used unless SetDefaultCookiePolicyToBlock() has
   // been called.
-  void AnnotateAndMoveUserBlockedCookies(
-      CookieAccessResultList& maybe_included_cookies,
-      CookieAccessResultList& excluded_cookies) const;
+  // void AnnotateAndMoveUserBlockedCookies(
+  //     CookieAccessResultList& maybe_included_cookies,
+  //     CookieAccessResultList& excluded_cookies) const;
 //   bool CanSetCookie(const net::CanonicalCookie& cookie,
 //                     CookieOptions* options) const;
   PrivacyMode DeterminePrivacyMode() const;
