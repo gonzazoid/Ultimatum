@@ -561,8 +561,8 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // Returns the Secure DNS Policy for the request.
   SecureDnsPolicy secure_dns_policy() const { return secure_dns_policy_; }
 
-  void set_maybe_sent_cookies(CookieAccessResultList cookies);
-  void set_maybe_stored_cookies(CookieAndLineAccessResultList cookies);
+  // void set_maybe_sent_cookies(CookieAccessResultList cookies);
+  // void set_maybe_stored_cookies(CookieAndLineAccessResultList cookies);
 
   // These lists contain a list of cookies that are associated with the given
   // request, both those that were sent and accepted, and those that were

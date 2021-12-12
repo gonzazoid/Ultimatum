@@ -381,7 +381,7 @@ void URLRequestHttpJob::NotifyHeadersComplete() {
 
   // Clear |set_cookie_access_result_list_| after any processing in case
   // SaveCookiesAndNotifyHeadersComplete is called again.
-  request_->set_maybe_stored_cookies(std::move(set_cookie_access_result_list_));
+  // request_->set_maybe_stored_cookies(std::move(set_cookie_access_result_list_));
 
   // The HTTP transaction may be restarted several times for the purposes
   // of sending authorization information. Each time it restarts, we get
@@ -1078,7 +1078,7 @@ void URLRequestHttpJob::RestartTransactionWithAuth(
   // the URLRequest layer. Should this call into URLRequest so it can share
   // logic at that layer with SetAuth()?
   // request_->set_maybe_sent_cookies({});
-  request_->set_maybe_stored_cookies({});
+  // request_->set_maybe_stored_cookies({});
 
   AddCookieHeaderAndStart();
 }

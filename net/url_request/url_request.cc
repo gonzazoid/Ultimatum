@@ -426,10 +426,10 @@ int URLRequest::GetResponseCode() const {
 //   maybe_sent_cookies_ = std::move(cookies);
 // }
 
-void URLRequest::set_maybe_stored_cookies(
-    CookieAndLineAccessResultList cookies) {
-  maybe_stored_cookies_ = std::move(cookies);
-}
+// void URLRequest::set_maybe_stored_cookies(
+//     CookieAndLineAccessResultList cookies) {
+//   maybe_stored_cookies_ = std::move(cookies);
+// }
 
 void URLRequest::SetLoadFlags(int flags) {
   if ((load_flags_ & LOAD_IGNORE_LIMITS) != (flags & LOAD_IGNORE_LIMITS)) {
