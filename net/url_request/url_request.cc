@@ -1055,11 +1055,11 @@ void URLRequest::NotifySSLCertificateError(int net_error,
   OnCallToDelegate(NetLogEventType::URL_REQUEST_DELEGATE_SSL_CERTIFICATE_ERROR);
   delegate_->OnSSLCertificateError(this, net_error, ssl_info, fatal);
 }
-// XXX remove
-void URLRequest::AnnotateAndMoveUserBlockedCookies(
-    CookieAccessResultList& maybe_included_cookies,
-    CookieAccessResultList& excluded_cookies) const {
-  DCHECK_EQ(privacy_mode_, PrivacyMode::PRIVACY_MODE_DISABLED);
+
+// void URLRequest::AnnotateAndMoveUserBlockedCookies(
+//     CookieAccessResultList& maybe_included_cookies,
+//     CookieAccessResultList& excluded_cookies) const {
+//   DCHECK_EQ(privacy_mode_, PrivacyMode::PRIVACY_MODE_DISABLED);
   // bool can_get_cookies = g_default_can_use_cookies;
   // if (network_delegate()) {
   //   can_get_cookies = network_delegate()->AnnotateAndMoveUserBlockedCookies(
@@ -1069,7 +1069,7 @@ void URLRequest::AnnotateAndMoveUserBlockedCookies(
 
   // if (!can_get_cookies)
   //   net_log_.AddEvent(NetLogEventType::COOKIE_GET_BLOCKED_BY_NETWORK_DELEGATE);
-}
+// }
 
 // bool URLRequest::CanSetCookie(const net::CanonicalCookie& cookie,
 //                               CookieOptions* options) const {
