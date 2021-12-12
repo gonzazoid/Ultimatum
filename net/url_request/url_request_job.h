@@ -36,7 +36,7 @@ namespace net {
 
 class AuthChallengeInfo;
 class AuthCredentials;
-class CookieOptions;
+// class CookieOptions;
 class HttpRequestHeaders;
 class HttpResponseInfo;
 class IOBuffer;
@@ -288,8 +288,8 @@ class NET_EXPORT URLRequestJob {
       CookieAccessResultList& excluded_cookies) const;
 
   // Delegates to URLRequest.
-  bool CanSetCookie(const net::CanonicalCookie& cookie,
-                    CookieOptions* options) const;
+  // bool CanSetCookie(const net::CanonicalCookie& cookie,
+  //                   CookieOptions* options) const;
 
   // Notifies the job that headers have been received.
   void NotifyHeadersComplete();
