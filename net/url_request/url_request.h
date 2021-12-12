@@ -224,7 +224,7 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // with the URLRequestContext that maintains the CookieStore.
   // The cookie policy default has to be set before the first URLRequest is
   // started. Once it was set to block all cookies, it cannot be changed back.
-  static void SetDefaultCookiePolicyToBlock();
+  // static void SetDefaultCookiePolicyToBlock();
 
   // The original url is the url used to initialize the request, and it may
   // differ from the url if the request was redirected.
