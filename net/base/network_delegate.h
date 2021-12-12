@@ -81,10 +81,10 @@ class NET_EXPORT NetworkDelegate {
       CookieAccessResultList& maybe_included_cookies,
       CookieAccessResultList& excluded_cookies,
       bool allowed_from_caller);
-  bool CanSetCookie(const URLRequest& request,
-                    const net::CanonicalCookie& cookie,
-                    CookieOptions* options,
-                    bool allowed_from_caller);
+  // bool CanSetCookie(const URLRequest& request,
+  //                   const net::CanonicalCookie& cookie,
+  //                   CookieOptions* options,
+  //                   bool allowed_from_caller);
   bool ForcePrivacyMode(const GURL& url,
                         const SiteForCookies& site_for_cookies,
                         const absl::optional<url::Origin>& top_frame_origin,
