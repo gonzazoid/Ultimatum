@@ -1070,10 +1070,10 @@ void URLRequest::AnnotateAndMoveUserBlockedCookies(
   // if (!can_get_cookies)
   //   net_log_.AddEvent(NetLogEventType::COOKIE_GET_BLOCKED_BY_NETWORK_DELEGATE);
 }
-// XXX remove
-bool URLRequest::CanSetCookie(const net::CanonicalCookie& cookie,
-                              CookieOptions* options) const {
-  DCHECK(!(load_flags_ & LOAD_DO_NOT_SAVE_COOKIES));
+
+// bool URLRequest::CanSetCookie(const net::CanonicalCookie& cookie,
+//                               CookieOptions* options) const {
+//   DCHECK(!(load_flags_ & LOAD_DO_NOT_SAVE_COOKIES));
   // bool can_set_cookies = g_default_can_use_cookies;
   // if (network_delegate()) {
   //   can_set_cookies =
@@ -1083,8 +1083,8 @@ bool URLRequest::CanSetCookie(const net::CanonicalCookie& cookie,
   // if (!can_set_cookies)
   //   net_log_.AddEvent(NetLogEventType::COOKIE_SET_BLOCKED_BY_NETWORK_DELEGATE);
   // return can_set_cookies;
-  return false;
-}
+//   return false;
+// }
 
 PrivacyMode URLRequest::DeterminePrivacyMode() const {
   if (!allow_credentials_) {

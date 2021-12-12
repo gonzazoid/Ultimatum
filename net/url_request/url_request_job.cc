@@ -412,10 +412,10 @@ void URLRequestJob::AnnotateAndMoveUserBlockedCookies(
                                               excluded_cookies);
 }
 
-bool URLRequestJob::CanSetCookie(const net::CanonicalCookie& cookie,
-                                 CookieOptions* options) const {
-  return request_->CanSetCookie(cookie, options);
-}
+// bool URLRequestJob::CanSetCookie(const net::CanonicalCookie& cookie,
+//                                  CookieOptions* options) const {
+//   return request_->CanSetCookie(cookie, options);
+// }
 
 void URLRequestJob::NotifyHeadersComplete() {
   if (has_handled_response_)

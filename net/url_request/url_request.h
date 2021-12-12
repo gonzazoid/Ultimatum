@@ -58,7 +58,7 @@ class Value;
 
 namespace net {
 
-class CookieOptions;
+// class CookieOptions;
 class IOBuffer;
 struct LoadTimingInfo;
 struct RedirectInfo;
@@ -897,8 +897,8 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   void AnnotateAndMoveUserBlockedCookies(
       CookieAccessResultList& maybe_included_cookies,
       CookieAccessResultList& excluded_cookies) const;
-  bool CanSetCookie(const net::CanonicalCookie& cookie,
-                    CookieOptions* options) const;
+//   bool CanSetCookie(const net::CanonicalCookie& cookie,
+//                     CookieOptions* options) const;
   PrivacyMode DeterminePrivacyMode() const;
 
   // Called just before calling a delegate that may block a request. |type|

@@ -818,7 +818,7 @@ void URLRequestHttpJob::SaveCookiesAndNotifyHeadersComplete(int result) {
       // Make a copy of the cookie if we successfully made one.
       cookie_to_return = *cookie;
     }
-    if (cookie && !CanSetCookie(*cookie, &options)) {
+    if (cookie /* && !CanSetCookie(*cookie, &options) */) {
       returned_status.AddExclusionReason(
           CookieInclusionStatus::EXCLUDE_USER_PREFERENCES);
     }
