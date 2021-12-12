@@ -722,7 +722,7 @@ void URLRequestHttpJob::SetCookieHeaderAndStart(
     }
   }
 
-  request_->set_maybe_sent_cookies(std::move(maybe_sent_cookies));
+  // request_->set_maybe_sent_cookies(std::move(maybe_sent_cookies));
 
   StartTransaction();
 }
@@ -1077,7 +1077,7 @@ void URLRequestHttpJob::RestartTransactionWithAuth(
   // TODO(https://crbug.com/968327/): This is weird, as all other clearing is at
   // the URLRequest layer. Should this call into URLRequest so it can share
   // logic at that layer with SetAuth()?
-  request_->set_maybe_sent_cookies({});
+  // request_->set_maybe_sent_cookies({});
   request_->set_maybe_stored_cookies({});
 
   AddCookieHeaderAndStart();
