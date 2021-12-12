@@ -590,13 +590,13 @@ std::unique_ptr<Network::ResourceTiming> GetTiming(
       .Build();
 }
 
-std::unique_ptr<Network::ConnectTiming> GetConnectTiming(
-    const base::TimeTicks timestamp) {
-  const base::TimeTicks kNullTicks;
-  return Network::ConnectTiming::Create()
-      .SetRequestTime((timestamp - kNullTicks).InSecondsF())
-      .Build();
-}
+// std::unique_ptr<Network::ConnectTiming> GetConnectTiming(
+//     const base::TimeTicks timestamp) {
+//   const base::TimeTicks kNullTicks;
+//   return Network::ConnectTiming::Create()
+//       .SetRequestTime((timestamp - kNullTicks).InSecondsF())
+//       .Build();
+// }
 
 std::unique_ptr<Object> GetRawHeaders(
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& headers) {
@@ -800,80 +800,80 @@ GetProtocolBlockedSetCookieReason(net::CookieInclusionStatus status) {
   return blockedReasons;
 }
 
-std::unique_ptr<Array<Network::CookieBlockedReason>>
-GetProtocolBlockedCookieReason(net::CookieInclusionStatus status) {
-  std::unique_ptr<Array<Network::CookieBlockedReason>> blockedReasons =
-      std::make_unique<Array<Network::CookieBlockedReason>>();
+// std::unique_ptr<Array<Network::CookieBlockedReason>>
+// GetProtocolBlockedCookieReason(net::CookieInclusionStatus status) {
+//   std::unique_ptr<Array<Network::CookieBlockedReason>> blockedReasons =
+//       std::make_unique<Array<Network::CookieBlockedReason>>();
 
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SECURE_ONLY)) {
-    blockedReasons->push_back(Network::CookieBlockedReasonEnum::SecureOnly);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_NOT_ON_PATH)) {
-    blockedReasons->push_back(Network::CookieBlockedReasonEnum::NotOnPath);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_DOMAIN_MISMATCH)) {
-    blockedReasons->push_back(Network::CookieBlockedReasonEnum::DomainMismatch);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_STRICT)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(
-          Network::CookieBlockedReasonEnum::SchemefulSameSiteStrict);
-    } else {
-      blockedReasons->push_back(
-          Network::CookieBlockedReasonEnum::SameSiteStrict);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_LAX)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(
-          Network::CookieBlockedReasonEnum::SchemefulSameSiteLax);
-    } else {
-      blockedReasons->push_back(Network::CookieBlockedReasonEnum::SameSiteLax);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::
-              EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX)) {
-    if (status.HasDowngradeWarning()) {
-      blockedReasons->push_back(Network::CookieBlockedReasonEnum::
-                                    SchemefulSameSiteUnspecifiedTreatedAsLax);
-    } else {
-      blockedReasons->push_back(
-          Network::CookieBlockedReasonEnum::SameSiteUnspecifiedTreatedAsLax);
-    }
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE)) {
-    blockedReasons->push_back(
-        Network::CookieBlockedReasonEnum::SameSiteNoneInsecure);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES)) {
-    blockedReasons->push_back(
-        Network::CookieBlockedReasonEnum::UserPreferences);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT)) {
-    blockedReasons->push_back(
-        Network::CookieBlockedReasonEnum::SamePartyFromCrossPartyContext);
-  }
-  if (status.HasExclusionReason(net::CookieInclusionStatus::
-                                    EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE)) {
-    blockedReasons->push_back(
-        Network::CookieBlockedReasonEnum::NameValuePairExceedsMaxSize);
-  }
-  if (status.HasExclusionReason(
-          net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR)) {
-    blockedReasons->push_back(Network::CookieBlockedReasonEnum::UnknownError);
-  }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SECURE_ONLY)) {
+//     blockedReasons->push_back(Network::CookieBlockedReasonEnum::SecureOnly);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_NOT_ON_PATH)) {
+//     blockedReasons->push_back(Network::CookieBlockedReasonEnum::NotOnPath);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_DOMAIN_MISMATCH)) {
+//     blockedReasons->push_back(Network::CookieBlockedReasonEnum::DomainMismatch);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_STRICT)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(
+//           Network::CookieBlockedReasonEnum::SchemefulSameSiteStrict);
+//     } else {
+//       blockedReasons->push_back(
+//           Network::CookieBlockedReasonEnum::SameSiteStrict);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_LAX)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(
+//           Network::CookieBlockedReasonEnum::SchemefulSameSiteLax);
+//     } else {
+//       blockedReasons->push_back(Network::CookieBlockedReasonEnum::SameSiteLax);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::
+//               EXCLUDE_SAMESITE_UNSPECIFIED_TREATED_AS_LAX)) {
+//     if (status.HasDowngradeWarning()) {
+//       blockedReasons->push_back(Network::CookieBlockedReasonEnum::
+//                                     SchemefulSameSiteUnspecifiedTreatedAsLax);
+//     } else {
+//       blockedReasons->push_back(
+//           Network::CookieBlockedReasonEnum::SameSiteUnspecifiedTreatedAsLax);
+//     }
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMESITE_NONE_INSECURE)) {
+//     blockedReasons->push_back(
+//         Network::CookieBlockedReasonEnum::SameSiteNoneInsecure);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES)) {
+//     blockedReasons->push_back(
+//         Network::CookieBlockedReasonEnum::UserPreferences);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT)) {
+//     blockedReasons->push_back(
+//         Network::CookieBlockedReasonEnum::SamePartyFromCrossPartyContext);
+//   }
+//   if (status.HasExclusionReason(net::CookieInclusionStatus::
+//                                     EXCLUDE_NAME_VALUE_PAIR_EXCEEDS_MAX_SIZE)) {
+//     blockedReasons->push_back(
+//         Network::CookieBlockedReasonEnum::NameValuePairExceedsMaxSize);
+//   }
+//   if (status.HasExclusionReason(
+//           net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR)) {
+//     blockedReasons->push_back(Network::CookieBlockedReasonEnum::UnknownError);
+//   }
 
-  return blockedReasons;
-}
+//   return blockedReasons;
+// }
 
 std::unique_ptr<Array<Network::BlockedSetCookieWithReason>>
 BuildProtocolBlockedSetCookies(
@@ -899,26 +899,26 @@ BuildProtocolBlockedSetCookies(
   return protocol_list;
 }
 
-std::unique_ptr<Array<Network::BlockedCookieWithReason>>
-BuildProtocolAssociatedCookies(const net::CookieAccessResultList& net_list) {
-  auto protocol_list =
-      std::make_unique<Array<Network::BlockedCookieWithReason>>();
+// std::unique_ptr<Array<Network::BlockedCookieWithReason>>
+// BuildProtocolAssociatedCookies(const net::CookieAccessResultList& net_list) {
+//   auto protocol_list =
+//       std::make_unique<Array<Network::BlockedCookieWithReason>>();
 
-  for (const net::CookieWithAccessResult& cookie : net_list) {
-    std::unique_ptr<Array<Network::CookieBlockedReason>> blocked_reasons =
-        GetProtocolBlockedCookieReason(cookie.access_result.status);
+//   for (const net::CookieWithAccessResult& cookie : net_list) {
+//     std::unique_ptr<Array<Network::CookieBlockedReason>> blocked_reasons =
+//         GetProtocolBlockedCookieReason(cookie.access_result.status);
     // Note that the condition below is not always true,
     // as there might be blocked reasons that we do not report.
-    if (blocked_reasons->size() || cookie.access_result.status.IsInclude()) {
-      protocol_list->push_back(
-          Network::BlockedCookieWithReason::Create()
-              .SetBlockedReasons(std::move(blocked_reasons))
-              .SetCookie(BuildCookie(cookie.cookie))
-              .Build());
-    }
-  }
-  return protocol_list;
-}
+//     if (blocked_reasons->size() || cookie.access_result.status.IsInclude()) {
+//       protocol_list->push_back(
+//           Network::BlockedCookieWithReason::Create()
+//               .SetBlockedReasons(std::move(blocked_reasons))
+//               .SetCookie(BuildCookie(cookie.cookie))
+//               .Build());
+//     }
+//   }
+//   return protocol_list;
+// }
 
 using SourceTypeEnum = net::SourceStream::SourceType;
 namespace ContentEncodingEnum = protocol::Network::ContentEncodingEnum;
@@ -2720,20 +2720,20 @@ DispatchResponse NetworkHandler::GetSecurityIsolationStatus(
   *out_info = std::move(status);
   return Response::Success();
 }
-
+// XXX Remove
 void NetworkHandler::OnRequestWillBeSentExtraInfo(
     const std::string& devtools_request_id,
-    const net::CookieAccessResultList& request_cookie_list,
+    // const net::CookieAccessResultList& request_cookie_list,
     const std::vector<network::mojom::HttpRawHeaderPairPtr>& request_headers,
     const base::TimeTicks timestamp,
     const network::mojom::ClientSecurityStatePtr& security_state) {
   if (!enabled_)
     return;
 
-  frontend_->RequestWillBeSentExtraInfo(
-      devtools_request_id, BuildProtocolAssociatedCookies(request_cookie_list),
-      GetRawHeaders(request_headers), GetConnectTiming(timestamp),
-      MaybeBuildClientSecurityState(security_state));
+  // frontend_->RequestWillBeSentExtraInfo(
+  //     devtools_request_id, BuildProtocolAssociatedCookies(request_cookie_list),
+  //     GetRawHeaders(request_headers), GetConnectTiming(timestamp),
+  //     MaybeBuildClientSecurityState(security_state));
 }
 
 void NetworkHandler::OnResponseReceivedExtraInfo(

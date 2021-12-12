@@ -23,13 +23,13 @@ mojo::PendingRemote<mojom::DevToolsObserver> MockDevToolsObserver::Bind() {
 
 void MockDevToolsObserver::OnRawRequest(
     const std::string& devtools_request_id,
-    const net::CookieAccessResultList& cookies_with_access_result,
+    // const net::CookieAccessResultList& cookies_with_access_result,
     std::vector<network::mojom::HttpRawHeaderPairPtr> headers,
     const base::TimeTicks timestamp,
     network::mojom::ClientSecurityStatePtr client_security_state) {
-  raw_request_cookies_.insert(raw_request_cookies_.end(),
-                              cookies_with_access_result.begin(),
-                              cookies_with_access_result.end());
+  // raw_request_cookies_.insert(raw_request_cookies_.end(),
+  //                             cookies_with_access_result.begin(),
+  //                             cookies_with_access_result.end());
   got_raw_request_ = true;
   devtools_request_id_ = devtools_request_id;
   client_security_state_ = std::move(client_security_state);

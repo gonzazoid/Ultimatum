@@ -38,7 +38,7 @@ class CONTENT_EXPORT NetworkServiceDevToolsObserver
   // network::mojom::DevToolsObserver overrides.
   void OnRawRequest(
       const std::string& devtools_request_id,
-      const net::CookieAccessResultList& request_cookie_list,
+      // const net::CookieAccessResultList& request_cookie_list,
       std::vector<network::mojom::HttpRawHeaderPairPtr> request_headers,
       const base::TimeTicks timestamp,
       network::mojom::ClientSecurityStatePtr security_state) override;

@@ -640,7 +640,7 @@ void URLRequestHttpJob::SetCookieHeaderAndStart(
     const CookieOptions& options,
     const CookieAccessResultList& cookies_with_access_result_list,
     const CookieAccessResultList& excluded_list) {
-  DCHECK(request_->maybe_sent_cookies().empty());
+  // DCHECK(request_->maybe_sent_cookies().empty());
 
   CookieAccessResultList maybe_included_cookies =
       cookies_with_access_result_list;
@@ -701,26 +701,26 @@ void URLRequestHttpJob::SetCookieHeaderAndStart(
     }
   }
 
-  CookieAccessResultList maybe_sent_cookies = std::move(excluded_cookies);
-  maybe_sent_cookies.insert(
-      maybe_sent_cookies.end(),
-      std::make_move_iterator(maybe_included_cookies.begin()),
-      std::make_move_iterator(maybe_included_cookies.end()));
+  // CookieAccessResultList maybe_sent_cookies = std::move(excluded_cookies);
+  // maybe_sent_cookies.insert(
+  //     maybe_sent_cookies.end(),
+  //     std::make_move_iterator(maybe_included_cookies.begin()),
+  //     std::make_move_iterator(maybe_included_cookies.end()));
   maybe_included_cookies.clear();
 
-  if (request_->net_log().IsCapturing()) {
-    for (const auto& cookie_with_access_result : maybe_sent_cookies) {
-      request_->net_log().AddEvent(
-          NetLogEventType::COOKIE_INCLUSION_STATUS,
-          [&](NetLogCaptureMode capture_mode) {
-            return CookieInclusionStatusNetLogParams(
-                "send", cookie_with_access_result.cookie.Name(),
-                cookie_with_access_result.cookie.Domain(),
-                cookie_with_access_result.cookie.Path(),
-                cookie_with_access_result.access_result.status, capture_mode);
-          });
-    }
-  }
+  // if (request_->net_log().IsCapturing()) {
+  //   for (const auto& cookie_with_access_result : maybe_sent_cookies) {
+  //     request_->net_log().AddEvent(
+  //         NetLogEventType::COOKIE_INCLUSION_STATUS,
+  //         [&](NetLogCaptureMode capture_mode) {
+  //           return CookieInclusionStatusNetLogParams(
+  //               "send", cookie_with_access_result.cookie.Name(),
+  //               cookie_with_access_result.cookie.Domain(),
+  //               cookie_with_access_result.cookie.Path(),
+  //               cookie_with_access_result.access_result.status, capture_mode);
+  //         });
+  //   }
+  // }
 
   // request_->set_maybe_sent_cookies(std::move(maybe_sent_cookies));
 

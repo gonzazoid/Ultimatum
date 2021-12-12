@@ -575,9 +575,9 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // and only contain the cookies relevant to the most recent roundtrip.
 
   // Populated while the http request is being built.
-  const CookieAccessResultList& maybe_sent_cookies() const {
-    return maybe_sent_cookies_;
-  }
+  // const CookieAccessResultList& maybe_sent_cookies() const {
+  //  return maybe_sent_cookies_;
+  // }
   // Populated after the response headers are received.
   const CookieAndLineAccessResultList& maybe_stored_cookies() const {
     return maybe_stored_cookies_;
@@ -956,7 +956,7 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   PrivacyMode privacy_mode_;
   SecureDnsPolicy secure_dns_policy_;
 
-  CookieAccessResultList maybe_sent_cookies_;
+  // CookieAccessResultList maybe_sent_cookies_;
   CookieAndLineAccessResultList maybe_stored_cookies_;
 
 #if BUILDFLAG(ENABLE_REPORTING)

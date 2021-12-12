@@ -138,13 +138,13 @@ void PopulateResourceResponse(net::URLRequest* request,
       response_info.unused_since_prefetch;
 
   response->was_cookie_in_request = false;
-  for (const auto& cookie_with_access_result : request->maybe_sent_cookies()) {
-    if (cookie_with_access_result.access_result.status.IsInclude()) {
+  // for (const auto& cookie_with_access_result : request->maybe_sent_cookies()) {
+  //   if (cookie_with_access_result.access_result.status.IsInclude()) {
       // IsInclude() true means the cookie was sent.
-      response->was_cookie_in_request = true;
-      break;
-    }
-  }
+  //     response->was_cookie_in_request = true;
+  //     break;
+  //   }
+  // }
 
   if (is_load_timing_enabled)
     request->GetLoadTimingInfo(&response->load_timing);
@@ -2023,15 +2023,15 @@ void URLLoader::SetRawRequestHeadersAndNotify(
 
   if (auto* cookie_observer = GetCookieAccessObserver()) {
     std::vector<mojom::CookieOrLineWithAccessResultPtr> reported_cookies;
-    for (const auto& cookie_with_access_result :
-         url_request_->maybe_sent_cookies()) {
-      if (ShouldNotifyAboutCookie(
-              cookie_with_access_result.access_result.status)) {
-        reported_cookies.push_back(mojom::CookieOrLineWithAccessResult::New(
-            mojom::CookieOrLine::NewCookie(cookie_with_access_result.cookie),
-            cookie_with_access_result.access_result));
-      }
-    }
+    // for (const auto& cookie_with_access_result :
+    //      url_request_->maybe_sent_cookies()) {
+    //   if (ShouldNotifyAboutCookie(
+    //           cookie_with_access_result.access_result.status)) {
+    //     reported_cookies.push_back(mojom::CookieOrLineWithAccessResult::New(
+    //         mojom::CookieOrLine::NewCookie(cookie_with_access_result.cookie),
+    //         cookie_with_access_result.access_result));
+    //   }
+    // }
 
     if (!reported_cookies.empty()) {
       cookie_observer->OnCookiesAccessed(mojom::CookieAccessDetails::New(
@@ -2061,7 +2061,7 @@ void URLLoader::DispatchOnRawRequest(
 
   emitted_devtools_raw_request_ = true;
   devtools_observer->OnRawRequest(
-      devtools_request_id().value(), url_request_->maybe_sent_cookies(),
+      devtools_request_id().value(), /* url_request_->maybe_sent_cookies(), */
       std::move(headers), load_timing_info.request_start,
       std::move(client_security_state));
 }

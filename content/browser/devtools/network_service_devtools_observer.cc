@@ -50,7 +50,7 @@ DevToolsAgentHostImpl* NetworkServiceDevToolsObserver::GetDevToolsAgentHost() {
 
 void NetworkServiceDevToolsObserver::OnRawRequest(
     const std::string& devtools_request_id,
-    const net::CookieAccessResultList& request_cookie_list,
+    // const net::CookieAccessResultList& request_cookie_list,
     std::vector<network::mojom::HttpRawHeaderPairPtr> request_headers,
     base::TimeTicks timestamp,
     network::mojom::ClientSecurityStatePtr security_state) {
@@ -59,7 +59,7 @@ void NetworkServiceDevToolsObserver::OnRawRequest(
     return;
   DispatchToAgents(host,
                    &protocol::NetworkHandler::OnRequestWillBeSentExtraInfo,
-                   devtools_request_id, request_cookie_list, request_headers,
+                   devtools_request_id, /* request_cookie_list, */ request_headers,
                    timestamp, security_state);
 }
 
