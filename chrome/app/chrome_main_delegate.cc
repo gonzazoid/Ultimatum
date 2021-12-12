@@ -533,7 +533,7 @@ void ChromeMainDelegate::PostEarlyInitialization(bool is_running_tests) {
   // Chrome disallows cookies by default. All code paths that want to use
   // cookies need to go through one of Chrome's URLRequestContexts which have
   // a ChromeNetworkDelegate attached that selectively allows cookies again.
-  net::URLRequest::SetDefaultCookiePolicyToBlock();
+  // net::URLRequest::SetDefaultCookiePolicyToBlock();
 
   // On Chrome OS, IPC (D-Bus, Crosapi) is required to create the FeatureList,
   // which depends on policy from an OS service. So, initialize it at this
