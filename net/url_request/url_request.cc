@@ -422,9 +422,9 @@ int URLRequest::GetResponseCode() const {
   return job_->GetResponseCode();
 }
 
-void URLRequest::set_maybe_sent_cookies(CookieAccessResultList cookies) {
-  maybe_sent_cookies_ = std::move(cookies);
-}
+// void URLRequest::set_maybe_sent_cookies(CookieAccessResultList cookies) {
+//   maybe_sent_cookies_ = std::move(cookies);
+// }
 
 void URLRequest::set_maybe_stored_cookies(
     CookieAndLineAccessResultList cookies) {
