@@ -282,9 +282,9 @@ class NET_EXPORT URLRequestJob {
                                  bool fatal);
 
   // Delegates to URLRequest.
-  void AnnotateAndMoveUserBlockedCookies(
-      CookieAccessResultList& maybe_included_cookies,
-      CookieAccessResultList& excluded_cookies) const;
+  // void AnnotateAndMoveUserBlockedCookies(
+  //     CookieAccessResultList& maybe_included_cookies,
+  //     CookieAccessResultList& excluded_cookies) const;
 
   // Delegates to URLRequest.
   // bool CanSetCookie(const net::CanonicalCookie& cookie,

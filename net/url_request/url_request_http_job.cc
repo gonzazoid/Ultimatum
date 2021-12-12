@@ -660,7 +660,7 @@ void URLRequestHttpJob::SetCookieHeaderAndStart(
           CookieInclusionStatus::EXCLUDE_USER_PREFERENCES);
     }
   } else {
-    AnnotateAndMoveUserBlockedCookies(maybe_included_cookies, excluded_cookies);
+    // AnnotateAndMoveUserBlockedCookies(maybe_included_cookies, excluded_cookies);
     if (!maybe_included_cookies.empty()) {
       std::string cookie_line =
           CanonicalCookie::BuildCookieLine(maybe_included_cookies);
