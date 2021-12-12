@@ -115,14 +115,14 @@ bool NetworkDelegate::AnnotateAndMoveUserBlockedCookies(
   return allowed;
 }
 
-bool NetworkDelegate::CanSetCookie(const URLRequest& request,
-                                   const CanonicalCookie& cookie,
-                                   CookieOptions* options,
-                                   bool allowed_from_caller) {
-  DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK(!(request.load_flags() & LOAD_DO_NOT_SAVE_COOKIES));
-  return OnCanSetCookie(request, cookie, options, allowed_from_caller);
-}
+// bool NetworkDelegate::CanSetCookie(const URLRequest& request,
+//                                    const CanonicalCookie& cookie,
+//                                    CookieOptions* options,
+//                                    bool allowed_from_caller) {
+//   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
+//   DCHECK(!(request.load_flags() & LOAD_DO_NOT_SAVE_COOKIES));
+//   return OnCanSetCookie(request, cookie, options, allowed_from_caller);
+// }
 
 bool NetworkDelegate::ForcePrivacyMode(
     const GURL& url,
