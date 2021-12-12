@@ -681,7 +681,7 @@ void URLRequest::StartJob(std::unique_ptr<URLRequestJob> job) {
   response_info_.was_cached = false;
 
   // maybe_sent_cookies_.clear();
-  maybe_stored_cookies_.clear();
+  // maybe_stored_cookies_.clear();
 
   GURL referrer_url(referrer_);
   bool same_origin_for_metrics;
@@ -873,7 +873,7 @@ void URLRequest::FollowDeferredRedirect(
   DCHECK_EQ(OK, status_);
 
   // maybe_sent_cookies_.clear();
-  maybe_stored_cookies_.clear();
+  // maybe_stored_cookies_.clear();
 
   status_ = ERR_IO_PENDING;
   job_->FollowDeferredRedirect(removed_headers, modified_headers);
@@ -884,7 +884,7 @@ void URLRequest::SetAuth(const AuthCredentials& credentials) {
   DCHECK(job_->NeedsAuth());
 
   // maybe_sent_cookies_.clear();
-  maybe_stored_cookies_.clear();
+  // maybe_stored_cookies_.clear();
 
   status_ = ERR_IO_PENDING;
   job_->SetAuth(credentials);
