@@ -187,8 +187,8 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
 //       },
 //       settings));
 // }
-// XXX remove
-void UpdateLegacyCookieSettings(Profile* profile) {
+
+// void UpdateLegacyCookieSettings(Profile* profile) {
 //   ContentSettingsForOneType settings;
 //   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
 //       ContentSettingsType::LEGACY_COOKIE_ACCESS, &settings);
@@ -199,7 +199,7 @@ void UpdateLegacyCookieSettings(Profile* profile) {
 //             ->SetContentSettingsForLegacyCookieAccess(settings);
 //       },
 //       settings));
-}
+// }
 // XXX remove
 void UpdateStorageAccessSettings(Profile* profile) {
 //   if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
@@ -915,14 +915,14 @@ void ProfileNetworkContextService::OnContentSettingChanged(
       // UpdateCookieSettings(profile_);
       break;
     case ContentSettingsType::LEGACY_COOKIE_ACCESS:
-      UpdateLegacyCookieSettings(profile_);
+      // UpdateLegacyCookieSettings(profile_);
       break;
     case ContentSettingsType::STORAGE_ACCESS:
       UpdateStorageAccessSettings(profile_);
       break;
     case ContentSettingsType::DEFAULT:
       // UpdateCookieSettings(profile_);
-      UpdateLegacyCookieSettings(profile_);
+      // UpdateLegacyCookieSettings(profile_);
       UpdateStorageAccessSettings(profile_);
       break;
     default:
