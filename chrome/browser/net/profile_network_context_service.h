@@ -163,8 +163,8 @@ class ProfileNetworkContextService
   //                              ContentSettingsType content_type) override;
 
   // content_settings::CookieSettings::Observer:
-  void OnThirdPartyCookieBlockingChanged(
-      bool block_third_party_cookies) override;
+  // void OnThirdPartyCookieBlockingChanged(
+  //     bool block_third_party_cookies) override;
 
   Profile* const profile_;
 
