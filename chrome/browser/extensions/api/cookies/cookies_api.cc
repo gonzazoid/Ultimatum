@@ -67,23 +67,24 @@ network::mojom::CookieManager* ParseStoreCookieManager(
     bool include_incognito,
     std::string* store_id,
     std::string* error) {
-  Profile* function_profile = Profile::FromBrowserContext(function_context);
-  Profile* store_profile = nullptr;
-  if (!store_id->empty()) {
-    store_profile = cookies_helpers::ChooseProfileFromStoreId(
-        *store_id, function_profile, include_incognito);
-    if (!store_profile) {
-      *error = ErrorUtils::FormatErrorMessage(
-          cookies_api_constants::kInvalidStoreIdError, *store_id);
-      return nullptr;
-    }
-  } else {
-    store_profile = function_profile;
-    *store_id = cookies_helpers::GetStoreIdFromProfile(store_profile);
-  }
+  return nullptr;
+  // Profile* function_profile = Profile::FromBrowserContext(function_context);
+  // Profile* store_profile = nullptr;
+  // if (!store_id->empty()) {
+  //   store_profile = cookies_helpers::ChooseProfileFromStoreId(
+  //       *store_id, function_profile, include_incognito);
+  //   if (!store_profile) {
+  //     *error = ErrorUtils::FormatErrorMessage(
+  //         cookies_api_constants::kInvalidStoreIdError, *store_id);
+  //     return nullptr;
+  //   }
+  // } else {
+  //   store_profile = function_profile;
+  //   *store_id = cookies_helpers::GetStoreIdFromProfile(store_profile);
+  // }
 
-  return store_profile->GetDefaultStoragePartition()
-      ->GetCookieManagerForBrowserProcess();
+  // return store_profile->GetDefaultStoragePartition()
+  //     ->GetCookieManagerForBrowserProcess();
 }
 
 template <typename T>
@@ -195,16 +196,16 @@ void CookiesEventRouter::MaybeStartListening() {
 void CookiesEventRouter::BindToCookieManager(
     mojo::Receiver<network::mojom::CookieChangeListener>* receiver,
     Profile* profile) {
-  network::mojom::CookieManager* cookie_manager =
-      profile->GetDefaultStoragePartition()
-          ->GetCookieManagerForBrowserProcess();
-  if (!cookie_manager)
+  // network::mojom::CookieManager* cookie_manager =
+  //     profile->GetDefaultStoragePartition()
+  //         ->GetCookieManagerForBrowserProcess();
+  // if (!cookie_manager)
     return;
 
-  cookie_manager->AddGlobalChangeListener(receiver->BindNewPipeAndPassRemote());
-  receiver->set_disconnect_handler(
-      base::BindOnce(&CookiesEventRouter::OnConnectionError,
-                     base::Unretained(this), receiver));
+  // cookie_manager->AddGlobalChangeListener(receiver->BindNewPipeAndPassRemote());
+  // receiver->set_disconnect_handler(
+  //     base::BindOnce(&CookiesEventRouter::OnConnectionError,
+  //                    base::Unretained(this), receiver));
 }
 
 void CookiesEventRouter::OnConnectionError(

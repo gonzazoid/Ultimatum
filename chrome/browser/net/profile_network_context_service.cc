@@ -174,47 +174,47 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
 
   return false;
 }
-
+// XXX remove
 void UpdateCookieSettings(Profile* profile) {
-  ContentSettingsForOneType settings;
-  HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
-      ContentSettingsType::COOKIES, &settings);
-  profile->ForEachStoragePartition(base::BindRepeating(
-      [](ContentSettingsForOneType settings,
-         content::StoragePartition* storage_partition) {
-        storage_partition->GetCookieManagerForBrowserProcess()
-            ->SetContentSettings(settings);
-      },
-      settings));
+//   ContentSettingsForOneType settings;
+//   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
+//       ContentSettingsType::COOKIES, &settings);
+//   profile->ForEachStoragePartition(base::BindRepeating(
+//       [](ContentSettingsForOneType settings,
+//          content::StoragePartition* storage_partition) {
+//         storage_partition->GetCookieManagerForBrowserProcess()
+//             ->SetContentSettings(settings);
+//       },
+//       settings));
 }
-
+// XXX remove
 void UpdateLegacyCookieSettings(Profile* profile) {
-  ContentSettingsForOneType settings;
-  HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
-      ContentSettingsType::LEGACY_COOKIE_ACCESS, &settings);
-  profile->ForEachStoragePartition(base::BindRepeating(
-      [](ContentSettingsForOneType settings,
-         content::StoragePartition* storage_partition) {
-        storage_partition->GetCookieManagerForBrowserProcess()
-            ->SetContentSettingsForLegacyCookieAccess(settings);
-      },
-      settings));
+//   ContentSettingsForOneType settings;
+//   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
+//       ContentSettingsType::LEGACY_COOKIE_ACCESS, &settings);
+//   profile->ForEachStoragePartition(base::BindRepeating(
+//       [](ContentSettingsForOneType settings,
+//          content::StoragePartition* storage_partition) {
+//         storage_partition->GetCookieManagerForBrowserProcess()
+//             ->SetContentSettingsForLegacyCookieAccess(settings);
+//       },
+//       settings));
 }
-
+// XXX remove
 void UpdateStorageAccessSettings(Profile* profile) {
-  if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
-    ContentSettingsForOneType settings;
-    HostContentSettingsMapFactory::GetForProfile(profile)
-        ->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS, &settings);
+//   if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
+//     ContentSettingsForOneType settings;
+//     HostContentSettingsMapFactory::GetForProfile(profile)
+//         ->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS, &settings);
 
-    profile->ForEachStoragePartition(base::BindRepeating(
-        [](ContentSettingsForOneType settings,
-           content::StoragePartition* storage_partition) {
-          storage_partition->GetCookieManagerForBrowserProcess()
-              ->SetStorageAccessGrantSettings(settings, base::DoNothing());
-        },
-        settings));
-  }
+//     profile->ForEachStoragePartition(base::BindRepeating(
+//         [](ContentSettingsForOneType settings,
+//            content::StoragePartition* storage_partition) {
+//           storage_partition->GetCookieManagerForBrowserProcess()
+//               ->SetStorageAccessGrantSettings(settings, base::DoNothing());
+//         },
+//         settings));
+//   }
 }
 
 }  // namespace
@@ -365,16 +365,16 @@ void ProfileNetworkContextService::UpdateAcceptLanguage() {
       },
       ComputeAcceptLanguage()));
 }
-
+// XXX remove
 void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
     bool block_third_party_cookies) {
-  profile_->ForEachStoragePartition(base::BindRepeating(
-      [](bool block_third_party_cookies,
-         content::StoragePartition* storage_partition) {
-        storage_partition->GetCookieManagerForBrowserProcess()
-            ->BlockThirdPartyCookies(block_third_party_cookies);
-      },
-      block_third_party_cookies));
+//   profile_->ForEachStoragePartition(base::BindRepeating(
+//       [](bool block_third_party_cookies,
+//          content::StoragePartition* storage_partition) {
+//         storage_partition->GetCookieManagerForBrowserProcess()
+//             ->BlockThirdPartyCookies(block_third_party_cookies);
+//       },
+//       block_third_party_cookies));
 }
 
 std::string ProfileNetworkContextService::ComputeAcceptLanguage() const {

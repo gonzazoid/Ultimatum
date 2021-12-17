@@ -148,10 +148,10 @@ void OnGotCookieList(
   std::move(result_callback).Run(url, true, absl::nullopt);
 }
 
-void CookieSetHelper(base::RepeatingClosure run_me,
-                     net::CookieAccessResult access_result) {
-  run_me.Run();
-}
+// void CookieSetHelper(base::RepeatingClosure run_me,
+//                      net::CookieAccessResult access_result) {
+//   run_me.Run();
+// }
 
 bool ShouldStartSpareRenderer() {
   if (!PrefetchProxyStartsSpareRenderer()) {
@@ -1419,11 +1419,12 @@ void PrefetchProxyTabHelper::CheckEligibilityOfURL(
     return;
   }
 
-  net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
-  options.set_return_excluded_cookies();
-  default_storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-      url, options, net::CookiePartitionKeychain::Todo(),
-      base::BindOnce(&OnGotCookieList, url, std::move(result_callback)));
+  // net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
+  // options.set_return_excluded_cookies();
+  // default_storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+  //     url, options, net::CookiePartitionKeychain::Todo(),
+  //     base::BindOnce(&OnGotCookieList, url, std::move(result_callback)));
+  OnGotCookieList(url, std::move(result_callback), {}, {});
 }
 
 void PrefetchProxyTabHelper::OnGotEligibilityResult(
@@ -1492,9 +1493,9 @@ void PrefetchProxyTabHelper::OnGotEligibilityResult(
   // Registers a cookie listener for this URL. If the cookies in the default
   // partition change after this point, then the prefetched resources should not
   // be served.
-  page_->cookie_listeners_[url] = PrefetchProxyCookieListener::MakeAndRegister(
-      url, profile_->GetDefaultStoragePartition()
-               ->GetCookieManagerForBrowserProcess());
+  // page_->cookie_listeners_[url] = PrefetchProxyCookieListener::MakeAndRegister(
+  //     url, profile_->GetDefaultStoragePartition()
+  //              ->GetCookieManagerForBrowserProcess());
 
   for (auto& observer : observer_list_) {
     observer.OnNewEligiblePrefetchStarted();
@@ -1528,21 +1529,22 @@ void PrefetchProxyTabHelper::CopyIsolatedCookiesOnAfterSRPClick(
 
   // We don't want the cookie listener for this URL to get the changes from the
   // copy.
-  page_->cookie_listeners_[url]->StopListening();
+  // page_->cookie_listeners_[url]->StopListening();
 
-  page_->cookie_copy_status_ = CookieCopyStatus::kWaitingForCopy;
+  // page_->cookie_copy_status_ = CookieCopyStatus::kWaitingForCopy;
 
-  if (!page_->isolated_cookie_manager_) {
-    page_->isolated_network_context_->GetCookieManager(
-        page_->isolated_cookie_manager_.BindNewPipeAndPassReceiver());
-  }
+  // if (!page_->isolated_cookie_manager_) {
+  //   page_->isolated_network_context_->GetCookieManager(
+  //       page_->isolated_cookie_manager_.BindNewPipeAndPassReceiver());
+  // }
 
-  net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
-  page_->isolated_cookie_manager_->GetCookieList(
-      url, options, net::CookiePartitionKeychain::Todo(),
-      base::BindOnce(
-          &PrefetchProxyTabHelper::OnGotIsolatedCookiesToCopyAfterSRPClick,
-          weak_factory_.GetWeakPtr(), url));
+  // net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
+  // page_->isolated_cookie_manager_->GetCookieList(
+  //     url, options, net::CookiePartitionKeychain::Todo(),
+  //     base::BindOnce(
+  //         &PrefetchProxyTabHelper::OnGotIsolatedCookiesToCopyAfterSRPClick,
+  //         weak_factory_.GetWeakPtr(), url));
+  OnGotIsolatedCookiesToCopyAfterSRPClick(url, {}, {});
 }
 
 void PrefetchProxyTabHelper::OnGotIsolatedCookiesToCopyAfterSRPClick(
@@ -1551,31 +1553,31 @@ void PrefetchProxyTabHelper::OnGotIsolatedCookiesToCopyAfterSRPClick(
     const net::CookieAccessResultList& excluded_cookies) {
   DCHECK(IsWaitingForAfterSRPCookiesCopy());
 
-  UMA_HISTOGRAM_COUNTS_100("PrefetchProxy.Prefetch.Mainframe.CookiesToCopy",
-                           cookie_list.size());
+  // UMA_HISTOGRAM_COUNTS_100("PrefetchProxy.Prefetch.Mainframe.CookiesToCopy",
+  //                          cookie_list.size());
 
-  if (cookie_list.empty()) {
+  // if (cookie_list.empty()) {
     OnCopiedIsolatedCookiesAfterSRPClick();
     return;
-  }
+  // }
 
   // When |barrier| is run |cookie_list.size()| times, it will run
   // |OnCopiedIsolatedCookiesAfterSRPClick|.
-  base::RepeatingClosure barrier = base::BarrierClosure(
-      cookie_list.size(),
-      base::BindOnce(
-          &PrefetchProxyTabHelper::OnCopiedIsolatedCookiesAfterSRPClick,
-          weak_factory_.GetWeakPtr()));
+  // base::RepeatingClosure barrier = base::BarrierClosure(
+  //     cookie_list.size(),
+  //     base::BindOnce(
+  //         &PrefetchProxyTabHelper::OnCopiedIsolatedCookiesAfterSRPClick,
+  //         weak_factory_.GetWeakPtr()));
 
-  content::StoragePartition* default_storage_partition =
-      profile_->GetDefaultStoragePartition();
-  net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
+  // content::StoragePartition* default_storage_partition =
+  //     profile_->GetDefaultStoragePartition();
+  // net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
 
-  for (const net::CookieWithAccessResult& cookie : cookie_list) {
-    default_storage_partition->GetCookieManagerForBrowserProcess()
-        ->SetCanonicalCookie(cookie.cookie, url, options,
-                             base::BindOnce(&CookieSetHelper, barrier));
-  }
+  // for (const net::CookieWithAccessResult& cookie : cookie_list) {
+  //   default_storage_partition->GetCookieManagerForBrowserProcess()
+  //       ->SetCanonicalCookie(cookie.cookie, url, options,
+  //                            base::BindOnce(&CookieSetHelper, barrier));
+  // }
 }
 
 void PrefetchProxyTabHelper::OnCopiedIsolatedCookiesAfterSRPClick() {

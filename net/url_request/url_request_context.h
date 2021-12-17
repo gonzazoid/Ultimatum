@@ -28,7 +28,7 @@
 
 namespace net {
 class CertVerifier;
-class CookieStore;
+// class CookieStore;
 class CTPolicyEnforcer;
 class HostResolver;
 class HttpAuthHandlerFactory;
@@ -193,8 +193,8 @@ class NET_EXPORT URLRequestContext {
 
   // Gets the cookie store for this context (may be null, in which case
   // cookies are not stored).
-  CookieStore* cookie_store() const { return cookie_store_; }
-  void set_cookie_store(CookieStore* cookie_store);
+  // CookieStore* cookie_store() const { return cookie_store_; }
+  // void set_cookie_store(CookieStore* cookie_store);
 
   TransportSecurityState* transport_security_state() const {
     return transport_security_state_;
@@ -317,7 +317,7 @@ class NET_EXPORT URLRequestContext {
   NetworkDelegate* network_delegate_;
   HttpServerProperties* http_server_properties_;
   const HttpUserAgentSettings* http_user_agent_settings_;
-  CookieStore* cookie_store_;
+  // CookieStore* cookie_store_;
   TransportSecurityState* transport_security_state_;
   CTPolicyEnforcer* ct_policy_enforcer_;
   SCTAuditingDelegate* sct_auditing_delegate_;

@@ -164,25 +164,25 @@ void RecordCTHistograms(const net::SSLInfo& ssl_info) {
       net::ct::CTPolicyCompliance::CT_POLICY_COUNT);
 }
 
-net::CookieOptions CreateCookieOptions(
-    net::CookieOptions::SameSiteCookieContext same_site_context,
-    const net::SamePartyContext& same_party_context,
-    const net::IsolationInfo& isolation_info,
-    bool is_in_nontrivial_first_party_set) {
-  net::CookieOptions options;
-  options.set_return_excluded_cookies();
-  options.set_include_httponly();
-  options.set_same_site_cookie_context(same_site_context);
-  options.set_same_party_context(same_party_context);
-  if (isolation_info.party_context().has_value()) {
+// net::CookieOptions CreateCookieOptions(
+//     net::CookieOptions::SameSiteCookieContext same_site_context,
+//     const net::SamePartyContext& same_party_context,
+//     const net::IsolationInfo& isolation_info,
+//     bool is_in_nontrivial_first_party_set) {
+//   net::CookieOptions options;
+//   options.set_return_excluded_cookies();
+//   options.set_include_httponly();
+//   options.set_same_site_cookie_context(same_site_context);
+//   options.set_same_party_context(same_party_context);
+//   if (isolation_info.party_context().has_value()) {
     // Count the top-frame site since it's not in the party_context.
-    options.set_full_party_context_size(isolation_info.party_context()->size() +
-                                        1);
-  }
-  options.set_is_in_nontrivial_first_party_set(
-      is_in_nontrivial_first_party_set);
-  return options;
-}
+//     options.set_full_party_context_size(isolation_info.party_context()->size() +
+//                                         1);
+//   }
+//   options.set_is_in_nontrivial_first_party_set(
+//       is_in_nontrivial_first_party_set);
+//   return options;
+// }
 
 bool IsTLS13OverTCP(const net::HttpResponseInfo& response_info) {
   // Although IETF QUIC also uses TLS 1.3, our QUIC connections report
@@ -581,59 +581,59 @@ void URLRequestHttpJob::AddExtraHeaders() {
     }
   }
 }
-
+// XXX remove?
 void URLRequestHttpJob::AddCookieHeaderAndStart() {
-  CookieStore* cookie_store = request_->context()->cookie_store();
+  // CookieStore* cookie_store = request_->context()->cookie_store();
   // Read cookies whenever allow_credentials() is true, even if the PrivacyMode
   // is being overridden by NetworkDelegate and will eventually block them, as
   // blocked cookies still need to be logged in that case.
-  if (cookie_store && request_->allow_credentials()) {
-    bool force_ignore_site_for_cookies =
-        request_->force_ignore_site_for_cookies();
-    if (cookie_store->cookie_access_delegate() &&
-        cookie_store->cookie_access_delegate()
-            ->ShouldIgnoreSameSiteRestrictions(request_->url(),
-                                               request_->site_for_cookies())) {
-      force_ignore_site_for_cookies = true;
-    }
-    bool is_main_frame_navigation =
-        IsolationInfo::RequestType::kMainFrame ==
-            request_->isolation_info().request_type() ||
-        request_->force_main_frame_for_same_site_cookies();
-    CookieOptions::SameSiteCookieContext same_site_context =
-        net::cookie_util::ComputeSameSiteContextForRequest(
-            request_->method(), request_->url_chain(),
-            request_->site_for_cookies(), request_->initiator(),
-            is_main_frame_navigation, force_ignore_site_for_cookies);
-
-    net::SchemefulSite request_site(request_->url());
-    const CookieAccessDelegate* delegate =
-        cookie_store->cookie_access_delegate();
-
-    bool is_in_nontrivial_first_party_set =
-        delegate && delegate->IsInNontrivialFirstPartySet(request_site);
-    CookieOptions options = CreateCookieOptions(
-        same_site_context, request_->same_party_context(),
-        request_->isolation_info(), is_in_nontrivial_first_party_set);
-
-    UMA_HISTOGRAM_ENUMERATION(
-        "Cookie.FirstPartySetsContextType.HTTP.Read",
-        net::cookie_util::ComputeFirstPartySetsContextType(
-            request_site, request_->isolation_info(), delegate,
-            request_->force_ignore_top_frame_party_for_cookies()));
-
-    absl::optional<CookiePartitionKey> cookie_partition_key =
-        CookiePartitionKey::FromNetworkIsolationKey(
-            request_->isolation_info().network_isolation_key());
-
-    cookie_store->GetCookieListWithOptionsAsync(
-        request_->url(), options,
-        CookiePartitionKeychain::FromOptional(cookie_partition_key),
-        base::BindOnce(&URLRequestHttpJob::SetCookieHeaderAndStart,
-                       weak_factory_.GetWeakPtr(), options));
-  } else {
+//   if (cookie_store && request_->allow_credentials()) {
+//     bool force_ignore_site_for_cookies =
+//         request_->force_ignore_site_for_cookies();
+//     if (cookie_store->cookie_access_delegate() &&
+//         cookie_store->cookie_access_delegate()
+//             ->ShouldIgnoreSameSiteRestrictions(request_->url(),
+//                                                request_->site_for_cookies())) {
+//       force_ignore_site_for_cookies = true;
+//     }
+//     bool is_main_frame_navigation =
+//         IsolationInfo::RequestType::kMainFrame ==
+//             request_->isolation_info().request_type() ||
+//         request_->force_main_frame_for_same_site_cookies();
+//     CookieOptions::SameSiteCookieContext same_site_context =
+//         net::cookie_util::ComputeSameSiteContextForRequest(
+//             request_->method(), request_->url_chain(),
+//             request_->site_for_cookies(), request_->initiator(),
+//             is_main_frame_navigation, force_ignore_site_for_cookies);
+// 
+//     net::SchemefulSite request_site(request_->url());
+//     const CookieAccessDelegate* delegate =
+//         cookie_store->cookie_access_delegate();
+// 
+//     bool is_in_nontrivial_first_party_set =
+//         delegate && delegate->IsInNontrivialFirstPartySet(request_site);
+//     CookieOptions options = CreateCookieOptions(
+//         same_site_context, request_->same_party_context(),
+//         request_->isolation_info(), is_in_nontrivial_first_party_set);
+// 
+//     UMA_HISTOGRAM_ENUMERATION(
+//         "Cookie.FirstPartySetsContextType.HTTP.Read",
+//         net::cookie_util::ComputeFirstPartySetsContextType(
+//             request_site, request_->isolation_info(), delegate,
+//             request_->force_ignore_top_frame_party_for_cookies()));
+// 
+//     absl::optional<CookiePartitionKey> cookie_partition_key =
+//         CookiePartitionKey::FromNetworkIsolationKey(
+//             request_->isolation_info().network_isolation_key());
+// 
+//     cookie_store->GetCookieListWithOptionsAsync(
+//         request_->url(), options,
+//         CookiePartitionKeychain::FromOptional(cookie_partition_key),
+//         base::BindOnce(&URLRequestHttpJob::SetCookieHeaderAndStart,
+//                        weak_factory_.GetWeakPtr(), options));
+//   } else {
     StartTransaction();
-  }
+  // }
 }
 
 void URLRequestHttpJob::SetCookieHeaderAndStart(
@@ -743,103 +743,103 @@ void URLRequestHttpJob::SaveCookiesAndNotifyHeadersComplete(int result) {
     return;
   }
 
-  CookieStore* cookie_store = request_->context()->cookie_store();
+  // CookieStore* cookie_store = request_->context()->cookie_store();
 
-  if ((request_info_.load_flags & LOAD_DO_NOT_SAVE_COOKIES) || !cookie_store) {
+//   if ((request_info_.load_flags & LOAD_DO_NOT_SAVE_COOKIES) || !cookie_store) {
     NotifyHeadersComplete();
     return;
-  }
-
-  base::Time response_date;
-  absl::optional<base::Time> server_time = absl::nullopt;
-  if (GetResponseHeaders()->GetDateValue(&response_date))
-    server_time = absl::make_optional(response_date);
-
-  bool force_ignore_site_for_cookies =
-      request_->force_ignore_site_for_cookies();
-  if (cookie_store->cookie_access_delegate() &&
-      cookie_store->cookie_access_delegate()->ShouldIgnoreSameSiteRestrictions(
-          request_->url(), request_->site_for_cookies())) {
-    force_ignore_site_for_cookies = true;
-  }
-  bool is_main_frame_navigation = IsolationInfo::RequestType::kMainFrame ==
-                                  request_->isolation_info().request_type();
-  CookieOptions::SameSiteCookieContext same_site_context =
-      net::cookie_util::ComputeSameSiteContextForResponse(
-          request_->url_chain(), request_->site_for_cookies(),
-          request_->initiator(), is_main_frame_navigation,
-          force_ignore_site_for_cookies);
-
-  const CookieAccessDelegate* delegate = cookie_store->cookie_access_delegate();
-  net::SchemefulSite request_site(request_->url());
-
-  bool is_in_nontrivial_first_party_set =
-      delegate && delegate->IsInNontrivialFirstPartySet(request_site);
-  CookieOptions options = CreateCookieOptions(
-      same_site_context, request_->same_party_context(),
-      request_->isolation_info(), is_in_nontrivial_first_party_set);
-
-  UMA_HISTOGRAM_ENUMERATION(
-      "Cookie.FirstPartySetsContextType.HTTP.Write",
-      net::cookie_util::ComputeFirstPartySetsContextType(
-          request_site, request_->isolation_info(), delegate,
-          request_->force_ignore_top_frame_party_for_cookies()));
-
-  // Set all cookies, without waiting for them to be set. Any subsequent
-  // read will see the combined result of all cookie operation.
-  const base::StringPiece name("Set-Cookie");
-  std::string cookie_string;
-  size_t iter = 0;
-  HttpResponseHeaders* headers = GetResponseHeaders();
-
-  // NotifyHeadersComplete needs to be called once and only once after the
-  // list has been fully processed, and it can either be called in the
-  // callback or after the loop is called, depending on how the last element
-  // was handled. |num_cookie_lines_left_| keeps track of how many async
-  // callbacks are currently out (starting from 1 to make sure the loop runs
-  // all the way through before trying to exit). If there are any callbacks
-  // still waiting when the loop ends, then NotifyHeadersComplete will be
-  // called when it reaches 0 in the callback itself.
-  num_cookie_lines_left_ = 1;
-  while (headers->EnumerateHeader(&iter, name, &cookie_string)) {
-    CookieInclusionStatus returned_status;
-
-    num_cookie_lines_left_++;
-
-    std::unique_ptr<CanonicalCookie> cookie = net::CanonicalCookie::Create(
-        request_->url(), cookie_string, base::Time::Now(), server_time,
-        net::CookiePartitionKey::FromNetworkIsolationKey(
-            request_->isolation_info().network_isolation_key()),
-        &returned_status);
-
-    absl::optional<CanonicalCookie> cookie_to_return = absl::nullopt;
-    if (returned_status.IsInclude()) {
-      DCHECK(cookie);
-      // Make a copy of the cookie if we successfully made one.
-      cookie_to_return = *cookie;
-    }
-    if (cookie /* && !CanSetCookie(*cookie, &options) */) {
-      returned_status.AddExclusionReason(
-          CookieInclusionStatus::EXCLUDE_USER_PREFERENCES);
-    }
-    if (!returned_status.IsInclude()) {
-      OnSetCookieResult(options, cookie_to_return, std::move(cookie_string),
-                        CookieAccessResult(returned_status));
-      continue;
-    }
-
-    cookie_store->SetCanonicalCookieAsync(
-        std::move(cookie), request_->url(), options,
-        base::BindOnce(&URLRequestHttpJob::OnSetCookieResult,
-                       weak_factory_.GetWeakPtr(), options, cookie_to_return,
-                       cookie_string));
-  }
-  // Removing the 1 that |num_cookie_lines_left| started with, signifing that
-  // loop has been exited.
-  num_cookie_lines_left_--;
-
-  if (num_cookie_lines_left_ == 0)
-    NotifyHeadersComplete();
+//   }
+// 
+//   base::Time response_date;
+//   absl::optional<base::Time> server_time = absl::nullopt;
+//   if (GetResponseHeaders()->GetDateValue(&response_date))
+//     server_time = absl::make_optional(response_date);
+// 
+//   bool force_ignore_site_for_cookies =
+//       request_->force_ignore_site_for_cookies();
+//   if (cookie_store->cookie_access_delegate() &&
+//       cookie_store->cookie_access_delegate()->ShouldIgnoreSameSiteRestrictions(
+//           request_->url(), request_->site_for_cookies())) {
+//     force_ignore_site_for_cookies = true;
+//   }
+//   bool is_main_frame_navigation = IsolationInfo::RequestType::kMainFrame ==
+//                                   request_->isolation_info().request_type();
+//   CookieOptions::SameSiteCookieContext same_site_context =
+//       net::cookie_util::ComputeSameSiteContextForResponse(
+//           request_->url_chain(), request_->site_for_cookies(),
+//           request_->initiator(), is_main_frame_navigation,
+//           force_ignore_site_for_cookies);
+// 
+//   const CookieAccessDelegate* delegate = cookie_store->cookie_access_delegate();
+//   net::SchemefulSite request_site(request_->url());
+// 
+//   bool is_in_nontrivial_first_party_set =
+//       delegate && delegate->IsInNontrivialFirstPartySet(request_site);
+//   CookieOptions options = CreateCookieOptions(
+//       same_site_context, request_->same_party_context(),
+//       request_->isolation_info(), is_in_nontrivial_first_party_set);
+// 
+//   UMA_HISTOGRAM_ENUMERATION(
+//       "Cookie.FirstPartySetsContextType.HTTP.Write",
+//       net::cookie_util::ComputeFirstPartySetsContextType(
+//           request_site, request_->isolation_info(), delegate,
+//           request_->force_ignore_top_frame_party_for_cookies()));
+// 
+//   // Set all cookies, without waiting for them to be set. Any subsequent
+//   // read will see the combined result of all cookie operation.
+//   const base::StringPiece name("Set-Cookie");
+//   std::string cookie_string;
+//   size_t iter = 0;
+//   HttpResponseHeaders* headers = GetResponseHeaders();
+// 
+//   // NotifyHeadersComplete needs to be called once and only once after the
+//   // list has been fully processed, and it can either be called in the
+//   // callback or after the loop is called, depending on how the last element
+//   // was handled. |num_cookie_lines_left_| keeps track of how many async
+//   // callbacks are currently out (starting from 1 to make sure the loop runs
+//   // all the way through before trying to exit). If there are any callbacks
+//   // still waiting when the loop ends, then NotifyHeadersComplete will be
+//   // called when it reaches 0 in the callback itself.
+//   num_cookie_lines_left_ = 1;
+//   while (headers->EnumerateHeader(&iter, name, &cookie_string)) {
+//     CookieInclusionStatus returned_status;
+// 
+//     num_cookie_lines_left_++;
+// 
+//     std::unique_ptr<CanonicalCookie> cookie = net::CanonicalCookie::Create(
+//         request_->url(), cookie_string, base::Time::Now(), server_time,
+//         net::CookiePartitionKey::FromNetworkIsolationKey(
+//             request_->isolation_info().network_isolation_key()),
+//         &returned_status);
+// 
+//     absl::optional<CanonicalCookie> cookie_to_return = absl::nullopt;
+//     if (returned_status.IsInclude()) {
+//       DCHECK(cookie);
+//       // Make a copy of the cookie if we successfully made one.
+//       cookie_to_return = *cookie;
+//     }
+//     if (cookie /* && !CanSetCookie(*cookie, &options) */) {
+//       returned_status.AddExclusionReason(
+//           CookieInclusionStatus::EXCLUDE_USER_PREFERENCES);
+//     }
+//     if (!returned_status.IsInclude()) {
+//       OnSetCookieResult(options, cookie_to_return, std::move(cookie_string),
+//                         CookieAccessResult(returned_status));
+//       continue;
+//     }
+// 
+//     cookie_store->SetCanonicalCookieAsync(
+//         std::move(cookie), request_->url(), options,
+//         base::BindOnce(&URLRequestHttpJob::OnSetCookieResult,
+//                        weak_factory_.GetWeakPtr(), options, cookie_to_return,
+//                        cookie_string));
+//   }
+//   // Removing the 1 that |num_cookie_lines_left| started with, signifing that
+//   // loop has been exited.
+//   num_cookie_lines_left_--;
+// 
+//   if (num_cookie_lines_left_ == 0)
+//     NotifyHeadersComplete();
 }
 
 void URLRequestHttpJob::OnSetCookieResult(

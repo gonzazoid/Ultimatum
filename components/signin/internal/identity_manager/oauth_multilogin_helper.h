@@ -72,9 +72,9 @@ class OAuthMultiloginHelper : public GaiaAuthConsumer {
   void StartSettingCookies(const OAuthMultiloginResult& result);
 
   // Callback for CookieManager::SetCanonicalCookie.
-  void OnCookieSet(const std::string& cookie_name,
+  void OnCookieSet(/* const std::string& cookie_name,
                    const std::string& cookie_domain,
-                   net::CookieAccessResult access_result);
+                   net::CookieAccessResult access_result */);
 
   SigninClient* signin_client_;
   AccountsCookieMutator::PartitionDelegate* partition_delegate_;

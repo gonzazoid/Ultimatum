@@ -299,13 +299,15 @@ void StorageHandler::GetCookies(Maybe<std::string> browser_context_id,
     return;
   }
 
-  storage_partition->GetCookieManagerForBrowserProcess()->GetAllCookies(
-      base::BindOnce(
-          [](std::unique_ptr<GetCookiesCallback> callback,
-             const std::vector<net::CanonicalCookie>& cookies) {
-            callback->sendSuccess(NetworkHandler::BuildCookieArray(cookies));
-          },
-          std::move(callback)));
+  // storage_partition->GetCookieManagerForBrowserProcess()->GetAllCookies(
+  //     base::BindOnce(
+  //         [](std::unique_ptr<GetCookiesCallback> callback,
+  //            const std::vector<net::CanonicalCookie>& cookies) {
+  //           callback->sendSuccess(NetworkHandler::BuildCookieArray(cookies));
+  //         },
+  //         std::move(callback)));
+  auto cookies = std::make_unique<Array<Network::Cookie>>();
+  callback->sendSuccess(std::move(cookies));
 }
 
 void StorageHandler::SetCookies(
@@ -333,23 +335,23 @@ void StorageHandler::SetCookies(
           },
           std::move(callback)));
 }
-
+// XXX remove
 void StorageHandler::ClearCookies(
     Maybe<std::string> browser_context_id,
     std::unique_ptr<ClearCookiesCallback> callback) {
   StoragePartition* storage_partition = nullptr;
   Response response = StorageHandler::FindStoragePartition(browser_context_id,
                                                            &storage_partition);
-  if (!response.IsSuccess()) {
-    callback->sendFailure(std::move(response));
+  // if (!response.IsSuccess()) {
+  //   callback->sendFailure(std::move(response));
     return;
-  }
+  // }
 
-  storage_partition->GetCookieManagerForBrowserProcess()->DeleteCookies(
-      network::mojom::CookieDeletionFilter::New(),
-      base::BindOnce([](std::unique_ptr<ClearCookiesCallback> callback,
-                        uint32_t) { callback->sendSuccess(); },
-                     std::move(callback)));
+  // storage_partition->GetCookieManagerForBrowserProcess()->DeleteCookies(
+  //     network::mojom::CookieDeletionFilter::New(),
+  //     base::BindOnce([](std::unique_ptr<ClearCookiesCallback> callback,
+  //                       uint32_t) { callback->sendSuccess(); },
+  //                    std::move(callback)));
 }
 
 void StorageHandler::ClearDataForOrigin(

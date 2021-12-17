@@ -59,7 +59,7 @@ class SigninClient : public KeyedService {
   GetURLLoaderFactory() = 0;
 
   // Returns the CookieManager for the client.
-  virtual network::mojom::CookieManager* GetCookieManager() = 0;
+  // virtual network::mojom::CookieManager* GetCookieManager() = 0;
 
   // Called before Google sign-out started. Implementers must run the
   // |on_signout_decision_reached|, passing a SignoutDecision to allow/disallow

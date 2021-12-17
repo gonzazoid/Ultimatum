@@ -83,15 +83,15 @@ void GaiaRemoteConsentFlow::OnSetAccountsComplete(
     return;
   }
 
-  network::mojom::CookieManager* cookie_manager =
-      GetCookieManagerForPartition();
-  net::CookieOptions options;
-  for (const auto& cookie : resolution_data_.cookies) {
-    cookie_manager->SetCanonicalCookie(
-        cookie,
-        net::cookie_util::SimulatedCookieSource(cookie, url::kHttpsScheme),
-        options, network::mojom::CookieManager::SetCanonicalCookieCallback());
-  }
+  // network::mojom::CookieManager* cookie_manager =
+  //     GetCookieManagerForPartition();
+  // net::CookieOptions options;
+  // for (const auto& cookie : resolution_data_.cookies) {
+  //   cookie_manager->SetCanonicalCookie(
+  //       cookie,
+  //       net::cookie_util::SimulatedCookieSource(cookie, url::kHttpsScheme),
+  //       options, network::mojom::CookieManager::SetCanonicalCookieCallback());
+  // }
 
   identity_api_set_consent_result_subscription_ =
       IdentityAPI::GetFactoryInstance()
@@ -158,10 +158,10 @@ GaiaRemoteConsentFlow::CreateGaiaAuthFetcherForPartition(
       web_flow_->GetGuestPartition()->GetURLLoaderFactoryForBrowserProcess());
 }
 
-network::mojom::CookieManager*
-GaiaRemoteConsentFlow::GetCookieManagerForPartition() {
-  return web_flow_->GetGuestPartition()->GetCookieManagerForBrowserProcess();
-}
+// network::mojom::CookieManager*
+// GaiaRemoteConsentFlow::GetCookieManagerForPartition() {
+//   return web_flow_->GetGuestPartition()->GetCookieManagerForBrowserProcess();
+// }
 
 void GaiaRemoteConsentFlow::OnEndBatchOfRefreshTokenStateChanges() {
 // On ChromeOS, new accounts are added through the account manager. They need to

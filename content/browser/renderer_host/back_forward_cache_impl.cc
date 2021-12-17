@@ -478,18 +478,18 @@ void BackForwardCacheImpl::Entry::WriteIntoTrace(
   auto dict = std::move(context).WriteDictionary();
   dict.Add("render_frame_host", render_frame_host());
 }
-
+// XXX remove
 void BackForwardCacheImpl::Entry::StartMonitoringCookieChange() {
-  RenderFrameHostImpl* rfh = stored_page_->render_frame_host.get();
-  StoragePartition* storage_partition = rfh->GetStoragePartition();
-  auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
-  if (!cookie_listener_receiver_.is_bound()) {
+  // RenderFrameHostImpl* rfh = stored_page_->render_frame_host.get();
+  // StoragePartition* storage_partition = rfh->GetStoragePartition();
+  // auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
+  // if (!cookie_listener_receiver_.is_bound()) {
     // Listening only to the main document's URL, not the documents inside the
     // subframes.
-    cookie_manager->AddCookieChangeListener(
-        rfh->GetLastCommittedURL(), absl::nullopt,
-        cookie_listener_receiver_.BindNewPipeAndPassRemote());
-  }
+  //   cookie_manager->AddCookieChangeListener(
+  //       rfh->GetLastCommittedURL(), absl::nullopt,
+  //       cookie_listener_receiver_.BindNewPipeAndPassRemote());
+  // }
 }
 
 void BackForwardCacheImpl::Entry::OnCookieChange(

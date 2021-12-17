@@ -37,19 +37,20 @@ CookieHelper::~CookieHelper() {}
 void CookieHelper::StartFetching(FetchCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(!callback.is_null());
-  storage_partition_->GetCookieManagerForBrowserProcess()->GetAllCookies(
-      std::move(callback));
+  // storage_partition_->GetCookieManagerForBrowserProcess()->GetAllCookies(
+  //     std::move(callback));
+  std::move(callback).Run({});
 }
 
 void CookieHelper::DeleteCookie(const net::CanonicalCookie& cookie) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (delete_disabled_callback_ &&
-      delete_disabled_callback_.Run(net::cookie_util::CookieOriginToURL(
-          cookie.Domain(), cookie.IsSecure()))) {
-    return;
-  }
-  storage_partition_->GetCookieManagerForBrowserProcess()
-      ->DeleteCanonicalCookie(cookie, base::DoNothing());
+  // if (delete_disabled_callback_ &&
+  //     delete_disabled_callback_.Run(net::cookie_util::CookieOriginToURL(
+  //         cookie.Domain(), cookie.IsSecure()))) {
+  //   return;
+  // }
+  // storage_partition_->GetCookieManagerForBrowserProcess()
+  //     ->DeleteCanonicalCookie(cookie, base::DoNothing());
 }
 
 CannedCookieHelper::CannedCookieHelper(

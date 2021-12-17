@@ -359,7 +359,7 @@ class GaiaCookieManagerService
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcherForPartition(
       GaiaAuthConsumer* consumer,
       const gaia::GaiaSource& source) override;
-  network::mojom::CookieManager* GetCookieManagerForPartition() override;
+  // network::mojom::CookieManager* GetCookieManagerForPartition() override;
 
   // Helper method to initialize listed accounts ids.
   void InitializeListedAccountsIds();

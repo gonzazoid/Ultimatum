@@ -646,24 +646,24 @@ class NetworkContextConfigurationBrowserTest
 
   std::string GetCookiesForContextType(NetworkContextType network_context_type,
                                        const GURL& url) {
-    std::string cookies;
-    base::RunLoop run_loop;
-    mojo::Remote<network::mojom::CookieManager> cookie_manager;
-    GetNetworkContextForContextType(network_context_type)
-        ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
-    cookie_manager->GetCookieList(
-        url, net::CookieOptions::MakeAllInclusive(),
-        net::CookiePartitionKeychain(),
-        base::BindOnce(
-            [](std::string* cookies_out, base::RunLoop* run_loop,
-               const net::CookieAccessResultList& cookies,
-               const net::CookieAccessResultList& excluded_cookies) {
-              *cookies_out = net::CanonicalCookie::BuildCookieLine(cookies);
-              run_loop->Quit();
-            },
-            &cookies, &run_loop));
-    run_loop.Run();
-    return cookies;
+    // std::string cookies;
+    // base::RunLoop run_loop;
+    // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+    // GetNetworkContextForContextType(network_context_type)
+    //     ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+    // cookie_manager->GetCookieList(
+    //     url, net::CookieOptions::MakeAllInclusive(),
+    //     net::CookiePartitionKeychain(),
+    //     base::BindOnce(
+    //         [](std::string* cookies_out, base::RunLoop* run_loop,
+    //            const net::CookieAccessResultList& cookies,
+    //            const net::CookieAccessResultList& excluded_cookies) {
+    //           *cookies_out = net::CanonicalCookie::BuildCookieLine(cookies);
+    //           run_loop->Quit();
+    //         },
+    //         &cookies, &run_loop));
+    // run_loop.Run();
+    return ""; // cookies;
   }
 
   void ForEachOtherContext(

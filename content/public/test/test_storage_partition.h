@@ -69,7 +69,7 @@ class TestStoragePartition : public StoragePartition {
       network::mojom::CookieManager* cookie_manager_for_browser_process) {
     cookie_manager_for_browser_process_ = cookie_manager_for_browser_process;
   }
-  network::mojom::CookieManager* GetCookieManagerForBrowserProcess() override;
+  // network::mojom::CookieManager* GetCookieManagerForBrowserProcess() override;
 
   void CreateHasTrustTokensAnswerer(
       mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,

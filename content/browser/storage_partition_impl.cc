@@ -948,7 +948,7 @@ class StoragePartitionImpl::DataDeletionHelper {
       storage::QuotaManager* quota_manager,
       storage::SpecialStoragePolicy* special_storage_policy,
       storage::FileSystemContext* filesystem_context,
-      network::mojom::CookieManager* cookie_manager,
+      // network::mojom::CookieManager* cookie_manager,
       InterestGroupManager* interest_group_manager,
       AttributionManagerImpl* attribution_manager,
       bool perform_storage_cleanup,
@@ -1405,38 +1405,38 @@ StoragePartitionImpl::GetURLLoaderFactoryForBrowserProcessIOThread() {
   return url_loader_factory_getter_->GetPendingNetworkFactory();
 }
 
-network::mojom::CookieManager*
-StoragePartitionImpl::GetCookieManagerForBrowserProcess() {
-  DCHECK(initialized_);
+// network::mojom::CookieManager*
+// StoragePartitionImpl::GetCookieManagerForBrowserProcess() {
+//   DCHECK(initialized_);
   // Create the CookieManager as needed.
-  if (!cookie_manager_for_browser_process_ ||
-      !cookie_manager_for_browser_process_.is_connected()) {
+//   if (!cookie_manager_for_browser_process_ ||
+//       !cookie_manager_for_browser_process_.is_connected()) {
     // Reset `cookie_manager_for_browser_process_` before binding it again.
-    cookie_manager_for_browser_process_.reset();
-    GetNetworkContext()->GetCookieManager(
-        cookie_manager_for_browser_process_.BindNewPipeAndPassReceiver());
-  }
-  return cookie_manager_for_browser_process_.get();
-}
+//     cookie_manager_for_browser_process_.reset();
+//     GetNetworkContext()->GetCookieManager(
+//         cookie_manager_for_browser_process_.BindNewPipeAndPassReceiver());
+//   }
+//   return cookie_manager_for_browser_process_.get();
+// }
 
-void StoragePartitionImpl::CreateRestrictedCookieManager(
-    network::mojom::RestrictedCookieManagerRole role,
-    const url::Origin& origin,
-    const net::IsolationInfo& isolation_info,
-    bool is_service_worker,
-    int process_id,
-    int routing_id,
-    mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
-    mojo::PendingRemote<network::mojom::CookieAccessObserver> cookie_observer) {
-  DCHECK(initialized_);
-  if (!GetContentClient()->browser()->WillCreateRestrictedCookieManager(
-          role, browser_context_, origin, isolation_info, is_service_worker,
-          process_id, routing_id, &receiver)) {
-    GetNetworkContext()->GetRestrictedCookieManager(std::move(receiver), role,
-                                                    origin, isolation_info,
-                                                    std::move(cookie_observer));
-  }
-}
+// void StoragePartitionImpl::CreateRestrictedCookieManager(
+//     network::mojom::RestrictedCookieManagerRole role,
+//     const url::Origin& origin,
+//     const net::IsolationInfo& isolation_info,
+//     bool is_service_worker,
+//     int process_id,
+//     int routing_id,
+//     mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
+//     mojo::PendingRemote<network::mojom::CookieAccessObserver> cookie_observer) {
+//   DCHECK(initialized_);
+//   if (!GetContentClient()->browser()->WillCreateRestrictedCookieManager(
+//           role, browser_context_, origin, isolation_info, is_service_worker,
+//           process_id, routing_id, &receiver)) {
+//     GetNetworkContext()->GetRestrictedCookieManager(std::move(receiver), role,
+//                                                     origin, isolation_info,
+//                                                     std::move(cookie_observer));
+//   }
+// }
 
 void StoragePartitionImpl::CreateHasTrustTokensAnswerer(
     mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,
@@ -2126,7 +2126,7 @@ void StoragePartitionImpl::ClearDataImpl(
       storage_origin, std::move(origin_matcher),
       std::move(cookie_deletion_filter), GetPath(), dom_storage_context_.get(),
       quota_manager_.get(), special_storage_policy_.get(),
-      filesystem_context_.get(), GetCookieManagerForBrowserProcess(),
+      filesystem_context_.get(), /* GetCookieManagerForBrowserProcess(), */
       interest_group_manager_.get(), attribution_manager_.get(),
       perform_storage_cleanup, begin, end);
 }
@@ -2326,7 +2326,7 @@ void StoragePartitionImpl::DataDeletionHelper::ClearDataOnUIThread(
     storage::QuotaManager* quota_manager,
     storage::SpecialStoragePolicy* special_storage_policy,
     storage::FileSystemContext* filesystem_context,
-    network::mojom::CookieManager* cookie_manager,
+    // network::mojom::CookieManager* cookie_manager,
     InterestGroupManager* interest_group_manager,
     AttributionManagerImpl* attribution_manager,
     bool perform_storage_cleanup,
@@ -2355,22 +2355,26 @@ void StoragePartitionImpl::DataDeletionHelper::ClearDataOnUIThread(
     // The CookieDeletionFilter has a redundant time interval to `begin` and
     // `end`. Ensure that the filter has no time interval specified to help
     // callers detect when they are using the wrong interval values.
-    DCHECK(!cookie_deletion_filter->created_after_time.has_value());
-    DCHECK(!cookie_deletion_filter->created_before_time.has_value());
+    // DCHECK(!cookie_deletion_filter->created_after_time.has_value());
+    // DCHECK(!cookie_deletion_filter->created_before_time.has_value());
 
-    if (!begin.is_null())
-      cookie_deletion_filter->created_after_time = begin;
-    if (!end.is_null())
-      cookie_deletion_filter->created_before_time = end;
+    // if (!begin.is_null())
+    //   cookie_deletion_filter->created_after_time = begin;
+    // if (!end.is_null())
+    //   cookie_deletion_filter->created_before_time = end;
 
-    cookie_manager->DeleteCookies(
-        std::move(cookie_deletion_filter),
-        base::BindOnce(
-            &OnClearedCookies,
+    // cookie_manager->DeleteCookies(
+    //     std::move(cookie_deletion_filter),
+    //     base::BindOnce(
+    //         &OnClearedCookies,
             // Handle the cookie store being destroyed and the callback thus not
             // being called.
-            mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-                CreateTaskCompletionClosure(TracingDataType::kCookies))));
+    //         mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+    //             CreateTaskCompletionClosure(TracingDataType::kCookies))));
+    OnClearedCookies(
+        mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+                CreateTaskCompletionClosure(TracingDataType::kCookies)),
+        0);
   }
 
   if (remove_mask_ & REMOVE_DATA_MASK_INTEREST_GROUPS) {

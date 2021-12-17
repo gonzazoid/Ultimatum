@@ -217,14 +217,14 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
       mojo::PendingReceiver<mojom::URLLoaderFactory> receiver,
       mojom::URLLoaderFactoryParamsPtr params) override;
   void ResetURLLoaderFactories() override;
-  void GetCookieManager(
-      mojo::PendingReceiver<mojom::CookieManager> receiver) override;
-  void GetRestrictedCookieManager(
-      mojo::PendingReceiver<mojom::RestrictedCookieManager> receiver,
-      mojom::RestrictedCookieManagerRole role,
-      const url::Origin& origin,
-      const net::IsolationInfo& isolation_info,
-      mojo::PendingRemote<mojom::CookieAccessObserver> observer) override;
+  // void GetCookieManager(
+  //     mojo::PendingReceiver<mojom::CookieManager> receiver) override;
+  // void GetRestrictedCookieManager(
+  //     mojo::PendingReceiver<mojom::RestrictedCookieManager> receiver,
+  //     mojom::RestrictedCookieManagerRole role,
+  //     const url::Origin& origin,
+  //     const net::IsolationInfo& isolation_info,
+  //     mojo::PendingRemote<mojom::CookieAccessObserver> observer) override;
   void GetHasTrustTokensAnswerer(
       mojo::PendingReceiver<mojom::HasTrustTokensAnswerer> receiver,
       const url::Origin& top_frame_origin) override;

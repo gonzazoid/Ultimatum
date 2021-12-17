@@ -702,12 +702,12 @@ bool WebTestControlHost::ResetBrowserAfterWebTest() {
 
   // Delete all cookies.
   {
-    BrowserContext* browser_context =
-        ShellContentBrowserClient::Get()->browser_context();
-    StoragePartition* storage_partition =
-        browser_context->GetDefaultStoragePartition();
-    storage_partition->GetCookieManagerForBrowserProcess()->DeleteCookies(
-        network::mojom::CookieDeletionFilter::New(), base::DoNothing());
+    // BrowserContext* browser_context =
+    //     ShellContentBrowserClient::Get()->browser_context();
+    // StoragePartition* storage_partition =
+    //     browser_context->GetDefaultStoragePartition();
+    // storage_partition->GetCookieManagerForBrowserProcess()->DeleteCookies(
+    //     network::mojom::CookieDeletionFilter::New(), base::DoNothing());
   }
 
   ui::SelectFileDialog::SetFactory(nullptr);
@@ -1927,12 +1927,12 @@ void WebTestControlHost::SendBluetoothManualChooserEvent(
 }
 
 void WebTestControlHost::BlockThirdPartyCookies(bool block) {
-  ShellBrowserContext* browser_context =
-      ShellContentBrowserClient::Get()->browser_context();
-  StoragePartition* storage_partition =
-      browser_context->GetDefaultStoragePartition();
-  storage_partition->GetCookieManagerForBrowserProcess()
-      ->BlockThirdPartyCookies(block);
+  // ShellBrowserContext* browser_context =
+  //     ShellContentBrowserClient::Get()->browser_context();
+  // StoragePartition* storage_partition =
+  //     browser_context->GetDefaultStoragePartition();
+  // storage_partition->GetCookieManagerForBrowserProcess()
+  //     ->BlockThirdPartyCookies(block);
 }
 
 void WebTestControlHost::BindWebTestControlHostForRenderer(

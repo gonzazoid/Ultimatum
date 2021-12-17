@@ -479,7 +479,7 @@ class DevToolsURLLoaderFactoryProxy : public network::mojom::URLLoaderFactory {
       mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>
           target_factory_remote,
-      mojo::PendingRemote<network::mojom::CookieManager> cookie_manager,
+      // mojo::PendingRemote<network::mojom::CookieManager> cookie_manager,
       base::WeakPtr<DevToolsURLLoaderInterceptor> interceptor);
   ~DevToolsURLLoaderFactoryProxy() override;
 
@@ -519,7 +519,7 @@ DevToolsURLLoaderFactoryProxy::DevToolsURLLoaderFactoryProxy(
     bool is_download,
     mojo::PendingReceiver<network::mojom::URLLoaderFactory> loader_receiver,
     mojo::PendingRemote<network::mojom::URLLoaderFactory> target_factory_remote,
-    mojo::PendingRemote<network::mojom::CookieManager> cookie_manager,
+    // mojo::PendingRemote<network::mojom::CookieManager> cookie_manager,
     base::WeakPtr<DevToolsURLLoaderInterceptor> interceptor)
     : frame_token_(frame_token),
       process_id_(process_id),
@@ -535,10 +535,10 @@ DevToolsURLLoaderFactoryProxy::DevToolsURLLoaderFactoryProxy(
       base::BindRepeating(&DevToolsURLLoaderFactoryProxy::OnProxyBindingError,
                           base::Unretained(this)));
 
-  cookie_manager_.Bind(std::move(cookie_manager));
-  cookie_manager_.set_disconnect_handler(
-      base::BindOnce(&DevToolsURLLoaderFactoryProxy::OnTargetFactoryError,
-                     base::Unretained(this)));
+  // cookie_manager_.Bind(std::move(cookie_manager));
+  // cookie_manager_.set_disconnect_handler(
+  //     base::BindOnce(&DevToolsURLLoaderFactoryProxy::OnTargetFactoryError,
+  //                    base::Unretained(this)));
 }
 
 DevToolsURLLoaderFactoryProxy::~DevToolsURLLoaderFactoryProxy() = default;
@@ -679,12 +679,12 @@ bool DevToolsURLLoaderInterceptor::CreateProxyForInterception(
   if (is_navigation)
     process_id_override = 0;
 
-  storage_partition->GetNetworkContext()->GetCookieManager(
-      cookie_manager.InitWithNewPipeAndPassReceiver());
+  // storage_partition->GetNetworkContext()->GetCookieManager(
+  //     cookie_manager.InitWithNewPipeAndPassReceiver());
   new DevToolsURLLoaderFactoryProxy(
       frame_token, process_id_override, is_download,
       std::move(intercepting_factory->overridden_factory_receiver),
-      std::move(target_remote), std::move(cookie_manager),
+      std::move(target_remote), /* std::move(cookie_manager), */
       weak_factory_.GetWeakPtr());
   intercepting_factory->overridden_factory_receiver =
       std::move(overridden_factory_receiver);

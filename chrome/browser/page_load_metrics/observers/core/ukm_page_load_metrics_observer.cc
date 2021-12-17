@@ -222,15 +222,16 @@ UkmPageLoadMetricsObserver::OnRedirect(
 void UkmPageLoadMetricsObserver::UpdateMainFrameRequestHadCookie(
     content::BrowserContext* browser_context,
     const GURL& url) {
-  content::StoragePartition* partition =
-      browser_context->GetStoragePartitionForUrl(url);
+  // content::StoragePartition* partition =
+  //     browser_context->GetStoragePartitionForUrl(url);
 
-  partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-      url, net::CookieOptions::MakeAllInclusive(),
-      net::CookiePartitionKeychain::Todo(),
-      base::BindOnce(
-          &UkmPageLoadMetricsObserver::OnMainFrameRequestHadCookieResult,
-          weak_factory_.GetWeakPtr(), base::Time::Now()));
+  // partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+  //     url, net::CookieOptions::MakeAllInclusive(),
+  //     net::CookiePartitionKeychain::Todo(),
+  //     base::BindOnce(
+  //         &UkmPageLoadMetricsObserver::OnMainFrameRequestHadCookieResult,
+  //         weak_factory_.GetWeakPtr(), base::Time::Now()));
+  OnMainFrameRequestHadCookieResult(base::Time::Now(), {}, {});
 }
 
 void UkmPageLoadMetricsObserver::OnMainFrameRequestHadCookieResult(

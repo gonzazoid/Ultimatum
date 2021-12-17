@@ -147,10 +147,10 @@ ChromeSigninClient::GetURLLoaderFactory() {
       ->GetURLLoaderFactoryForBrowserProcess();
 }
 
-network::mojom::CookieManager* ChromeSigninClient::GetCookieManager() {
-  return profile_->GetDefaultStoragePartition()
-      ->GetCookieManagerForBrowserProcess();
-}
+// network::mojom::CookieManager* ChromeSigninClient::GetCookieManager() {
+//   return profile_->GetDefaultStoragePartition()
+//       ->GetCookieManagerForBrowserProcess();
+// }
 
 bool ChromeSigninClient::AreSigninCookiesAllowed() {
   return ProfileAllowsSigninCookies(profile_);

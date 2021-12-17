@@ -141,7 +141,7 @@ class CONTENT_EXPORT StoragePartitionImpl
   GetURLLoaderFactoryForBrowserProcessWithCORBEnabled() override;
   std::unique_ptr<network::PendingSharedURLLoaderFactory>
   GetURLLoaderFactoryForBrowserProcessIOThread() override;
-  network::mojom::CookieManager* GetCookieManagerForBrowserProcess() override;
+  // network::mojom::CookieManager* GetCookieManagerForBrowserProcess() override;
   void CreateHasTrustTokensAnswerer(
       mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,
       const url::Origin& top_frame_origin) override;
@@ -364,16 +364,16 @@ class CONTENT_EXPORT StoragePartitionImpl
   // We have to plumb `is_service_worker`, `process_id` and `routing_id` because
   // they are plumbed to WebView via WillCreateRestrictedCookieManager, which
   // makes some decision based on that.
-  void CreateRestrictedCookieManager(
-      network::mojom::RestrictedCookieManagerRole role,
-      const url::Origin& origin,
-      const net::IsolationInfo& isolation_info,
-      bool is_service_worker,
-      int process_id,
-      int routing_id,
-      mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
-      mojo::PendingRemote<network::mojom::CookieAccessObserver>
-          cookie_observer);
+  // void CreateRestrictedCookieManager(
+  //     network::mojom::RestrictedCookieManagerRole role,
+  //     const url::Origin& origin,
+  //     const net::IsolationInfo& isolation_info,
+  //     bool is_service_worker,
+  //     int process_id,
+  //     int routing_id,
+  //     mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
+  //     mojo::PendingRemote<network::mojom::CookieAccessObserver>
+  //         cookie_observer);
 
   // Override the origin policy manager for testing use only.
   void SetOriginPolicyManagerForBrowserProcessForTesting(

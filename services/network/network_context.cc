@@ -511,8 +511,8 @@ NetworkContext::NetworkContext(
 #endif
 
 #if defined(OS_ANDROID)
-  if (params_->cookie_manager)
-    GetCookieManager(std::move(params_->cookie_manager));
+  // if (params_->cookie_manager)
+  //   GetCookieManager(std::move(params_->cookie_manager));
 #endif
 
   CreateURLLoaderFactoryForCertNetFetcher(
@@ -674,24 +674,24 @@ void NetworkContext::ResetURLLoaderFactories() {
     factory->ClearBindings();
 }
 
-void NetworkContext::GetCookieManager(
-    mojo::PendingReceiver<mojom::CookieManager> receiver) {
-  cookie_manager_->AddReceiver(std::move(receiver));
-}
+// void NetworkContext::GetCookieManager(
+//     mojo::PendingReceiver<mojom::CookieManager> receiver) {
+//   cookie_manager_->AddReceiver(std::move(receiver));
+// }
 
-void NetworkContext::GetRestrictedCookieManager(
-    mojo::PendingReceiver<mojom::RestrictedCookieManager> receiver,
-    mojom::RestrictedCookieManagerRole role,
-    const url::Origin& origin,
-    const net::IsolationInfo& isolation_info,
-    mojo::PendingRemote<mojom::CookieAccessObserver> cookie_observer) {
-  restricted_cookie_manager_receivers_.Add(
-      std::make_unique<RestrictedCookieManager>(
-          role, url_request_context_->cookie_store(),
-          cookie_manager_->cookie_settings(), origin, isolation_info,
-          std::move(cookie_observer)),
-      std::move(receiver));
-}
+// void NetworkContext::GetRestrictedCookieManager(
+//     mojo::PendingReceiver<mojom::RestrictedCookieManager> receiver,
+//     mojom::RestrictedCookieManagerRole role,
+//     const url::Origin& origin,
+//     const net::IsolationInfo& isolation_info,
+//     mojo::PendingRemote<mojom::CookieAccessObserver> cookie_observer) {
+//   restricted_cookie_manager_receivers_.Add(
+//       std::make_unique<RestrictedCookieManager>(
+//           role, url_request_context_->cookie_store(),
+//           cookie_manager_->cookie_settings(), origin, isolation_info,
+//           std::move(cookie_observer)),
+//       std::move(receiver));
+// }
 
 void NetworkContext::GetHasTrustTokensAnswerer(
     mojo::PendingReceiver<mojom::HasTrustTokensAnswerer> receiver,

@@ -9580,16 +9580,16 @@ void RenderFrameHostImpl::BindRestrictedCookieManager(
                                         GetIsolationInfoForSubresources(),
                                         GetLastCommittedOrigin());
 }
-
+// XXX remove
 void RenderFrameHostImpl::BindRestrictedCookieManagerWithOrigin(
     mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver,
     const net::IsolationInfo& isolation_info,
     const url::Origin& origin) {
-  GetStoragePartition()->CreateRestrictedCookieManager(
-      network::mojom::RestrictedCookieManagerRole::SCRIPT, origin,
-      isolation_info,
-      /*is_service_worker=*/false, GetProcess()->GetID(), routing_id(),
-      std::move(receiver), CreateCookieAccessObserver());
+  // GetStoragePartition()->CreateRestrictedCookieManager(
+  //     network::mojom::RestrictedCookieManagerRole::SCRIPT, origin,
+  //     isolation_info,
+  //     /*is_service_worker=*/false, GetProcess()->GetID(), routing_id(),
+  //     std::move(receiver), CreateCookieAccessObserver());
 }
 
 void RenderFrameHostImpl::BindHasTrustTokensAnswerer(

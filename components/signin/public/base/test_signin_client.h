@@ -59,7 +59,7 @@ class TestSigninClient : public SigninClient {
   // Wraps the test_url_loader_factory().
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
 
-  network::mojom::CookieManager* GetCookieManager() override;
+  // network::mojom::CookieManager* GetCookieManager() override;
   void set_cookie_manager(
       std::unique_ptr<network::mojom::CookieManager> cookie_manager) {
     cookie_manager_ = std::move(cookie_manager);

@@ -262,8 +262,8 @@ void BrowserContext::SaveSessionState() {
       base::BindOnce(&storage::DatabaseTracker::SetForceKeepSessionState,
                      base::WrapRefCounted(database_tracker)));
 
-  storage_partition->GetCookieManagerForBrowserProcess()
-      ->SetForceKeepSessionState();
+  // storage_partition->GetCookieManagerForBrowserProcess()
+  //     ->SetForceKeepSessionState();
 
   DOMStorageContextWrapper* dom_storage_context_proxy =
       static_cast<DOMStorageContextWrapper*>(

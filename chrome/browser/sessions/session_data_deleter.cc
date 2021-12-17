@@ -108,33 +108,33 @@ void SessionDataDeleterInternal::Run(
                        this));
   }
 
-  storage_partition->GetNetworkContext()->GetCookieManager(
-      cookie_manager_.BindNewPipeAndPassReceiver());
+  // storage_partition->GetNetworkContext()->GetCookieManager(
+  //     cookie_manager_.BindNewPipeAndPassReceiver());
 
-  if (!delete_only_by_session_only_policy_) {
-    network::mojom::CookieDeletionFilterPtr filter(
-        network::mojom::CookieDeletionFilter::New());
-    filter->session_control =
-        network::mojom::CookieDeletionSessionControl::SESSION_COOKIES;
-    cookie_manager_->DeleteCookies(
-        std::move(filter),
+  // if (!delete_only_by_session_only_policy_) {
+  //   network::mojom::CookieDeletionFilterPtr filter(
+  //       network::mojom::CookieDeletionFilter::New());
+  //   filter->session_control =
+  //       network::mojom::CookieDeletionSessionControl::SESSION_COOKIES;
+  //   cookie_manager_->DeleteCookies(
+  //       std::move(filter),
         // Fire and forget. Session cookies will be cleaned up on start as well.
         // (SQLitePersistentCookieStore::Backend::DeleteSessionCookiesOnStartup)
-        base::DoNothing());
+  //       base::DoNothing());
 
     // If the permissions policy feature is enabled, delete the client hint
     // preferences
-    if (base::FeatureList::IsEnabled(features::kFeaturePolicyForClientHints)) {
-      host_content_settings_map->ClearSettingsForOneType(
-          ContentSettingsType::CLIENT_HINTS);
-    }
-  }
+  //   if (base::FeatureList::IsEnabled(features::kFeaturePolicyForClientHints)) {
+  //     host_content_settings_map->ClearSettingsForOneType(
+  //         ContentSettingsType::CLIENT_HINTS);
+  //   }
+  // }
 
-  if (!storage_policy_.get() || !storage_policy_->HasSessionOnlyOrigins())
-    return;
+  // if (!storage_policy_.get() || !storage_policy_->HasSessionOnlyOrigins())
+  //   return;
 
-  cookie_manager_->DeleteSessionOnlyCookies(
-      base::BindOnce(&SessionDataDeleterInternal::OnCookieDeletionDone, this));
+  // cookie_manager_->DeleteSessionOnlyCookies(
+   //    base::BindOnce(&SessionDataDeleterInternal::OnCookieDeletionDone, this));
   // Note that from this point on |*this| is kept alive by scoped_refptr<>
   // references automatically taken by |Bind()|, so when the last callback
   // created by Bind() is released (after execution of that function), the

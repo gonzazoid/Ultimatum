@@ -44,12 +44,12 @@ bool WebsiteSettingsFilterAdapter(
 // Callback for when cookies have been deleted. Invokes |done|.
 // Receiving |cookie_manager| as a parameter so that the receive pipe is
 // not deleted before the response is received.
-void OnClearedCookies(
-    base::OnceClosure done,
-    mojo::Remote<network::mojom::CookieManager> cookie_manager,
-    uint32_t num_deleted) {
-  std::move(done).Run();
-}
+// void OnClearedCookies(
+//     base::OnceClosure done,
+//     mojo::Remote<network::mojom::CookieManager> cookie_manager,
+//     uint32_t num_deleted) {
+//   std::move(done).Run();
+// }
 
 }  // namespace
 
@@ -109,22 +109,23 @@ void RemoveEmbedderCookieData(
   if (delete_begin == base::Time() && delete_end == base::Time::Max() &&
       safe_browsing_context) {
     mojo::Remote<network::mojom::CookieManager> cookie_manager;
-    safe_browsing_context->GetCookieManager(
-        cookie_manager.BindNewPipeAndPassReceiver());
+    // safe_browsing_context->GetCookieManager(
+    //     cookie_manager.BindNewPipeAndPassReceiver());
 
-    network::mojom::CookieManager* manager_ptr = cookie_manager.get();
+    // network::mojom::CookieManager* manager_ptr = cookie_manager.get();
 
-    network::mojom::CookieDeletionFilterPtr deletion_filter =
-        filter_builder->BuildCookieDeletionFilter();
-    if (!delete_begin.is_null())
-      deletion_filter->created_after_time = delete_begin;
-    if (!delete_end.is_null())
-      deletion_filter->created_before_time = delete_end;
+    // network::mojom::CookieDeletionFilterPtr deletion_filter =
+    //     filter_builder->BuildCookieDeletionFilter();
+    // if (!delete_begin.is_null())
+    //   deletion_filter->created_after_time = delete_begin;
+    // if (!delete_end.is_null())
+    //   deletion_filter->created_before_time = delete_end;
 
-    manager_ptr->DeleteCookies(
-        std::move(deletion_filter),
-        base::BindOnce(&OnClearedCookies, std::move(callback_factory).Run(),
-                       std::move(cookie_manager)));
+    // manager_ptr->DeleteCookies(
+    //     std::move(deletion_filter),
+    //     base::BindOnce(&OnClearedCookies, std::move(callback_factory).Run(),
+    //                    std::move(cookie_manager)));
+    std::move(std::move(callback_factory).Run()).Run();
   }
 }
 

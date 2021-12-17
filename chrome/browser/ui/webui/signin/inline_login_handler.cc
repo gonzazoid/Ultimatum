@@ -149,23 +149,24 @@ void InlineLoginHandler::ContinueHandleInitializeMessage() {
   SetExtraInitParams(params);
   FireWebUIListener("load-auth-extension", params);
 }
-
+// XXX remove
 void InlineLoginHandler::HandleCompleteLoginMessage(
     const base::ListValue* args) {
   // When the network service is enabled, the webRequest API doesn't expose
   // cookie headers. So manually fetch the cookies for the GAIA URL from the
   // CookieManager.
-  content::WebContents* contents = web_ui()->GetWebContents();
-  content::StoragePartition* partition =
-      signin::GetSigninPartition(contents->GetBrowserContext());
+  // content::WebContents* contents = web_ui()->GetWebContents();
+  // content::StoragePartition* partition =
+  //     signin::GetSigninPartition(contents->GetBrowserContext());
 
-  partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-      GaiaUrls::GetInstance()->gaia_url(),
-      net::CookieOptions::MakeAllInclusive(),
-      net::CookiePartitionKeychain::Todo(),
-      base::BindOnce(&InlineLoginHandler::HandleCompleteLoginMessageWithCookies,
-                     weak_ptr_factory_.GetWeakPtr(),
-                     base::ListValue(args->GetList())));
+  // partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+  //     GaiaUrls::GetInstance()->gaia_url(),
+  //     net::CookieOptions::MakeAllInclusive(),
+  //     net::CookiePartitionKeychain::Todo(),
+  //     base::BindOnce(&InlineLoginHandler::HandleCompleteLoginMessageWithCookies,
+  //                    weak_ptr_factory_.GetWeakPtr(),
+  //                    base::ListValue(args->GetList())));
+  HandleCompleteLoginMessageWithCookies({}, {}, {});
 }
 
 void InlineLoginHandler::HandleCompleteLoginMessageWithCookies(

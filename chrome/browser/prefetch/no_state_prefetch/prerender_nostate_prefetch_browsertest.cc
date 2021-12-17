@@ -100,7 +100,7 @@ static constexpr char kOriginTrialPublicKeyForTesting[] =
 namespace prerender {
 
 const char k302RedirectPage[] = "/prerender/302_redirect.html";
-const char kPrefetchCookiePage[] = "/prerender/cookie.html";
+// const char kPrefetchCookiePage[] = "/prerender/cookie.html";
 const char kPrefetchFromSubframe[] = "/prerender/prefetch_from_subframe.html";
 const char kPrefetchImagePage[] = "/prerender/prefetch_image.html";
 const char kPrefetchJpeg[] = "/prerender/image.jpeg";
@@ -776,43 +776,43 @@ void GetCookieCallback(base::RepeatingClosure callback,
 }
 
 // Check cookie loading for prefetched pages.
-IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest, PrefetchCookie) {
-  GURL url = src_server()->GetURL(kPrefetchCookiePage);
-  std::unique_ptr<TestPrerender> test_prerender =
-      PrefetchFromURL(url, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
+// IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest, PrefetchCookie) {
+//   GURL url = src_server()->GetURL(kPrefetchCookiePage);
+//   std::unique_ptr<TestPrerender> test_prerender =
+//       PrefetchFromURL(url, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
 
-  content::StoragePartition* storage_partition =
-      current_browser()->profile()->GetStoragePartitionForUrl(url, false);
-  net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
-  base::RunLoop loop;
-  storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-      url, options, net::CookiePartitionKeychain(),
-      base::BindOnce(GetCookieCallback, loop.QuitClosure()));
-  loop.Run();
-}
+//   content::StoragePartition* storage_partition =
+//       current_browser()->profile()->GetStoragePartitionForUrl(url, false);
+//   net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
+//   base::RunLoop loop;
+//   storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+//       url, options, net::CookiePartitionKeychain(),
+//       base::BindOnce(GetCookieCallback, loop.QuitClosure()));
+//   loop.Run();
+// }
 
 // Check cookie loading for a cross-domain prefetched pages.
-IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest, PrefetchCookieCrossDomain) {
-  static const std::string secondary_domain = "www.foo.com";
-  GURL cross_domain_url(base::StringPrintf(
-      "http://%s:%d%s", secondary_domain.c_str(),
-      embedded_test_server()->host_port_pair().port(), kPrefetchCookiePage));
+// IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest, PrefetchCookieCrossDomain) {
+//   static const std::string secondary_domain = "www.foo.com";
+//   GURL cross_domain_url(base::StringPrintf(
+//       "http://%s:%d%s", secondary_domain.c_str(),
+//       embedded_test_server()->host_port_pair().port(), kPrefetchCookiePage));
 
-  std::unique_ptr<TestPrerender> test_prerender =
-      PrefetchFromURL(cross_domain_url, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
+//   std::unique_ptr<TestPrerender> test_prerender =
+//       PrefetchFromURL(cross_domain_url, FINAL_STATUS_NOSTATE_PREFETCH_FINISHED);
 
   // While the request is cross-site, it's permitted to set (implicitly) lax
   // cookies on a cross-site navigation.
-  content::StoragePartition* storage_partition =
-      current_browser()->profile()->GetStoragePartitionForUrl(cross_domain_url,
-                                                              false);
-  net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
-  base::RunLoop loop;
-  storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-      cross_domain_url, options, net::CookiePartitionKeychain(),
-      base::BindOnce(GetCookieCallback, loop.QuitClosure()));
-  loop.Run();
-}
+//   content::StoragePartition* storage_partition =
+//       current_browser()->profile()->GetStoragePartitionForUrl(cross_domain_url,
+//                                                               false);
+//   net::CookieOptions options = net::CookieOptions::MakeAllInclusive();
+//   base::RunLoop loop;
+//   storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+//       cross_domain_url, options, net::CookiePartitionKeychain(),
+//       base::BindOnce(GetCookieCallback, loop.QuitClosure()));
+//   loop.Run();
+// }
 
 // Check cookie loading for a cross-domain prefetched pages.
 IN_PROC_BROWSER_TEST_F(NoStatePrefetchBrowserTest,

@@ -361,13 +361,13 @@ void WebUIInfoSingleton::UnregisterWebUIInstance(SafeBrowsingUIHandler* webui) {
   base::Erase(webui_instances_, webui);
   MaybeClearData();
 }
-
+// XXX remove
 mojo::Remote<network::mojom::CookieManager>
 WebUIInfoSingleton::GetCookieManager(content::BrowserContext* browser_context) {
   mojo::Remote<network::mojom::CookieManager> cookie_manager_remote;
   if (sb_service_) {
-    sb_service_->GetNetworkContext(browser_context)
-        ->GetCookieManager(cookie_manager_remote.BindNewPipeAndPassReceiver());
+    // sb_service_->GetNetworkContext(browser_context)
+    //     ->GetCookieManager(cookie_manager_remote.BindNewPipeAndPassReceiver());
   }
 
   return cookie_manager_remote;

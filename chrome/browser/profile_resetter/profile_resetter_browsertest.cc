@@ -58,17 +58,17 @@ class RemoveCookieTester {
   std::vector<net::CanonicalCookie> last_cookies_;
   bool waiting_callback_;
   Profile* profile_;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager_;
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager_;
   scoped_refptr<content::MessageLoopRunner> runner_;
 };
 
 RemoveCookieTester::RemoveCookieTester(Profile* profile)
     : waiting_callback_(false),
       profile_(profile) {
-  network::mojom::NetworkContext* network_context =
-      profile_->GetDefaultStoragePartition()->GetNetworkContext();
-  network_context->GetCookieManager(
-      cookie_manager_.BindNewPipeAndPassReceiver());
+  // network::mojom::NetworkContext* network_context =
+  //     profile_->GetDefaultStoragePartition()->GetNetworkContext();
+  // network_context->GetCookieManager(
+  //     cookie_manager_.BindNewPipeAndPassReceiver());
 }
 
 RemoveCookieTester::~RemoveCookieTester() {}
@@ -77,41 +77,41 @@ RemoveCookieTester::~RemoveCookieTester() {}
 // the cookie store.
 bool RemoveCookieTester::GetCookie(const std::string& host,
                                    net::CanonicalCookie* cookie) {
-  last_cookies_.clear();
-  DCHECK(!waiting_callback_);
-  waiting_callback_ = true;
-  net::CookieOptions cookie_options;
-  cookie_manager_->GetCookieList(
-      GURL("https://" + host + "/"), cookie_options,
-      net::CookiePartitionKeychain(),
-      base::BindOnce(&RemoveCookieTester::GetCookieListCallback,
-                     base::Unretained(this)));
-  BlockUntilNotified();
-  DCHECK_GE(1u, last_cookies_.size());
-  if (last_cookies_.empty())
-    return false;
-  *cookie = last_cookies_[0];
+  // last_cookies_.clear();
+  // DCHECK(!waiting_callback_);
+  // waiting_callback_ = true;
+  // net::CookieOptions cookie_options;
+  // cookie_manager_->GetCookieList(
+  //     GURL("https://" + host + "/"), cookie_options,
+  //     net::CookiePartitionKeychain(),
+  //     base::BindOnce(&RemoveCookieTester::GetCookieListCallback,
+  //                    base::Unretained(this)));
+  // BlockUntilNotified();
+  // DCHECK_GE(1u, last_cookies_.size());
+  // if (last_cookies_.empty())
+  //   return false;
+  // *cookie = last_cookies_[0];
   return true;
 }
 
 void RemoveCookieTester::AddCookie(const std::string& host,
                                    const std::string& name,
                                    const std::string& value) {
-  DCHECK(!waiting_callback_);
-  waiting_callback_ = true;
-  net::CookieOptions options;
-  options.set_include_httponly();
-  auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
-      name, value, host, "/", base::Time(), base::Time(), base::Time(),
-      true /* secure*/, false /* http only*/,
-      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_MEDIUM,
-      false /* same_party */);
-  cookie_manager_->SetCanonicalCookie(
-      *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-      options,
-      base::BindOnce(&RemoveCookieTester::SetCanonicalCookieCallback,
-                     base::Unretained(this)));
-  BlockUntilNotified();
+  // DCHECK(!waiting_callback_);
+  // waiting_callback_ = true;
+  // net::CookieOptions options;
+  // options.set_include_httponly();
+  // auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
+  //     name, value, host, "/", base::Time(), base::Time(), base::Time(),
+  //     true /* secure*/, false /* http only*/,
+  //     net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_MEDIUM,
+  //     false /* same_party */);
+  // cookie_manager_->SetCanonicalCookie(
+  //     *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+  //     options,
+  //     base::BindOnce(&RemoveCookieTester::SetCanonicalCookieCallback,
+  //                    base::Unretained(this)));
+  // BlockUntilNotified();
 }
 
 void RemoveCookieTester::GetCookieListCallback(

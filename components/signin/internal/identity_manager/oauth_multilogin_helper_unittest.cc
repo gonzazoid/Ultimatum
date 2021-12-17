@@ -231,9 +231,9 @@ class OAuthMultiloginHelperTest
     return test_signin_client_.CreateGaiaAuthFetcher(consumer, source);
   }
 
-  network::mojom::CookieManager* GetCookieManagerForPartition() override {
-    return &mock_cookie_manager_;
-  }
+  // network::mojom::CookieManager* GetCookieManagerForPartition() override {
+  //   return &mock_cookie_manager_;
+  // }
 
   base::test::TaskEnvironment task_environment_;
 

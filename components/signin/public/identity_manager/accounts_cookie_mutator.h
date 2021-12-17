@@ -38,7 +38,7 @@ class AccountsCookieMutator {
         const gaia::GaiaSource& source) = 0;
 
     // Returns the CookieManager for the partition.
-    virtual network::mojom::CookieManager* GetCookieManagerForPartition() = 0;
+    // virtual network::mojom::CookieManager* GetCookieManagerForPartition() = 0;
   };
 
   // Task handle for SetAccountsInCookieForPartition. Deleting this object

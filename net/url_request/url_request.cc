@@ -650,12 +650,12 @@ void URLRequest::StartJob(std::unique_ptr<URLRequestJob> job) {
   DCHECK(!job_);
 
   set_same_party_context(
-      context()->cookie_store()
-          ? cookie_util::ComputeSamePartyContext(
-                SchemefulSite(url()), isolation_info(),
-                context()->cookie_store()->cookie_access_delegate(),
-                force_ignore_top_frame_party_for_cookies())
-          : SamePartyContext());
+      // context()->cookie_store()
+      //     ? cookie_util::ComputeSamePartyContext(
+      //           SchemefulSite(url()), isolation_info(),
+      //           context()->cookie_store()->cookie_access_delegate(),
+      //           force_ignore_top_frame_party_for_cookies())
+      /*    : */ SamePartyContext());
   privacy_mode_ = DeterminePrivacyMode();
 
   net_log_.BeginEvent(NetLogEventType::URL_REQUEST_START_JOB, [&] {

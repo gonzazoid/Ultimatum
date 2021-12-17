@@ -53,7 +53,7 @@ class ChromeSigninClient
       base::OnceCallback<void(SignoutDecision)> on_signout_decision_reached,
       signin_metrics::ProfileSignout signout_source_metric) override;
   scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
-  network::mojom::CookieManager* GetCookieManager() override;
+  // network::mojom::CookieManager* GetCookieManager() override;
   bool AreSigninCookiesAllowed() override;
   bool AreSigninCookiesDeletedOnExit() override;
   void AddContentSettingsObserver(

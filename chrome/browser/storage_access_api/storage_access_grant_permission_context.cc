@@ -28,8 +28,8 @@ constexpr int kDefaultImplicitGrantLimit = 5;
 
 namespace {
 
-constexpr base::TimeDelta kImplicitGrantDuration = base::Hours(24);
-constexpr base::TimeDelta kExplicitGrantDuration = base::Days(30);
+// constexpr base::TimeDelta kImplicitGrantDuration = base::Hours(24);
+// constexpr base::TimeDelta kExplicitGrantDuration = base::Days(30);
 
 const base::FeatureParam<int> kImplicitGrantLimit{
     &blink::features::kStorageAccessAPI,
@@ -149,43 +149,43 @@ void StorageAccessGrantPermissionContext::NotifyPermissionSetInternal(
   const bool permission_allowed = (content_setting == CONTENT_SETTING_ALLOW);
   UpdateTabContext(id, requesting_origin, permission_allowed);
 
-  if (!permission_allowed) {
+  // if (!permission_allowed) {
     if (content_setting == CONTENT_SETTING_DEFAULT) {
       content_setting = CONTENT_SETTING_ASK;
     }
 
     std::move(callback).Run(content_setting);
     return;
-  }
+  // }
 
   // Our failure cases are tracked by the prompt outcomes in the
   // `Permissions.Action.StorageAccess` histogram. We'll only log when a grant
   // is actually generated.
-  base::UmaHistogramBoolean("API.StorageAccess.GrantIsImplicit",
-                            implicit_result);
+  // base::UmaHistogramBoolean("API.StorageAccess.GrantIsImplicit",
+  //                           implicit_result);
 
-  HostContentSettingsMap* settings_map =
-      HostContentSettingsMapFactory::GetForProfile(browser_context());
-  DCHECK(settings_map);
-  DCHECK(persist);
+  // HostContentSettingsMap* settings_map =
+  //     HostContentSettingsMapFactory::GetForProfile(browser_context());
+  // DCHECK(settings_map);
+  // DCHECK(persist);
 
-  static const content_settings::ContentSettingConstraints implicit_grant = {
-      content_settings::GetConstraintExpiration(kImplicitGrantDuration),
-      content_settings::SessionModel::UserSession};
-  static const content_settings::ContentSettingConstraints explicit_grant = {
-      content_settings::GetConstraintExpiration(kExplicitGrantDuration),
-      content_settings::SessionModel::Durable};
+  // static const content_settings::ContentSettingConstraints implicit_grant = {
+  //     content_settings::GetConstraintExpiration(kImplicitGrantDuration),
+  //     content_settings::SessionModel::UserSession};
+  // static const content_settings::ContentSettingConstraints explicit_grant = {
+  //     content_settings::GetConstraintExpiration(kExplicitGrantDuration),
+  //     content_settings::SessionModel::Durable};
 
   // This permission was allowed so store it either ephemerally or more
   // permanently depending on if the allow came from a prompt or automatic
   // grant.
-  settings_map->SetContentSettingDefaultScope(
-      requesting_origin, embedding_origin, ContentSettingsType::STORAGE_ACCESS,
-      content_setting, implicit_result ? implicit_grant : explicit_grant);
+  // settings_map->SetContentSettingDefaultScope(
+  //     requesting_origin, embedding_origin, ContentSettingsType::STORAGE_ACCESS,
+  //     content_setting, implicit_result ? implicit_grant : explicit_grant);
 
-  ContentSettingsForOneType grants;
-  settings_map->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS,
-                                      &grants);
+  // ContentSettingsForOneType grants;
+  // settings_map->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS,
+  //                                     &grants);
 
   // TODO(https://crbug.com/989663): Ensure that this update of settings doesn't
   // cause a double update with
@@ -195,11 +195,11 @@ void StorageAccessGrantPermissionContext::NotifyPermissionSetInternal(
   // partition has updated and ack'd the update. This prevents a race where
   // the renderer could initiate a network request based on the response to this
   // request before the access grants have updated in the network service.
-  browser_context()
-      ->GetDefaultStoragePartition()
-      ->GetCookieManagerForBrowserProcess()
-      ->SetStorageAccessGrantSettings(
-          grants, base::BindOnce(std::move(callback), content_setting));
+  // browser_context()
+  //     ->GetDefaultStoragePartition()
+  //     ->GetCookieManagerForBrowserProcess()
+  //     ->SetStorageAccessGrantSettings(
+  //         grants, base::BindOnce(std::move(callback), content_setting));
 }
 
 void StorageAccessGrantPermissionContext::UpdateContentSetting(

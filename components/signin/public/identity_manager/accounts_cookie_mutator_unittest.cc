@@ -169,9 +169,9 @@ class AccountsCookieMutatorTest
     return test_signin_client_.CreateGaiaAuthFetcher(consumer, source);
   }
 
-  network::mojom::CookieManager* GetCookieManagerForPartition() override {
-    return &cookie_manager_for_partition_;
-  }
+  // network::mojom::CookieManager* GetCookieManagerForPartition() override {
+  //   return &cookie_manager_for_partition_;
+  // }
 
   base::test::TaskEnvironment task_environment_;
   sync_preferences::TestingPrefServiceSyncable prefs_;

@@ -357,19 +357,19 @@ class ExtensionSameSiteCookiesTest
     // If SameSite access semantics is "legacy", add content settings to allow
     // legacy access for all sites.
     if (HasLegacySameSiteAccessSemantics()) {
-      browser()
-          ->profile()
-          ->GetDefaultStoragePartition()
-          ->GetNetworkContext()
-          ->GetCookieManager(
-              cookie_manager_remote_.BindNewPipeAndPassReceiver());
-      cookie_manager_remote_->SetContentSettingsForLegacyCookieAccess(
-          {ContentSettingPatternSource(
-              ContentSettingsPattern::Wildcard(),
-              ContentSettingsPattern::Wildcard(),
-              base::Value(ContentSetting::CONTENT_SETTING_ALLOW),
-              /*source=*/std::string(), /*incognito=*/false)});
-      cookie_manager_remote_.FlushForTesting();
+      // browser()
+      //     ->profile()
+      //     ->GetDefaultStoragePartition()
+      //     ->GetNetworkContext()
+      //     ->GetCookieManager(
+      //         cookie_manager_remote_.BindNewPipeAndPassReceiver());
+      // cookie_manager_remote_->SetContentSettingsForLegacyCookieAccess(
+      //     {ContentSettingPatternSource(
+      //         ContentSettingsPattern::Wildcard(),
+      //         ContentSettingsPattern::Wildcard(),
+      //         base::Value(ContentSetting::CONTENT_SETTING_ALLOW),
+      //         /*source=*/std::string(), /*incognito=*/false)});
+      // cookie_manager_remote_.FlushForTesting();
     }
   }
 

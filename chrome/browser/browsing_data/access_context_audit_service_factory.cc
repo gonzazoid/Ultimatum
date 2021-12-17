@@ -51,8 +51,8 @@ KeyedService* AccessContextAuditServiceFactory::BuildServiceInstanceFor(
       std::make_unique<AccessContextAuditService>(profile);
   if (!context_audit_service->Init(
           context->GetPath(),
-          context->GetDefaultStoragePartition()
-              ->GetCookieManagerForBrowserProcess(),
+          // context->GetDefaultStoragePartition()
+          //     ->GetCookieManagerForBrowserProcess(),
           HistoryServiceFactory::GetForProfile(
               profile, ServiceAccessType::EXPLICIT_ACCESS),
           context->GetDefaultStoragePartition())) {

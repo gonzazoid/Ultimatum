@@ -45,21 +45,21 @@ bool IsShowingInterstitial(content::WebContents* contents) {
 
 std::vector<net::CanonicalCookie> GetCookies(
     network::mojom::NetworkContext* network_context) {
-  base::RunLoop run_loop;
-  std::vector<net::CanonicalCookie> cookies;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager_remote;
-  network_context->GetCookieManager(
-      cookie_manager_remote.BindNewPipeAndPassReceiver());
-  cookie_manager_remote->GetAllCookies(base::BindOnce(
-      [](base::RunLoop* run_loop,
-         std::vector<net::CanonicalCookie>* out_cookies,
-         const std::vector<net::CanonicalCookie>& cookies) {
-        *out_cookies = cookies;
-        run_loop->Quit();
-      },
-      &run_loop, &cookies));
-  run_loop.Run();
-  return cookies;
+  // base::RunLoop run_loop;
+  // std::vector<net::CanonicalCookie> cookies;
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager_remote;
+  // network_context->GetCookieManager(
+  //     cookie_manager_remote.BindNewPipeAndPassReceiver());
+  // cookie_manager_remote->GetAllCookies(base::BindOnce(
+  //     [](base::RunLoop* run_loop,
+  //        std::vector<net::CanonicalCookie>* out_cookies,
+  //        const std::vector<net::CanonicalCookie>& cookies) {
+  //       *out_cookies = cookies;
+  //       run_loop->Quit();
+  //     },
+  //     &run_loop, &cookies));
+  // run_loop.Run();
+  return {}; // cookies;
 }
 
 }  // namespace

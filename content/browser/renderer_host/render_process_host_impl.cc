@@ -2034,24 +2034,24 @@ void RenderProcessHostImpl::BindNativeIOHost(
       storage_partition_impl_->GetNativeIOContext());
   native_io_context->BindReceiver(storage_key, std::move(receiver));
 }
-
+// XXX remove
 void RenderProcessHostImpl::BindRestrictedCookieManagerForServiceWorker(
     const blink::StorageKey& storage_key,
     mojo::PendingReceiver<network::mojom::RestrictedCookieManager> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
 
-  storage_partition_impl_->CreateRestrictedCookieManager(
-      network::mojom::RestrictedCookieManagerRole::SCRIPT, storage_key.origin(),
-      net::IsolationInfo::Create(
-          net::IsolationInfo::RequestType::kOther,
-          url::Origin::Create(storage_key.top_level_site().GetURL()),
-          storage_key.origin(), storage_key.ToNetSiteForCookies(),
-          /*party_context=*/absl::nullopt,
-          storage_key.nonce().has_value() ? &storage_key.nonce().value()
-                                          : nullptr),
-      true /* is_service_worker */, GetID(), MSG_ROUTING_NONE,
-      std::move(receiver),
-      storage_partition_impl_->CreateCookieAccessObserverForServiceWorker());
+  // storage_partition_impl_->CreateRestrictedCookieManager(
+  //     network::mojom::RestrictedCookieManagerRole::SCRIPT, storage_key.origin(),
+  //     net::IsolationInfo::Create(
+  //         net::IsolationInfo::RequestType::kOther,
+  //         url::Origin::Create(storage_key.top_level_site().GetURL()),
+  //         storage_key.origin(), storage_key.ToNetSiteForCookies(),
+  //         /*party_context=*/absl::nullopt,
+  //         storage_key.nonce().has_value() ? &storage_key.nonce().value()
+  //                                         : nullptr),
+  //     true /* is_service_worker */, GetID(), MSG_ROUTING_NONE,
+  //     std::move(receiver),
+  //     storage_partition_impl_->CreateCookieAccessObserverForServiceWorker());
 }
 
 void RenderProcessHostImpl::BindVideoDecodePerfHistory(

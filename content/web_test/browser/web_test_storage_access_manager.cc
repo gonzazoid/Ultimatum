@@ -64,18 +64,18 @@ void WebTestStorageAccessManager::SetStorageAccess(
   // Content Shell, then we should update this class to handle those other
   // types are well.
 
-  auto* storage_partition = browser_context_->GetDefaultStoragePartition();
-  auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
+  // auto* storage_partition = browser_context_->GetDefaultStoragePartition();
+  // auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
 
   // Enable third-party cookies blocking if we have not done so yet. This will
   // cause the content settings to take effect.
   if (!third_party_cookies_blocked_) {
-    cookie_manager->BlockThirdPartyCookies(true);
+    // cookie_manager->BlockThirdPartyCookies(true);
     third_party_cookies_blocked_ = true;
   }
 
   // Update the cookie manager's copy of the content settings.
-  cookie_manager->SetContentSettings(content_settings_for_automation_);
+  // cookie_manager->SetContentSettings(content_settings_for_automation_);
   std::move(callback).Run(true);
 }
 

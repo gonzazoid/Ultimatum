@@ -1968,54 +1968,54 @@ bool ExecuteWebUIResourceTest(WebContents* web_contents) {
 std::string GetCookies(BrowserContext* browser_context,
                        const GURL& url,
                        net::CookieOptions::SameSiteCookieContext context) {
-  std::string cookies;
-  base::RunLoop run_loop;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  browser_context->GetDefaultStoragePartition()
-      ->GetNetworkContext()
-      ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
-  net::CookieOptions options;
-  options.set_same_site_cookie_context(context);
-  cookie_manager->GetCookieList(
-      url, options, net::CookiePartitionKeychain(),
-      base::BindOnce(
-          [](std::string* cookies_out, base::RunLoop* run_loop,
-             const net::CookieAccessResultList& cookies,
-             const net::CookieAccessResultList& excluded_cookies) {
-            *cookies_out = net::CanonicalCookie::BuildCookieLine(cookies);
-            run_loop->Quit();
-          },
-          &cookies, &run_loop));
-  run_loop.Run();
-  return cookies;
+//   std::string cookies;
+//   base::RunLoop run_loop;
+//   mojo::Remote<network::mojom::CookieManager> cookie_manager;
+//   browser_context->GetDefaultStoragePartition()
+//       ->GetNetworkContext()
+//       ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+//   net::CookieOptions options;
+//   options.set_same_site_cookie_context(context);
+//   cookie_manager->GetCookieList(
+//       url, options, net::CookiePartitionKeychain(),
+//       base::BindOnce(
+//           [](std::string* cookies_out, base::RunLoop* run_loop,
+//              const net::CookieAccessResultList& cookies,
+//              const net::CookieAccessResultList& excluded_cookies) {
+//             *cookies_out = net::CanonicalCookie::BuildCookieLine(cookies);
+//             run_loop->Quit();
+//           },
+//           &cookies, &run_loop));
+//   run_loop.Run();
+  return ""; // cookies;
 }
 
 std::vector<net::CanonicalCookie> GetCanonicalCookies(
     BrowserContext* browser_context,
     const GURL& url) {
-  std::vector<net::CanonicalCookie> cookies;
-  base::RunLoop run_loop;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  browser_context->GetDefaultStoragePartition()
-      ->GetNetworkContext()
-      ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+  // std::vector<net::CanonicalCookie> cookies;
+  // base::RunLoop run_loop;
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+  // browser_context->GetDefaultStoragePartition()
+  //     ->GetNetworkContext()
+  //     ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
   // Allow access to SameSite cookies in tests.
-  net::CookieOptions options;
-  options.set_same_site_cookie_context(
-      net::CookieOptions::SameSiteCookieContext::MakeInclusive());
-  cookie_manager->GetCookieList(
-      url, options, net::CookiePartitionKeychain(),
-      base::BindOnce(
-          [](base::RunLoop* run_loop,
-             std::vector<net::CanonicalCookie>* cookies_out,
-             const net::CookieAccessResultList& cookies,
-             const net::CookieAccessResultList& excluded_cookies) {
-            *cookies_out = net::cookie_util::StripAccessResults(cookies);
-            run_loop->Quit();
-          },
-          &run_loop, &cookies));
-  run_loop.Run();
-  return cookies;
+//   net::CookieOptions options;
+//   options.set_same_site_cookie_context(
+//       net::CookieOptions::SameSiteCookieContext::MakeInclusive());
+//   cookie_manager->GetCookieList(
+//       url, options, net::CookiePartitionKeychain(),
+//       base::BindOnce(
+//           [](base::RunLoop* run_loop,
+//              std::vector<net::CanonicalCookie>* cookies_out,
+//              const net::CookieAccessResultList& cookies,
+//              const net::CookieAccessResultList& excluded_cookies) {
+//             *cookies_out = net::cookie_util::StripAccessResults(cookies);
+//             run_loop->Quit();
+//           },
+//           &run_loop, &cookies));
+//   run_loop.Run();
+  return {}; // cookies;
 }
 
 bool SetCookie(BrowserContext* browser_context,
@@ -2023,54 +2023,54 @@ bool SetCookie(BrowserContext* browser_context,
                const std::string& value,
                net::CookieOptions::SameSiteCookieContext context,
                net::SamePartyContext::Type party_context) {
-  bool result = false;
-  base::RunLoop run_loop;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  browser_context->GetDefaultStoragePartition()
-      ->GetNetworkContext()
-      ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
-  std::unique_ptr<net::CanonicalCookie> cc(net::CanonicalCookie::Create(
-      url, value, base::Time::Now(), absl::nullopt /* server_time */,
-      absl::nullopt /* cookie_partition_key */));
-  DCHECK(cc.get());
+  // bool result = false;
+  // base::RunLoop run_loop;
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+  // browser_context->GetDefaultStoragePartition()
+  //     ->GetNetworkContext()
+  //     ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+  // std::unique_ptr<net::CanonicalCookie> cc(net::CanonicalCookie::Create(
+  //     url, value, base::Time::Now(), absl::nullopt /* server_time */,
+  //     absl::nullopt /* cookie_partition_key */));
+  // DCHECK(cc.get());
 
-  net::CookieOptions options;
-  options.set_include_httponly();
-  options.set_same_site_cookie_context(context);
-  options.set_same_party_context(net::SamePartyContext(party_context));
-  cookie_manager->SetCanonicalCookie(
-      *cc.get(), url, options,
-      base::BindOnce(
-          [](bool* result, base::RunLoop* run_loop,
-             net::CookieAccessResult set_cookie_access_result) {
-            *result = set_cookie_access_result.status.IsInclude();
-            run_loop->Quit();
-          },
-          &result, &run_loop));
-  run_loop.Run();
-  return result;
+  // net::CookieOptions options;
+  // options.set_include_httponly();
+  // options.set_same_site_cookie_context(context);
+  // options.set_same_party_context(net::SamePartyContext(party_context));
+  // cookie_manager->SetCanonicalCookie(
+  //     *cc.get(), url, options,
+  //     base::BindOnce(
+  //         [](bool* result, base::RunLoop* run_loop,
+  //            net::CookieAccessResult set_cookie_access_result) {
+  //           *result = set_cookie_access_result.status.IsInclude();
+  //           run_loop->Quit();
+  //         },
+  //         &result, &run_loop));
+  // run_loop.Run();
+  return true; // result;
 }
 
 uint32_t DeleteCookies(BrowserContext* browser_context,
                        network::mojom::CookieDeletionFilter filter) {
-  base::RunLoop run_loop;
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  browser_context->GetDefaultStoragePartition()
-      ->GetNetworkContext()
-      ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+  // base::RunLoop run_loop;
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+  // browser_context->GetDefaultStoragePartition()
+  //     ->GetNetworkContext()
+  //     ->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
 
   uint32_t result = 0U;
-  cookie_manager->DeleteCookies(
-      network::mojom::CookieDeletionFilter::New(filter),
-      base::BindOnce(
-          [](uint32_t* result, base::RunLoop* run_loop,
-             uint32_t cookies_cleared) {
-            *result = cookies_cleared;
-            run_loop->Quit();
-          },
-          &result, &run_loop));
+  // cookie_manager->DeleteCookies(
+  //     network::mojom::CookieDeletionFilter::New(filter),
+  //     base::BindOnce(
+  //         [](uint32_t* result, base::RunLoop* run_loop,
+  //            uint32_t cookies_cleared) {
+  //           *result = cookies_cleared;
+  //            run_loop->Quit();
+  //         },
+  //         &result, &run_loop));
 
-  run_loop.Run();
+  // run_loop.Run();
   return result;
 }
 
@@ -3578,13 +3578,13 @@ int LoadBasicRequest(RenderFrameHost* frame, const GURL& url) {
 }
 
 void EnsureCookiesFlushed(BrowserContext* browser_context) {
-  browser_context->ForEachStoragePartition(
-      base::BindRepeating([](StoragePartition* partition) {
-        base::RunLoop run_loop;
-        partition->GetCookieManagerForBrowserProcess()->FlushCookieStore(
-            run_loop.QuitClosure());
-        run_loop.Run();
-      }));
+  // browser_context->ForEachStoragePartition(
+  //     base::BindRepeating([](StoragePartition* partition) {
+  //       base::RunLoop run_loop;
+  //       partition->GetCookieManagerForBrowserProcess()->FlushCookieStore(
+  //           run_loop.QuitClosure());
+  //       run_loop.Run();
+  //     }));
 }
 
 bool TestGuestAutoresize(WebContents* embedder_web_contents,

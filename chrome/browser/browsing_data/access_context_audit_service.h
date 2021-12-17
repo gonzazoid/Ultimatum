@@ -82,7 +82,7 @@ class AccessContextAuditService
   // Initialises the Access Context Audit database in |database_dir|, and
   // attaches listeners to |cookie_manager| and |history_service|.
   bool Init(const base::FilePath& database_dir,
-            network::mojom::CookieManager* cookie_manager,
+            // network::mojom::CookieManager* cookie_manager,
             history::HistoryService* history_service,
             content::StoragePartition* storage_partition);
 
