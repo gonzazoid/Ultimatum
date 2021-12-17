@@ -480,23 +480,23 @@ void GaiaCookieManagerService::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(prefs::kGaiaCookieLastListAccountsData,
                                std::string());
 }
-
+// XXX remove
 void GaiaCookieManagerService::InitCookieListener() {
-  DCHECK(!cookie_listener_receiver_.is_bound());
-  network::mojom::CookieManager* cookie_manager =
-      signin_client_->GetCookieManager();
+  // DCHECK(!cookie_listener_receiver_.is_bound());
+  // network::mojom::CookieManager* cookie_manager =
+  //     signin_client_->GetCookieManager();
 
   // NOTE: |cookie_manager| can be nullptr when TestSigninClient is used in
   // testing contexts.
-  if (cookie_manager) {
-    cookie_manager->AddCookieChangeListener(
-        GaiaUrls::GetInstance()->secure_google_url(),
-        GaiaConstants::kGaiaSigninCookieName,
-        cookie_listener_receiver_.BindNewPipeAndPassRemote());
-    cookie_listener_receiver_.set_disconnect_handler(base::BindOnce(
-        &GaiaCookieManagerService::OnCookieListenerConnectionError,
-        base::Unretained(this)));
-  }
+  // if (cookie_manager) {
+  //   cookie_manager->AddCookieChangeListener(
+  //       GaiaUrls::GetInstance()->secure_google_url(),
+  //       GaiaConstants::kGaiaSigninCookieName,
+  //       cookie_listener_receiver_.BindNewPipeAndPassRemote());
+  //   cookie_listener_receiver_.set_disconnect_handler(base::BindOnce(
+  //       &GaiaCookieManagerService::OnCookieListenerConnectionError,
+  //       base::Unretained(this)));
+  // }
 }
 
 void GaiaCookieManagerService::SetAccountsInCookie(
@@ -1000,10 +1000,10 @@ GaiaCookieManagerService::CreateGaiaAuthFetcherForPartition(
   return signin_client_->CreateGaiaAuthFetcher(consumer, source);
 }
 
-network::mojom::CookieManager*
-GaiaCookieManagerService::GetCookieManagerForPartition() {
-  return signin_client_->GetCookieManager();
-}
+// network::mojom::CookieManager*
+// GaiaCookieManagerService::GetCookieManagerForPartition() {
+//   return signin_client_->GetCookieManager();
+// }
 
 void GaiaCookieManagerService::InitializeListedAccountsIds() {
   for (gaia::ListedAccount& account : listed_accounts_) {

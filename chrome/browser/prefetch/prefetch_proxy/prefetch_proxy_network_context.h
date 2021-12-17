@@ -42,7 +42,7 @@ class PrefetchProxyNetworkContext {
 
   // Get a reference to |cookie_manager_|. If it is null, then it is bound to
   // the cookie manager of |network_context_|.
-  network::mojom::CookieManager* GetCookieManager();
+  // network::mojom::CookieManager* GetCookieManager();
 
   // Binds |pending_receiver| to a URL loader factory associated with
   // |network_context_|.

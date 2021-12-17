@@ -479,13 +479,13 @@ Browser* GetBrowserNotInSet(const std::set<Browser*>& excluded_browsers) {
 
 namespace {
 
-void GetCookieCallback(base::RepeatingClosure callback,
-                       net::CookieList* cookies,
-                       const net::CookieAccessResultList& cookie_list,
-                       const net::CookieAccessResultList& excluded_cookies) {
-  *cookies = net::cookie_util::StripAccessResults(cookie_list);
-  callback.Run();
-}
+// void GetCookieCallback(base::RepeatingClosure callback,
+//                        net::CookieList* cookies,
+//                        const net::CookieAccessResultList& cookie_list,
+//                        const net::CookieAccessResultList& excluded_cookies) {
+//   *cookies = net::cookie_util::StripAccessResults(cookie_list);
+//   callback.Run();
+// }
 
 }  // namespace
 
@@ -495,18 +495,20 @@ void GetCookies(const GURL& url,
                 std::string* value) {
   *value_size = -1;
   if (url.is_valid() && contents) {
-    base::RunLoop loop;
-    auto* storage_partition =
-        contents->GetMainFrame()->GetProcess()->GetStoragePartition();
-    net::CookieList cookie_list;
-    storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
-        url, net::CookieOptions::MakeAllInclusive(),
-        net::CookiePartitionKeyCollection(),
-        base::BindOnce(GetCookieCallback, loop.QuitClosure(), &cookie_list));
-    loop.Run();
+    // base::RunLoop loop;
+    // auto* storage_partition =
+    //     contents->GetMainFrame()->GetProcess()->GetStoragePartition();
+    // net::CookieList cookie_list;
+    // storage_partition->GetCookieManagerForBrowserProcess()->GetCookieList(
+    //     url, net::CookieOptions::MakeAllInclusive(),
+    //     net::CookiePartitionKeyCollection(),
+    //     base::BindOnce(GetCookieCallback, loop.QuitClosure(), &cookie_list));
+    // loop.Run();
 
-    *value = net::CanonicalCookie::BuildCookieLine(cookie_list);
-    *value_size = static_cast<int>(value->size());
+    // *value = net::CanonicalCookie::BuildCookieLine(cookie_list);
+    // *value_size = static_cast<int>(value->size());
+    *value = "";
+    *value_size = 0;
   }
 }
 

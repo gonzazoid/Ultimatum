@@ -72,48 +72,48 @@ class ThirdPartyDataRemoverTest : public InProcessBrowserTest {
                                     "StorageFoundationAPI");
   }
 
-  network::mojom::CookieManager* CookieManager() {
-    return browser()
-        ->profile()
-        ->GetDefaultStoragePartition()
-        ->GetCookieManagerForBrowserProcess();
-  }
+  // network::mojom::CookieManager* CookieManager() {
+  //   return browser()
+  //       ->profile()
+  //       ->GetDefaultStoragePartition()
+  //       ->GetCookieManagerForBrowserProcess();
+  // }
 
   void SetCookie(std::string host,
                  std::string name,
                  net::CookieSameSite same_site,
                  net::CookieOptions::SameSiteCookieContext cookie_context) {
-    std::unique_ptr<net::CanonicalCookie> cookie =
-        net::CanonicalCookie::CreateUnsafeCookieForTesting(
-            name, "foobar", host, "/", base::Time(), base::Time(), base::Time(),
-            /* secure= */ true, /* httponly= */ false, same_site,
-            net::COOKIE_PRIORITY_LOW, /* same_party= */ false);
-    net::CookieOptions options;
-    options.set_same_site_cookie_context(cookie_context);
-    bool result_out;
-    base::RunLoop run_loop;
+    // std::unique_ptr<net::CanonicalCookie> cookie =
+    //     net::CanonicalCookie::CreateUnsafeCookieForTesting(
+    //         name, "foobar", host, "/", base::Time(), base::Time(), base::Time(),
+    //         /* secure= */ true, /* httponly= */ false, same_site,
+    //         net::COOKIE_PRIORITY_LOW, /* same_party= */ false);
+    // net::CookieOptions options;
+    // options.set_same_site_cookie_context(cookie_context);
+    bool result_out = true;
+    // base::RunLoop run_loop;
 
-    CookieManager()->SetCanonicalCookie(
-        *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-        options,
-        base::BindLambdaForTesting([&](net::CookieAccessResult result) {
-          result_out = result.status.IsInclude();
-          run_loop.Quit();
-        }));
-    run_loop.Run();
+    // CookieManager()->SetCanonicalCookie(
+    //     *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+    //     options,
+    //     base::BindLambdaForTesting([&](net::CookieAccessResult result) {
+    //       result_out = result.status.IsInclude();
+    //       run_loop.Quit();
+    //     }));
+    // run_loop.Run();
     EXPECT_TRUE(result_out);
   }
 
   std::vector<net::CanonicalCookie> GetAllCookies() {
-    base::RunLoop run_loop;
-    std::vector<net::CanonicalCookie> cookies_out;
-    CookieManager()->GetAllCookies(base::BindLambdaForTesting(
-        [&](const std::vector<net::CanonicalCookie>& cookies) {
-          cookies_out = cookies;
-          run_loop.Quit();
-        }));
-    run_loop.Run();
-    return cookies_out;
+    // base::RunLoop run_loop;
+    // std::vector<net::CanonicalCookie> cookies_out;
+    // CookieManager()->GetAllCookies(base::BindLambdaForTesting(
+    //     [&](const std::vector<net::CanonicalCookie>& cookies) {
+    //       cookies_out = cookies;
+    //       run_loop.Quit();
+    //     }));
+    // run_loop.Run();
+    return {}; // cookies_out;
   }
 
   void NavigateToPageWithFrame(const std::string& host) {

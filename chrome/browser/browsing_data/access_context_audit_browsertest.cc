@@ -214,18 +214,18 @@ class AccessContextAuditBrowserTest : public PlatformBrowserTest {
   }
 
   std::vector<net::CanonicalCookie> GetAllCookies() {
-    base::RunLoop run_loop;
-    std::vector<net::CanonicalCookie> cookies_out;
-    chrome_test_utils::GetProfile(this)
-        ->GetDefaultStoragePartition()
-        ->GetCookieManagerForBrowserProcess()
-        ->GetAllCookies(base::BindLambdaForTesting(
-            [&](const std::vector<net::CanonicalCookie>& cookies) {
-              cookies_out = cookies;
-              run_loop.QuitWhenIdle();
-            }));
-    run_loop.Run();
-    return cookies_out;
+    // base::RunLoop run_loop;
+    // std::vector<net::CanonicalCookie> cookies_out;
+    // chrome_test_utils::GetProfile(this)
+    //     ->GetDefaultStoragePartition()
+    //     ->GetCookieManagerForBrowserProcess()
+    //     ->GetAllCookies(base::BindLambdaForTesting(
+    //         [&](const std::vector<net::CanonicalCookie>& cookies) {
+    //           cookies_out = cookies;
+    //           run_loop.QuitWhenIdle();
+    //         }));
+    // run_loop.Run();
+    return {}; // cookies_out;
   }
 
   // Navigate to a page that accesses cookies and storage APIs and also embeds

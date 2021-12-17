@@ -40,43 +40,43 @@
 
 namespace {
 
-constexpr char kCookieName[] = "Name";
+// constexpr char kCookieName[] = "Name";
 constexpr char kCookieValue[] = "Value";
 
-net::CookieList GetCookies(network::mojom::CookieManager* cookie_manager) {
-  base::RunLoop run_loop;
-  net::CookieList cookies_out;
-  cookie_manager->GetAllCookies(
-      base::BindLambdaForTesting([&](const net::CookieList& cookies) {
-        cookies_out = cookies;
-        run_loop.Quit();
-      }));
-  run_loop.Run();
-  return cookies_out;
-}
+// net::CookieList GetCookies(network::mojom::CookieManager* cookie_manager) {
+//   base::RunLoop run_loop;
+//   net::CookieList cookies_out;
+//   cookie_manager->GetAllCookies(
+//       base::BindLambdaForTesting([&](const net::CookieList& cookies) {
+//         cookies_out = cookies;
+//         run_loop.Quit();
+//       }));
+//   run_loop.Run();
+//   return cookies_out;
+// }
 
-void SetCookie(network::mojom::CookieManager* cookie_manager) {
-  base::Time t = base::Time::Now();
-  auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
-      kCookieName, kCookieValue, "www.test.com", "/", t, t + base::Days(1),
-      base::Time(), true /* secure */, false /* http-only*/,
-      net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
-      false /* same_party */);
-  base::RunLoop run_loop;
-  cookie_manager->SetCanonicalCookie(
-      *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-      net::CookieOptions(),
-      base::BindLambdaForTesting(
-          [&](net::CookieAccessResult result) { run_loop.Quit(); }));
-  run_loop.Run();
-}
+// void SetCookie(network::mojom::CookieManager* cookie_manager) {
+//   base::Time t = base::Time::Now();
+//   auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
+//       kCookieName, kCookieValue, "www.test.com", "/", t, t + base::Days(1),
+//       base::Time(), true /* secure */, false /* http-only*/,
+//       net::CookieSameSite::NO_RESTRICTION, net::COOKIE_PRIORITY_DEFAULT,
+//       false /* same_party */);
+//   base::RunLoop run_loop;
+//   cookie_manager->SetCanonicalCookie(
+//       *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+//       net::CookieOptions(),
+//       base::BindLambdaForTesting(
+//           [&](net::CookieAccessResult result) { run_loop.Quit(); }));
+//   run_loop.Run();
+// }
 
-void FlushCookies(network::mojom::CookieManager* cookie_manager) {
-  base::RunLoop run_loop;
-  cookie_manager->FlushCookieStore(
-      base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
-  run_loop.Run();
-}
+// void FlushCookies(network::mojom::CookieManager* cookie_manager) {
+//   base::RunLoop run_loop;
+//   cookie_manager->FlushCookieStore(
+//       base::BindLambdaForTesting([&]() { run_loop.Quit(); }));
+//   run_loop.Run();
+// }
 
 // See |NetworkServiceBrowserTest| for content's version of tests.
 class ChromeNetworkServiceBrowserTest
@@ -121,19 +121,19 @@ class ChromeNetworkServiceBrowserTest
 
 IN_PROC_BROWSER_TEST_P(ChromeNetworkServiceBrowserTest, PRE_EncryptedCookies) {
   // First set a cookie with cookie encryption enabled.
-  mojo::Remote<network::mojom::NetworkContext> context(
-      CreateNetworkContext(/*enable_encrypted_cookies=*/true));
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  context->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+  // mojo::Remote<network::mojom::NetworkContext> context(
+  //     CreateNetworkContext(/*enable_encrypted_cookies=*/true));
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+  // context->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
 
-  SetCookie(cookie_manager.get());
+  // SetCookie(cookie_manager.get());
 
-  net::CookieList cookies = GetCookies(cookie_manager.get());
-  ASSERT_EQ(1u, cookies.size());
-  EXPECT_EQ(kCookieName, cookies[0].Name());
-  EXPECT_EQ(kCookieValue, cookies[0].Value());
+  // net::CookieList cookies = GetCookies(cookie_manager.get());
+  // ASSERT_EQ(1u, cookies.size());
+  // EXPECT_EQ(kCookieName, cookies[0].Name());
+  // EXPECT_EQ(kCookieValue, cookies[0].Value());
 
-  FlushCookies(cookie_manager.get());
+  // FlushCookies(cookie_manager.get());
 }
 
 // This flakes on Mac10.12 and Windows: http://crbug.com/868667
@@ -153,15 +153,15 @@ IN_PROC_BROWSER_TEST_P(ChromeNetworkServiceBrowserTest,
     return;
 
   // Now attempt to read the cookie with encryption disabled.
-  mojo::Remote<network::mojom::NetworkContext> context(
-      CreateNetworkContext(/*enable_encrypted_cookies=*/false));
-  mojo::Remote<network::mojom::CookieManager> cookie_manager;
-  context->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
+  // mojo::Remote<network::mojom::NetworkContext> context(
+  //     CreateNetworkContext(/*enable_encrypted_cookies=*/false));
+  // mojo::Remote<network::mojom::CookieManager> cookie_manager;
+  // context->GetCookieManager(cookie_manager.BindNewPipeAndPassReceiver());
 
-  net::CookieList cookies = GetCookies(cookie_manager.get());
-  ASSERT_EQ(1u, cookies.size());
-  EXPECT_EQ(kCookieName, cookies[0].Name());
-  EXPECT_EQ("", cookies[0].Value());
+  // net::CookieList cookies = GetCookies(cookie_manager.get());
+  // ASSERT_EQ(1u, cookies.size());
+  // EXPECT_EQ(kCookieName, cookies[0].Name());
+  // EXPECT_EQ("", cookies[0].Value());
 }
 
 INSTANTIATE_TEST_SUITE_P(InProcess,
@@ -208,14 +208,14 @@ class ChromeNetworkServiceMigrationBrowserTest : public InProcessBrowserTest {
 
  protected:
   void VerifyCookiePresent() {
-    auto* cookie_manager = browser()
-                               ->profile()
-                               ->GetDefaultStoragePartition()
-                               ->GetCookieManagerForBrowserProcess();
-    auto cookies = GetCookies(cookie_manager);
-    ASSERT_EQ(1u, cookies.size());
-    EXPECT_EQ("name", cookies[0].Name());
-    EXPECT_EQ("Good", cookies[0].Value());
+    // auto* cookie_manager = browser()
+    //                            ->profile()
+    //                            ->GetDefaultStoragePartition()
+    //                            ->GetCookieManagerForBrowserProcess();
+    // auto cookies = GetCookies(cookie_manager);
+    // ASSERT_EQ(1u, cookies.size());
+    // EXPECT_EQ("name", cookies[0].Name());
+    // EXPECT_EQ("Good", cookies[0].Value());
   }
 
   base::FilePath GetOldCookieLocation() {

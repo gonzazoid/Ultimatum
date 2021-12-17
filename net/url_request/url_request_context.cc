@@ -39,7 +39,7 @@ URLRequestContext::URLRequestContext()
       network_delegate_(nullptr),
       http_server_properties_(nullptr),
       http_user_agent_settings_(nullptr),
-      cookie_store_(nullptr),
+      // cookie_store_(nullptr),
       transport_security_state_(nullptr),
       ct_policy_enforcer_(nullptr),
       sct_auditing_delegate_(nullptr),
@@ -109,9 +109,9 @@ std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
                                          net_log_source));
 }
 
-void URLRequestContext::set_cookie_store(CookieStore* cookie_store) {
-  cookie_store_ = cookie_store;
-}
+// void URLRequestContext::set_cookie_store(CookieStore* cookie_store) {
+//   cookie_store_ = cookie_store;
+// }
 
 void URLRequestContext::AssertNoURLRequests() const {
   int num_requests = url_requests_->size();

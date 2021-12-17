@@ -565,11 +565,11 @@ IN_PROC_BROWSER_TEST_F(StorageAccessAPIBrowserTest,
       base::Value(CONTENT_SETTING_ALLOW), "preference",
       /*incognito=*/false, base::Time());
 
-  browser()
-      ->profile()
-      ->GetDefaultStoragePartition()
-      ->GetCookieManagerForBrowserProcess()
-      ->SetStorageAccessGrantSettings(settings, base::DoNothing());
+  // browser()
+  //     ->profile()
+  //     ->GetDefaultStoragePartition()
+  //     ->GetCookieManagerForBrowserProcess()
+  //     ->SetStorageAccessGrantSettings(settings, base::DoNothing());
 
   storage::test::CheckStorageAccessForFrame(GetFrame(), false);
   storage::test::CheckStorageAccessForFrame(GetNestedFrame(), true);

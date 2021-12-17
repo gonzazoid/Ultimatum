@@ -54,11 +54,11 @@ void SiteDataCountingHelper::CountAndDestroySelfWhenFinished() {
 
   tasks_ += 1;
   // Count origins with cookies.
-  network::mojom::CookieManager* cookie_manager =
-      partition->GetCookieManagerForBrowserProcess();
-  cookie_manager->GetAllCookies(base::BindOnce(
-      &SiteDataCountingHelper::GetCookiesCallback, base::Unretained(this)));
-
+  // network::mojom::CookieManager* cookie_manager =
+  //     partition->GetCookieManagerForBrowserProcess();
+  // cookie_manager->GetAllCookies(base::BindOnce(
+  //     &SiteDataCountingHelper::GetCookiesCallback, base::Unretained(this)));
+  GetCookiesCallback({});
   storage::QuotaManager* quota_manager = partition->GetQuotaManager();
   if (quota_manager) {
     // Count storage keys with filesystem, websql, appcache, indexeddb,

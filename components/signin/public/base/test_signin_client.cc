@@ -48,11 +48,11 @@ TestSigninClient::GetURLLoaderFactory() {
   return GetTestURLLoaderFactory()->GetSafeWeakWrapper();
 }
 
-network::mojom::CookieManager* TestSigninClient::GetCookieManager() {
-  if (!cookie_manager_)
-    cookie_manager_ = std::make_unique<network::TestCookieManager>();
-  return cookie_manager_.get();
-}
+// network::mojom::CookieManager* TestSigninClient::GetCookieManager() {
+//   if (!cookie_manager_)
+//     cookie_manager_ = std::make_unique<network::TestCookieManager>();
+//   return cookie_manager_.get();
+// }
 
 network::TestURLLoaderFactory* TestSigninClient::GetTestURLLoaderFactory() {
   if (test_url_loader_factory_)

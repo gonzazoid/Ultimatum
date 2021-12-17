@@ -81,11 +81,11 @@ AccountsCookieMutatorImpl::SetAccountsInCookieForPartition(
     base::OnceCallback<void(SetAccountsInCookieResult)>
         set_accounts_in_cookies_completed_callback) {
   // The default partition must go through the GaiaCookieManagerService.
-  DCHECK_NE(signin_client_->GetCookieManager(),
-            partition_delegate->GetCookieManagerForPartition())
-      << "The default partition is passed to "
-      << "SetAccountsInCookieForPartition(). Use SetAccountsInCookie() "
-      << "instead.";
+  // DCHECK_NE(signin_client_->GetCookieManager(),
+  //           partition_delegate->GetCookieManagerForPartition())
+  //     << "The default partition is passed to "
+  //     << "SetAccountsInCookieForPartition(). Use SetAccountsInCookie() "
+  //     << "instead.";
 
   std::vector<GaiaCookieManagerService::AccountIdGaiaIdPair> accounts;
   for (const auto& account_id : parameters.accounts_to_send) {

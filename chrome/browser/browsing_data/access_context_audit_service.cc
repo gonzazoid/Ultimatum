@@ -63,7 +63,7 @@ AccessContextAuditService::~AccessContextAuditService() {
 
 bool AccessContextAuditService::Init(
     const base::FilePath& database_dir,
-    network::mojom::CookieManager* cookie_manager,
+    // network::mojom::CookieManager* cookie_manager,
     history::HistoryService* history_service,
     content::StoragePartition* storage_partition) {
   database_ = base::MakeRefCounted<AccessContextAuditDatabase>(database_dir);
@@ -86,8 +86,8 @@ bool AccessContextAuditService::Init(
     return false;
   }
 
-  cookie_manager->AddGlobalChangeListener(
-      cookie_listener_receiver_.BindNewPipeAndPassRemote());
+  // cookie_manager->AddGlobalChangeListener(
+  //     cookie_listener_receiver_.BindNewPipeAndPassRemote());
   history_observation_.Observe(history_service);
   storage_partition_observation_.Observe(storage_partition);
   return true;

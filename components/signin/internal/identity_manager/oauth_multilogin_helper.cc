@@ -186,50 +186,51 @@ void OAuthMultiloginHelper::OnOAuthMultiloginFinished(
 void OAuthMultiloginHelper::StartSettingCookies(
     const OAuthMultiloginResult& result) {
   DCHECK(cookies_to_set_.empty());
-  network::mojom::CookieManager* cookie_manager =
-      partition_delegate_->GetCookieManagerForPartition();
-  const std::vector<net::CanonicalCookie>& cookies = result.cookies();
+  // network::mojom::CookieManager* cookie_manager =
+  //     partition_delegate_->GetCookieManagerForPartition();
+  // const std::vector<net::CanonicalCookie>& cookies = result.cookies();
 
-  for (const net::CanonicalCookie& cookie : cookies) {
-    cookies_to_set_.insert(std::make_pair(cookie.Name(), cookie.Domain()));
-  }
-  for (const net::CanonicalCookie& cookie : cookies) {
-    if (cookies_to_set_.find(std::make_pair(cookie.Name(), cookie.Domain())) !=
-        cookies_to_set_.end()) {
-      base::OnceCallback<void(net::CookieAccessResult)> callback =
-          base::BindOnce(&OAuthMultiloginHelper::OnCookieSet,
-                         weak_ptr_factory_.GetWeakPtr(), cookie.Name(),
-                         cookie.Domain());
-      net::CookieOptions options;
-      options.set_include_httponly();
+  // for (const net::CanonicalCookie& cookie : cookies) {
+  //   cookies_to_set_.insert(std::make_pair(cookie.Name(), cookie.Domain()));
+  // }
+  // for (const net::CanonicalCookie& cookie : cookies) {
+  //   if (cookies_to_set_.find(std::make_pair(cookie.Name(), cookie.Domain())) !=
+  //       cookies_to_set_.end()) {
+  //     base::OnceCallback<void(net::CookieAccessResult)> callback =
+  //         base::BindOnce(&OAuthMultiloginHelper::OnCookieSet,
+  //                        weak_ptr_factory_.GetWeakPtr(), cookie.Name(),
+  //                        cookie.Domain());
+  //     net::CookieOptions options;
+  //     options.set_include_httponly();
       // Permit it to set a SameSite cookie if it wants to.
-      options.set_same_site_cookie_context(
-          net::CookieOptions::SameSiteCookieContext::MakeInclusive());
-      cookie_manager->SetCanonicalCookie(
-          cookie, net::cookie_util::SimulatedCookieSource(cookie, "https"),
-          options,
-          mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-              std::move(callback),
-              net::CookieAccessResult(net::CookieInclusionStatus(
-                  net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR))));
-    } else {
-      LOG(ERROR) << "Duplicate cookie found: " << cookie.Name() << " "
-                 << cookie.Domain();
-    }
-  }
+  //     options.set_same_site_cookie_context(
+  //         net::CookieOptions::SameSiteCookieContext::MakeInclusive());
+  //     cookie_manager->SetCanonicalCookie(
+  //         cookie, net::cookie_util::SimulatedCookieSource(cookie, "https"),
+  //         options,
+  //         mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+  //             std::move(callback),
+  //             net::CookieAccessResult(net::CookieInclusionStatus(
+  //                 net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR))));
+  //   } else {
+  //     LOG(ERROR) << "Duplicate cookie found: " << cookie.Name() << " "
+  //                << cookie.Domain();
+  //   }
+  // }
+  OnCookieSet();
 }
 
-void OAuthMultiloginHelper::OnCookieSet(const std::string& cookie_name,
+void OAuthMultiloginHelper::OnCookieSet(/* const std::string& cookie_name,
                                         const std::string& cookie_domain,
-                                        net::CookieAccessResult access_result) {
-  cookies_to_set_.erase(std::make_pair(cookie_name, cookie_domain));
-  bool success = access_result.status.IsInclude();
-  if (!success) {
-    LOG(ERROR) << "Failed to set cookie " << cookie_name
-               << " for domain=" << cookie_domain << ".";
-  }
-  UMA_HISTOGRAM_BOOLEAN("Signin.SetCookieSuccess", success);
-  if (cookies_to_set_.empty())
+                                        net::CookieAccessResult access_result */) {
+  // cookies_to_set_.erase(std::make_pair(cookie_name, cookie_domain));
+  // bool success = access_result.status.IsInclude();
+  // if (!success) {
+  //   LOG(ERROR) << "Failed to set cookie " << cookie_name
+  //              << " for domain=" << cookie_domain << ".";
+  // }
+  // UMA_HISTOGRAM_BOOLEAN("Signin.SetCookieSuccess", success);
+  // if (cookies_to_set_.empty())
     std::move(callback_).Run(SetAccountsInCookieResult::kSuccess);
   // Do not add anything below this line, because this may be deleted.
 }

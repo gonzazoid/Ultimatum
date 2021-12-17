@@ -20,50 +20,50 @@ namespace {
 
 // Name of the GAIA cookie that is being observed to detect when available
 // accounts have changed in the content-area.
-const char kSigninCookieName[] = "SAPISID";
+// const char kSigninCookieName[] = "SAPISID";
 
 }  // namespace
 
 void AddSigninCookie(Profile* profile) {
   DCHECK(profile);
-  auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
-      kSigninCookieName, std::string(), ".google.com", "/",
-      /*creation=*/base::Time(),
-      /*expires=*/base::Time(), /*last_access=*/base::Time(), /*secure=*/true,
-      /*httponly=*/false, net::CookieSameSite::NO_RESTRICTION,
-      net::COOKIE_PRIORITY_DEFAULT,
-      /*same_party=*/false);
+  // auto cookie = net::CanonicalCookie::CreateUnsafeCookieForTesting(
+  //     kSigninCookieName, std::string(), ".google.com", "/",
+  //     /*creation=*/base::Time(),
+  //     /*expires=*/base::Time(), /*last_access=*/base::Time(), /*secure=*/true,
+  //     /*httponly=*/false, net::CookieSameSite::NO_RESTRICTION,
+  //     net::COOKIE_PRIORITY_DEFAULT,
+  //     /*same_party=*/false);
 
-  network::mojom::CookieManager* cookie_manager =
-      profile->GetDefaultStoragePartition()
-          ->GetCookieManagerForBrowserProcess();
-  DCHECK(cookie_manager);
+  // network::mojom::CookieManager* cookie_manager =
+  //     profile->GetDefaultStoragePartition()
+  //         ->GetCookieManagerForBrowserProcess();
+  // DCHECK(cookie_manager);
 
-  base::RunLoop run_loop;
-  cookie_manager->SetCanonicalCookie(
-      *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-      net::CookieOptions(),
-      base::BindLambdaForTesting(
-          [&run_loop](net::CookieAccessResult) { run_loop.Quit(); }));
-  run_loop.Run();
+  // base::RunLoop run_loop;
+  // cookie_manager->SetCanonicalCookie(
+  //     *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+  //     net::CookieOptions(),
+  //     base::BindLambdaForTesting(
+  //         [&run_loop](net::CookieAccessResult) { run_loop.Quit(); }));
+  // run_loop.Run();
 }
 
 void DeleteSigninCookies(Profile* profile) {
   DCHECK(profile);
-  network::mojom::CookieManager* cookie_manager =
-      profile->GetDefaultStoragePartition()
-          ->GetCookieManagerForBrowserProcess();
-  DCHECK(cookie_manager);
+  // network::mojom::CookieManager* cookie_manager =
+  //     profile->GetDefaultStoragePartition()
+  //         ->GetCookieManagerForBrowserProcess();
+  // DCHECK(cookie_manager);
 
-  base::RunLoop run_loop;
-  network::mojom::CookieDeletionFilterPtr filter =
-      network::mojom::CookieDeletionFilter::New();
-  filter->cookie_name = kSigninCookieName;
+  // base::RunLoop run_loop;
+  // network::mojom::CookieDeletionFilterPtr filter =
+  //     network::mojom::CookieDeletionFilter::New();
+  // filter->cookie_name = kSigninCookieName;
 
-  cookie_manager->DeleteCookies(
-      std::move(filter),
-      base::BindLambdaForTesting([&run_loop](uint32_t) { run_loop.Quit(); }));
-  run_loop.Run();
+  // cookie_manager->DeleteCookies(
+  //     std::move(filter),
+  //     base::BindLambdaForTesting([&run_loop](uint32_t) { run_loop.Quit(); }));
+  // run_loop.Run();
 }
 
 }  // namespace cookie_helper

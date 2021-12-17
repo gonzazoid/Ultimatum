@@ -41,10 +41,10 @@ TestStoragePartition::GetURLLoaderFactoryForBrowserProcessIOThread() {
   return nullptr;
 }
 
-network::mojom::CookieManager*
-TestStoragePartition::GetCookieManagerForBrowserProcess() {
-  return cookie_manager_for_browser_process_;
-}
+// network::mojom::CookieManager*
+// TestStoragePartition::GetCookieManagerForBrowserProcess() {
+//   return cookie_manager_for_browser_process_;
+// }
 
 void TestStoragePartition::CreateHasTrustTokensAnswerer(
     mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,

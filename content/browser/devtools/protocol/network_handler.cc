@@ -260,46 +260,46 @@ class CookieRetrieverNetworkService
 };
 
 namespace {
-std::vector<net::CanonicalCookie> FilterCookies(
-    const std::vector<net::CanonicalCookie>& cookies,
-    const std::string& name,
-    const std::string& normalized_domain,
-    const std::string& path) {
-  std::vector<net::CanonicalCookie> result;
+// std::vector<net::CanonicalCookie> FilterCookies(
+//     const std::vector<net::CanonicalCookie>& cookies,
+//     const std::string& name,
+//     const std::string& normalized_domain,
+//     const std::string& path) {
+//   std::vector<net::CanonicalCookie> result;
 
-  for (const auto& cookie : cookies) {
-    if (cookie.Name() != name)
-      continue;
-    if (cookie.Domain() != normalized_domain)
-      continue;
-    if (!path.empty() && cookie.Path() != path)
-      continue;
-    result.push_back(cookie);
-  }
+//   for (const auto& cookie : cookies) {
+//     if (cookie.Name() != name)
+//       continue;
+//     if (cookie.Domain() != normalized_domain)
+//       continue;
+//     if (!path.empty() && cookie.Path() != path)
+//       continue;
+//     result.push_back(cookie);
+//   }
 
-  return result;
-}
+//   return result;
+// }
 
-void DeleteFilteredCookies(network::mojom::CookieManager* cookie_manager,
-                           const std::string& name,
-                           const std::string& normalized_domain,
-                           const std::string& path,
-                           std::unique_ptr<DeleteCookiesCallback> callback,
-                           const std::vector<net::CanonicalCookie>& cookies) {
-  std::vector<net::CanonicalCookie> filtered_list =
-      FilterCookies(cookies, name, normalized_domain, path);
+// void DeleteFilteredCookies(network::mojom::CookieManager* cookie_manager,
+//                            const std::string& name,
+//                            const std::string& normalized_domain,
+//                            const std::string& path,
+//                            std::unique_ptr<DeleteCookiesCallback> callback,
+//                            const std::vector<net::CanonicalCookie>& cookies) {
+//   std::vector<net::CanonicalCookie> filtered_list =
+//       FilterCookies(cookies, name, normalized_domain, path);
 
-  base::RepeatingClosure barrier_closure = base::BarrierClosure(
-      filtered_list.size(),
-      base::BindOnce(&DeleteCookiesCallback::sendSuccess, std::move(callback)));
+//   base::RepeatingClosure barrier_closure = base::BarrierClosure(
+//       filtered_list.size(),
+//       base::BindOnce(&DeleteCookiesCallback::sendSuccess, std::move(callback)));
 
-  for (auto& cookie : filtered_list) {
-    cookie_manager->DeleteCanonicalCookie(
-        cookie, base::BindOnce([](base::RepeatingClosure callback,
-                                  bool) { callback.Run(); },
-                               barrier_closure));
-  }
-}
+//   for (auto& cookie : filtered_list) {
+//     cookie_manager->DeleteCanonicalCookie(
+//         cookie, base::BindOnce([](base::RepeatingClosure callback,
+//                                   bool) { callback.Run(); },
+//                                barrier_closure));
+//   }
+// }
 
 absl::variant<net::CookieSourceScheme, Response> GetSourceSchemeFromProtocol(
     const std::string& source_scheme) {
@@ -1465,16 +1465,16 @@ void NetworkHandler::ClearBrowserCache(
 
 void NetworkHandler::ClearBrowserCookies(
     std::unique_ptr<ClearBrowserCookiesCallback> callback) {
-  if (!storage_partition_) {
-    callback->sendFailure(Response::InternalError());
+  // if (!storage_partition_) {
+  //   callback->sendFailure(Response::InternalError());
     return;
-  }
+  // }
 
-  storage_partition_->GetCookieManagerForBrowserProcess()->DeleteCookies(
-      network::mojom::CookieDeletionFilter::New(),
-      base::BindOnce([](std::unique_ptr<ClearBrowserCookiesCallback> callback,
-                        uint32_t) { callback->sendSuccess(); },
-                     std::move(callback)));
+  // storage_partition_->GetCookieManagerForBrowserProcess()->DeleteCookies(
+  //     network::mojom::CookieDeletionFilter::New(),
+  //     base::BindOnce([](std::unique_ptr<ClearBrowserCookiesCallback> callback,
+  //                       uint32_t) { callback->sendSuccess(); },
+  //                    std::move(callback)));
 }
 
 void NetworkHandler::GetCookies(Maybe<Array<String>> protocol_urls,
@@ -1485,24 +1485,26 @@ void NetworkHandler::GetCookies(Maybe<Array<String>> protocol_urls,
   }
   std::vector<GURL> urls = ComputeCookieURLs(host_, protocol_urls);
 
-  CookieRetrieverNetworkService::Retrieve(
-      storage_partition_->GetCookieManagerForBrowserProcess(), urls,
-      host_->GetNetworkIsolationKey(), std::move(callback));
+  // CookieRetrieverNetworkService::Retrieve(
+  //     storage_partition_->GetCookieManagerForBrowserProcess(), urls,
+  //     host_->GetNetworkIsolationKey(), std::move(callback));
+  auto cookies = std::make_unique<Array<Network::Cookie>>();
+  std::move(callback)->sendSuccess(std::move(cookies));
 }
 
 void NetworkHandler::GetAllCookies(
     std::unique_ptr<GetAllCookiesCallback> callback) {
-  if (!storage_partition_) {
-    callback->sendFailure(Response::InternalError());
+  // if (!storage_partition_) {
+  //   callback->sendFailure(Response::InternalError());
     return;
-  }
-  storage_partition_->GetCookieManagerForBrowserProcess()->GetAllCookies(
-      base::BindOnce(
-          [](std::unique_ptr<GetAllCookiesCallback> callback,
-             const std::vector<net::CanonicalCookie>& cookies) {
-            callback->sendSuccess(NetworkHandler::BuildCookieArray(cookies));
-          },
-          std::move(callback)));
+  // }
+  // storage_partition_->GetCookieManagerForBrowserProcess()->GetAllCookies(
+  //     base::BindOnce(
+  //         [](std::unique_ptr<GetAllCookiesCallback> callback,
+  //            const std::vector<net::CanonicalCookie>& cookies) {
+  //           callback->sendSuccess(NetworkHandler::BuildCookieArray(cookies));
+  //         },
+  //         std::move(callback)));
 }
 
 void NetworkHandler::SetCookie(const std::string& name,
@@ -1535,20 +1537,21 @@ void NetworkHandler::SetCookie(const std::string& name,
     callback->sendFailure(absl::get<Response>(std::move(cookie_or_error)));
     return;
   }
-  std::unique_ptr<net::CanonicalCookie> cookie =
-      absl::get<std::unique_ptr<net::CanonicalCookie>>(
-          std::move(cookie_or_error));
+  // std::unique_ptr<net::CanonicalCookie> cookie =
+  //     absl::get<std::unique_ptr<net::CanonicalCookie>>(
+  //         std::move(cookie_or_error));
 
-  net::CookieOptions options;
+  // net::CookieOptions options;
   // Permit it to set a SameSite cookie if it wants to.
-  options.set_same_site_cookie_context(
-      net::CookieOptions::SameSiteCookieContext::MakeInclusive());
-  options.set_include_httponly();
-  storage_partition_->GetCookieManagerForBrowserProcess()->SetCanonicalCookie(
-      *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-      options,
-      net::cookie_util::AdaptCookieAccessResultToBool(base::BindOnce(
-          &SetCookieCallback::sendSuccess, std::move(callback))));
+  // options.set_same_site_cookie_context(
+  //     net::CookieOptions::SameSiteCookieContext::MakeInclusive());
+  // options.set_include_httponly();
+  // storage_partition_->GetCookieManagerForBrowserProcess()->SetCanonicalCookie(
+  //     *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+  //     options,
+  //     net::cookie_util::AdaptCookieAccessResultToBool(base::BindOnce(
+  //         &SetCookieCallback::sendSuccess, std::move(callback))));
+  std::move(callback)->sendSuccess(true);
 }
 
 // static
@@ -1588,23 +1591,24 @@ void NetworkHandler::SetCookies(
         std::move(net_cookie_or_error)));
   }
 
-  base::RepeatingClosure barrier_closure = base::BarrierClosure(
-      net_cookies.size(), base::BindOnce(std::move(callback), true));
+  // base::RepeatingClosure barrier_closure = base::BarrierClosure(
+  //     net_cookies.size(), base::BindOnce(std::move(callback), true));
 
-  auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
-  net::CookieOptions options;
-  options.set_include_httponly();
+  // auto* cookie_manager = storage_partition->GetCookieManagerForBrowserProcess();
+  // net::CookieOptions options;
+  // options.set_include_httponly();
   // Permit it to set a SameSite cookie if it wants to.
-  options.set_same_site_cookie_context(
-      net::CookieOptions::SameSiteCookieContext::MakeInclusive());
-  for (const auto& cookie : net_cookies) {
-    cookie_manager->SetCanonicalCookie(
-        *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
-        options,
-        base::BindOnce([](base::RepeatingClosure callback,
-                          net::CookieAccessResult) { callback.Run(); },
-                       barrier_closure));
-  }
+  // options.set_same_site_cookie_context(
+  //     net::CookieOptions::SameSiteCookieContext::MakeInclusive());
+  // for (const auto& cookie : net_cookies) {
+  //   cookie_manager->SetCanonicalCookie(
+  //       *cookie, net::cookie_util::SimulatedCookieSource(*cookie, "https"),
+  //       options,
+  //       base::BindOnce([](base::RepeatingClosure callback,
+  //                         net::CookieAccessResult) { callback.Run(); },
+  //                      barrier_closure));
+  // }
+  std::move(callback).Run(true);
 }
 
 void NetworkHandler::SetCookies(
@@ -1655,12 +1659,13 @@ void NetworkHandler::DeleteCookies(
     normalized_domain = url.host();
   }
 
-  auto* cookie_manager =
-      storage_partition_->GetCookieManagerForBrowserProcess();
+  // auto* cookie_manager =
+  //     storage_partition_->GetCookieManagerForBrowserProcess();
 
-  cookie_manager->GetAllCookies(base::BindOnce(
-      &DeleteFilteredCookies, base::Unretained(cookie_manager), name,
-      normalized_domain, path.fromMaybe(""), std::move(callback)));
+  // cookie_manager->GetAllCookies(base::BindOnce(
+  //     &DeleteFilteredCookies, base::Unretained(cookie_manager), name,
+  //     normalized_domain, path.fromMaybe(""), std::move(callback)));
+  callback->sendSuccess();
 }
 
 Response NetworkHandler::SetExtraHTTPHeaders(

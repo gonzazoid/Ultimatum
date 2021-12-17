@@ -61,25 +61,25 @@ bool SetGaiaCookieForProfile(Profile* profile) {
       /*secure=*/true, false, net::CookieSameSite::NO_RESTRICTION,
       net::COOKIE_PRIORITY_DEFAULT, false);
 
-  bool success = false;
-  base::RunLoop loop;
-  base::OnceClosure loop_quit = loop.QuitClosure();
-  base::OnceCallback<void(net::CookieAccessResult)> callback =
-      base::BindLambdaForTesting(
-          [&success, &loop_quit](net::CookieAccessResult r) {
-            success = r.status.IsInclude();
-            std::move(loop_quit).Run();
-          });
-  network::mojom::CookieManager* cookie_manager =
-      profile->GetDefaultStoragePartition()
-          ->GetCookieManagerForBrowserProcess();
-  cookie_manager->SetCanonicalCookie(
-      *cookie, google_url, net::CookieOptions::MakeAllInclusive(),
-      mojo::WrapCallbackWithDefaultInvokeIfNotRun(
-          std::move(callback),
-          net::CookieAccessResult(net::CookieInclusionStatus(
-              net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR))));
-  loop.Run();
+  bool success = true; // false;
+  // base::RunLoop loop;
+  // base::OnceClosure loop_quit = loop.QuitClosure();
+  // base::OnceCallback<void(net::CookieAccessResult)> callback =
+  //     base::BindLambdaForTesting(
+  //         [&success, &loop_quit](net::CookieAccessResult r) {
+  //           success = r.status.IsInclude();
+  //           std::move(loop_quit).Run();
+  //         });
+  // network::mojom::CookieManager* cookie_manager =
+  //     profile->GetDefaultStoragePartition()
+  //         ->GetCookieManagerForBrowserProcess();
+  // cookie_manager->SetCanonicalCookie(
+  //     *cookie, google_url, net::CookieOptions::MakeAllInclusive(),
+  //     mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+  //         std::move(callback),
+  //         net::CookieAccessResult(net::CookieInclusionStatus(
+  //             net::CookieInclusionStatus::EXCLUDE_UNKNOWN_ERROR))));
+  // loop.Run();
   return success;
 }
 #endif

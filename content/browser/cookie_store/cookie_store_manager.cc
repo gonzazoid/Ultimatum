@@ -85,14 +85,14 @@ void CookieStoreManager::ListenToCookieChanges(
   DCHECK(!cookie_change_listener_receiver_.is_bound())
       << __func__ << " already called";
 
-  mojo::PendingRemote<::network::mojom::CookieManager> cookie_manager_remote;
-  network_context->GetCookieManager(
-      cookie_manager_remote.InitWithNewPipeAndPassReceiver());
-  cookie_manager_.Bind(std::move(cookie_manager_remote));
+  // mojo::PendingRemote<::network::mojom::CookieManager> cookie_manager_remote;
+  // network_context->GetCookieManager(
+  //     cookie_manager_remote.InitWithNewPipeAndPassReceiver());
+  // cookie_manager_.Bind(std::move(cookie_manager_remote));
 
   // TODO(pwnall): Switch to an API with subscription confirmation.
-  cookie_manager_->AddGlobalChangeListener(
-      cookie_change_listener_receiver_.BindNewPipeAndPassRemote());
+  // cookie_manager_->AddGlobalChangeListener(
+  //     cookie_change_listener_receiver_.BindNewPipeAndPassRemote());
   std::move(callback).Run(true);
 }
 

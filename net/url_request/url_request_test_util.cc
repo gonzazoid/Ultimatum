@@ -122,10 +122,10 @@ void TestURLRequestContext::Init() {
     context_storage_.set_quic_context(std::make_unique<QuicContext>());
   }
   // In-memory cookie store.
-  if (!cookie_store()) {
-    context_storage_.set_cookie_store(std::make_unique<CookieMonster>(
-        nullptr /* store */, nullptr /* netlog */));
-  }
+  // if (!cookie_store()) {
+  //   context_storage_.set_cookie_store(std::make_unique<CookieMonster>(
+  //       nullptr /* store */, nullptr /* netlog */));
+  // }
 
   if (!http_user_agent_settings() && create_default_http_user_agent_settings_) {
     context_storage_.set_http_user_agent_settings(

@@ -690,44 +690,44 @@ void SignedExchangeHandler::OnVerifyCert(
   }
   CreateResponse(std::move(response_head));
 }
-
+// XXX remove
 void SignedExchangeHandler::CheckAbsenceOfCookies(base::OnceClosure callback) {
   auto* frame = FrameTreeNode::GloballyFindByID(frame_tree_node_id_);
   if (!frame) {
     std::move(callback).Run();
     return;
   }
-  DCHECK(outer_request_isolation_info_.has_value());
+  // DCHECK(outer_request_isolation_info_.has_value());
 
-  StoragePartition* storage_partition =
-      frame->current_frame_host()->GetProcess()->GetStoragePartition();
-  url::Origin inner_url_origin =
-      url::Origin::Create(envelope_->request_url().url);
-  net::IsolationInfo isolation_info =
-      outer_request_isolation_info_->CreateForRedirect(inner_url_origin);
+  // StoragePartition* storage_partition =
+  //     frame->current_frame_host()->GetProcess()->GetStoragePartition();
+  // url::Origin inner_url_origin =
+  //     url::Origin::Create(envelope_->request_url().url);
+  // net::IsolationInfo isolation_info =
+  //     outer_request_isolation_info_->CreateForRedirect(inner_url_origin);
 
-  RenderFrameHostImpl* render_frame_host = frame->current_frame_host();
-  static_cast<StoragePartitionImpl*>(storage_partition)
-      ->CreateRestrictedCookieManager(
-          network::mojom::RestrictedCookieManagerRole::NETWORK,
-          inner_url_origin, isolation_info,
-          /* is_service_worker = */ false,
-          render_frame_host ? render_frame_host->GetProcess()->GetID() : -1,
-          render_frame_host ? render_frame_host->GetRoutingID()
-                            : MSG_ROUTING_NONE,
-          cookie_manager_.BindNewPipeAndPassReceiver(),
-          render_frame_host ? render_frame_host->CreateCookieAccessObserver()
-                            : mojo::NullRemote());
+  // RenderFrameHostImpl* render_frame_host = frame->current_frame_host();
+  // static_cast<StoragePartitionImpl*>(storage_partition)
+  //     ->CreateRestrictedCookieManager(
+  //         network::mojom::RestrictedCookieManagerRole::NETWORK,
+  //         inner_url_origin, isolation_info,
+  //         /* is_service_worker = */ false,
+  //         render_frame_host ? render_frame_host->GetProcess()->GetID() : -1,
+  //         render_frame_host ? render_frame_host->GetRoutingID()
+  //                           : MSG_ROUTING_NONE,
+  //         cookie_manager_.BindNewPipeAndPassReceiver(),
+  //         render_frame_host ? render_frame_host->CreateCookieAccessObserver()
+  //                           : mojo::NullRemote());
 
-  DCHECK(isolation_info.top_frame_origin().has_value());
-  auto match_options = network::mojom::CookieManagerGetOptions::New();
-  match_options->name = "";
-  match_options->match_type = network::mojom::CookieMatchType::STARTS_WITH;
-  cookie_manager_->GetAllForUrl(
-      envelope_->request_url().url, isolation_info.site_for_cookies(),
-      *isolation_info.top_frame_origin(), std::move(match_options),
-      base::BindOnce(&SignedExchangeHandler::OnGetCookies,
-                     weak_factory_.GetWeakPtr(), std::move(callback)));
+  // DCHECK(isolation_info.top_frame_origin().has_value());
+  // auto match_options = network::mojom::CookieManagerGetOptions::New();
+  // match_options->name = "";
+  // match_options->match_type = network::mojom::CookieMatchType::STARTS_WITH;
+  // cookie_manager_->GetAllForUrl(
+  //     envelope_->request_url().url, isolation_info.site_for_cookies(),
+  //     *isolation_info.top_frame_origin(), std::move(match_options),
+  //     base::BindOnce(&SignedExchangeHandler::OnGetCookies,
+  //                    weak_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void SignedExchangeHandler::OnGetCookies(

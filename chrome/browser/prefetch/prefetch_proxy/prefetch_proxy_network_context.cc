@@ -57,15 +57,15 @@ PrefetchProxyNetworkContext::GetUrlLoaderFactory() {
   return url_loader_factory_.get();
 }
 
-network::mojom::CookieManager* PrefetchProxyNetworkContext::GetCookieManager() {
-  DCHECK(is_isolated_);
-  DCHECK(network_context_);
-  if (!cookie_manager_)
-    network_context_->GetCookieManager(
-        cookie_manager_.BindNewPipeAndPassReceiver());
+// network::mojom::CookieManager* PrefetchProxyNetworkContext::GetCookieManager() {
+//   DCHECK(is_isolated_);
+//   DCHECK(network_context_);
+//   if (!cookie_manager_)
+//     network_context_->GetCookieManager(
+//         cookie_manager_.BindNewPipeAndPassReceiver());
 
-  return cookie_manager_.get();
-}
+//   return cookie_manager_.get();
+// }
 
 void PrefetchProxyNetworkContext::CreateNewUrlLoaderFactory(
     mojo::PendingReceiver<network::mojom::URLLoaderFactory> pending_receiver,

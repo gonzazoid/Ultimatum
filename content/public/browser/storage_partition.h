@@ -117,8 +117,8 @@ class CONTENT_EXPORT StoragePartition {
   GetURLLoaderFactoryForBrowserProcessWithCORBEnabled() = 0;
   virtual std::unique_ptr<network::PendingSharedURLLoaderFactory>
   GetURLLoaderFactoryForBrowserProcessIOThread() = 0;
-  virtual network::mojom::CookieManager*
-  GetCookieManagerForBrowserProcess() = 0;
+  // virtual network::mojom::CookieManager*
+  // GetCookieManagerForBrowserProcess() = 0;
 
   virtual void CreateHasTrustTokensAnswerer(
       mojo::PendingReceiver<network::mojom::HasTrustTokensAnswerer> receiver,

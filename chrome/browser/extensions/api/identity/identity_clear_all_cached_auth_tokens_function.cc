@@ -40,17 +40,20 @@ IdentityClearAllCachedAuthTokensFunction::Run() {
   id_api->EraseGaiaIdForExtension(extension()->id());
   id_api->token_cache()->EraseAllTokensForExtension(extension()->id());
 
-  for (WebAuthFlow::Partition partition : kPartitionsToClean) {
-    profile
-        ->GetStoragePartition(
-            WebAuthFlow::GetWebViewPartitionConfig(partition, profile))
-        ->GetCookieManagerForBrowserProcess()
-        ->DeleteCookies(
-            network::mojom::CookieDeletionFilter::New(),
-            base::BindOnce(
-                &IdentityClearAllCachedAuthTokensFunction::OnCookiesDeleted,
-                this));
+  for (size_t i=0; i < base::size(kPartitionsToClean); i++) {
+    OnCookiesDeleted(1);
   }
+  // for (WebAuthFlow::Partition partition : kPartitionsToClean) {
+    // profile
+    //     ->GetStoragePartition(
+    //         WebAuthFlow::GetWebViewPartitionConfig(partition, profile))
+    //     ->GetCookieManagerForBrowserProcess()
+    //     ->DeleteCookies(
+    //         network::mojom::CookieDeletionFilter::New(),
+    //         base::BindOnce(
+    //             &IdentityClearAllCachedAuthTokensFunction::OnCookiesDeleted,
+    //             this));
+  // }
 
   // This object is retained by the DeleteCookies callbacks.
   return RespondLater();

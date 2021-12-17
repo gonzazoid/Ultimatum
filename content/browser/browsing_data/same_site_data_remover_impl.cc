@@ -30,28 +30,28 @@ const uint32_t kStoragePartitionRemovalMask =
     content::StoragePartition::REMOVE_DATA_MASK_ALL &
     ~content::StoragePartition::REMOVE_DATA_MASK_COOKIES;
 
-void OnGetAllCookiesWithAccessSemantics(
-    base::OnceClosure closure,
-    network::mojom::CookieManager* cookie_manager,
-    std::set<std::string>* same_site_none_domains,
-    const std::vector<net::CanonicalCookie>& cookies,
-    const std::vector<net::CookieAccessSemantics>& access_semantics_list) {
-  DCHECK(cookies.size() == access_semantics_list.size());
-  base::RepeatingClosure barrier =
-      base::BarrierClosure(cookies.size(), std::move(closure));
-  for (size_t i = 0; i < cookies.size(); ++i) {
-    const net::CanonicalCookie& cookie = cookies[i];
-    if (cookie.IsEffectivelySameSiteNone(access_semantics_list[i])) {
-      same_site_none_domains->emplace(cookie.Domain());
-      cookie_manager->DeleteCanonicalCookie(
-          cookie, base::BindOnce([](const base::RepeatingClosure& callback,
-                                    bool success) { callback.Run(); },
-                                 barrier));
-    } else {
-      barrier.Run();
-    }
-  }
-}
+// void OnGetAllCookiesWithAccessSemantics(
+//     base::OnceClosure closure,
+//     network::mojom::CookieManager* cookie_manager,
+//     std::set<std::string>* same_site_none_domains,
+//     const std::vector<net::CanonicalCookie>& cookies,
+//     const std::vector<net::CookieAccessSemantics>& access_semantics_list) {
+//   DCHECK(cookies.size() == access_semantics_list.size());
+//   base::RepeatingClosure barrier =
+//       base::BarrierClosure(cookies.size(), std::move(closure));
+//   for (size_t i = 0; i < cookies.size(); ++i) {
+//     const net::CanonicalCookie& cookie = cookies[i];
+//     if (cookie.IsEffectivelySameSiteNone(access_semantics_list[i])) {
+//       same_site_none_domains->emplace(cookie.Domain());
+//       cookie_manager->DeleteCanonicalCookie(
+//           cookie, base::BindOnce([](const base::RepeatingClosure& callback,
+//                                     bool success) { callback.Run(); },
+//                                  barrier));
+//     } else {
+//       barrier.Run();
+//     }
+//   }
+// }
 
 bool DoesOriginMatchDomain(const std::set<std::string>& same_site_none_domains,
                            const url::Origin& origin,
@@ -88,11 +88,11 @@ void SameSiteDataRemoverImpl::OverrideStoragePartitionForTesting(
 void SameSiteDataRemoverImpl::DeleteSameSiteNoneCookies(
     base::OnceClosure closure) {
   same_site_none_domains_.clear();
-  auto* cookie_manager =
-      storage_partition_->GetCookieManagerForBrowserProcess();
-  cookie_manager->GetAllCookiesWithAccessSemantics(
-      base::BindOnce(&OnGetAllCookiesWithAccessSemantics, std::move(closure),
-                     cookie_manager, &same_site_none_domains_));
+  // auto* cookie_manager =
+  //     storage_partition_->GetCookieManagerForBrowserProcess();
+  // cookie_manager->GetAllCookiesWithAccessSemantics(
+  //     base::BindOnce(&OnGetAllCookiesWithAccessSemantics, std::move(closure),
+  //                    cookie_manager, &same_site_none_domains_));
 }
 
 void SameSiteDataRemoverImpl::ClearStoragePartitionData(

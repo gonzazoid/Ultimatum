@@ -90,11 +90,11 @@ void URLRequestContextStorage::set_http_server_properties(
   context_->set_http_server_properties(http_server_properties.get());
   http_server_properties_ = std::move(http_server_properties);
 }
-
+// XXX remove
 void URLRequestContextStorage::set_cookie_store(
     std::unique_ptr<CookieStore> cookie_store) {
-  context_->set_cookie_store(cookie_store.get());
-  cookie_store_ = std::move(cookie_store);
+  // context_->set_cookie_store(cookie_store.get());
+  // cookie_store_ = std::move(cookie_store);
 }
 
 void URLRequestContextStorage::set_transport_security_state(

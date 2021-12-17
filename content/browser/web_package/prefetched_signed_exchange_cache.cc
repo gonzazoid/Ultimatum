@@ -475,11 +475,11 @@ class PrefetchedNavigationLoaderInterceptor
  public:
   PrefetchedNavigationLoaderInterceptor(
       std::unique_ptr<const PrefetchedSignedExchangeCacheEntry> exchange,
-      std::vector<blink::mojom::PrefetchedSignedExchangeInfoPtr> info_list,
-      mojo::Remote<network::mojom::RestrictedCookieManager> cookie_manager)
+      std::vector<blink::mojom::PrefetchedSignedExchangeInfoPtr> info_list // ,
+      /* mojo::Remote<network::mojom::RestrictedCookieManager> cookie_manager */ )
       : exchange_(std::move(exchange)),
-        info_list_(std::move(info_list)),
-        cookie_manager_(std::move(cookie_manager)) {}
+        info_list_(std::move(info_list)) // ,
+        /* cookie_manager_(std::move(cookie_manager)) */ {}
 
   PrefetchedNavigationLoaderInterceptor(
       const PrefetchedNavigationLoaderInterceptor&) = delete;
@@ -506,7 +506,7 @@ class PrefetchedNavigationLoaderInterceptor
       DCHECK_EQ(State::kOuterRequestRequested, state_);
       if (signed_exchange_utils::IsCookielessOnlyExchange(
               *exchange_->inner_response()->headers)) {
-        DCHECK(cookie_manager_);
+        // DCHECK(cookie_manager_);
         state_ = State::kCheckingCookies;
         CheckAbsenceOfCookies(tentative_resource_request, std::move(callback),
                               std::move(fallback_callback));
@@ -772,31 +772,31 @@ PrefetchedSignedExchangeCache::MaybeCreateInterceptor(
       GetInfoListForNavigation(*exchange, verification_time, frame_tree_node_id,
                                isolation_info.network_isolation_key());
 
-  mojo::Remote<network::mojom::RestrictedCookieManager> cookie_manager;
+  // mojo::Remote<network::mojom::RestrictedCookieManager> cookie_manager;
   auto* frame = FrameTreeNode::GloballyFindByID(frame_tree_node_id);
   if (frame) {
-    StoragePartition* storage_partition =
-        frame->current_frame_host()->GetProcess()->GetStoragePartition();
-    url::Origin inner_url_origin = url::Origin::Create(exchange->inner_url());
-    net::IsolationInfo inner_url_isolation_info =
-        isolation_info.CreateForRedirect(inner_url_origin);
+    // StoragePartition* storage_partition =
+    //     frame->current_frame_host()->GetProcess()->GetStoragePartition();
+    // url::Origin inner_url_origin = url::Origin::Create(exchange->inner_url());
+    // net::IsolationInfo inner_url_isolation_info =
+    //     isolation_info.CreateForRedirect(inner_url_origin);
 
-    RenderFrameHostImpl* render_frame_host = frame->current_frame_host();
-    static_cast<StoragePartitionImpl*>(storage_partition)
-        ->CreateRestrictedCookieManager(
-            network::mojom::RestrictedCookieManagerRole::NETWORK,
-            inner_url_origin, inner_url_isolation_info,
-            /* is_service_worker = */ false,
-            render_frame_host ? render_frame_host->GetProcess()->GetID() : -1,
-            render_frame_host ? render_frame_host->GetRoutingID()
-                              : MSG_ROUTING_NONE,
-            cookie_manager.BindNewPipeAndPassReceiver(),
-            render_frame_host ? render_frame_host->CreateCookieAccessObserver()
-                              : mojo::NullRemote());
+    // RenderFrameHostImpl* render_frame_host = frame->current_frame_host();
+    // static_cast<StoragePartitionImpl*>(storage_partition)
+    //     ->CreateRestrictedCookieManager(
+    //         network::mojom::RestrictedCookieManagerRole::NETWORK,
+    //         inner_url_origin, inner_url_isolation_info,
+    //         /* is_service_worker = */ false,
+    //         render_frame_host ? render_frame_host->GetProcess()->GetID() : -1,
+    //         render_frame_host ? render_frame_host->GetRoutingID()
+    //                           : MSG_ROUTING_NONE,
+    //         cookie_manager.BindNewPipeAndPassReceiver(),
+    //         render_frame_host ? render_frame_host->CreateCookieAccessObserver()
+    //                           : mojo::NullRemote());
   }
 
   return std::make_unique<PrefetchedNavigationLoaderInterceptor>(
-      exchange->Clone(), std::move(info_list), std::move(cookie_manager));
+      exchange->Clone(), std::move(info_list) /* , std::move(cookie_manager) */);
 }
 
 const PrefetchedSignedExchangeCache::EntryMap&

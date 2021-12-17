@@ -76,7 +76,7 @@ class GaiaRemoteConsentFlow
 
       GaiaAuthConsumer* consumer,
       const gaia::GaiaSource& source) override;
-  network::mojom::CookieManager* GetCookieManagerForPartition() override;
+  // network::mojom::CookieManager* GetCookieManagerForPartition() override;
 
   // signin::IdentityManager::Observer:
   void OnEndBatchOfRefreshTokenStateChanges() override;
