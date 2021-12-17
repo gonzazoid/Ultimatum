@@ -200,8 +200,8 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
 //       },
 //       settings));
 // }
-// XXX remove
-void UpdateStorageAccessSettings(Profile* profile) {
+
+// void UpdateStorageAccessSettings(Profile* profile) {
 //   if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
 //     ContentSettingsForOneType settings;
 //     HostContentSettingsMapFactory::GetForProfile(profile)
@@ -215,7 +215,7 @@ void UpdateStorageAccessSettings(Profile* profile) {
 //         },
 //         settings));
 //   }
-}
+// }
 
 }  // namespace
 
@@ -905,27 +905,27 @@ base::FilePath ProfileNetworkContextService::GetPartitionPath(
     path = path.Append(relative_partition_path);
   return path;
 }
-
+// XXX remove
 void ProfileNetworkContextService::OnContentSettingChanged(
     const ContentSettingsPattern& primary_pattern,
     const ContentSettingsPattern& secondary_pattern,
     ContentSettingsType content_type) {
-  switch (content_type) {
-    case ContentSettingsType::COOKIES:
+  // switch (content_type) {
+  //   case ContentSettingsType::COOKIES:
       // UpdateCookieSettings(profile_);
-      break;
-    case ContentSettingsType::LEGACY_COOKIE_ACCESS:
+  //     break;
+  //   case ContentSettingsType::LEGACY_COOKIE_ACCESS:
       // UpdateLegacyCookieSettings(profile_);
-      break;
-    case ContentSettingsType::STORAGE_ACCESS:
-      UpdateStorageAccessSettings(profile_);
-      break;
-    case ContentSettingsType::DEFAULT:
+  //     break;
+  //   case ContentSettingsType::STORAGE_ACCESS:
+      // UpdateStorageAccessSettings(profile_);
+  //     break;
+  //   case ContentSettingsType::DEFAULT:
       // UpdateCookieSettings(profile_);
       // UpdateLegacyCookieSettings(profile_);
-      UpdateStorageAccessSettings(profile_);
-      break;
-    default:
-      return;
-  }
+      // UpdateStorageAccessSettings(profile_);
+  //     break;
+  //   default:
+  //     return;
+  // }
 }
