@@ -174,8 +174,8 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
 
   return false;
 }
-// XXX remove
-void UpdateCookieSettings(Profile* profile) {
+
+// void UpdateCookieSettings(Profile* profile) {
 //   ContentSettingsForOneType settings;
 //   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
 //       ContentSettingsType::COOKIES, &settings);
@@ -186,7 +186,7 @@ void UpdateCookieSettings(Profile* profile) {
 //             ->SetContentSettings(settings);
 //       },
 //       settings));
-}
+// }
 // XXX remove
 void UpdateLegacyCookieSettings(Profile* profile) {
 //   ContentSettingsForOneType settings;
@@ -912,7 +912,7 @@ void ProfileNetworkContextService::OnContentSettingChanged(
     ContentSettingsType content_type) {
   switch (content_type) {
     case ContentSettingsType::COOKIES:
-      UpdateCookieSettings(profile_);
+      // UpdateCookieSettings(profile_);
       break;
     case ContentSettingsType::LEGACY_COOKIE_ACCESS:
       UpdateLegacyCookieSettings(profile_);
@@ -921,7 +921,7 @@ void ProfileNetworkContextService::OnContentSettingChanged(
       UpdateStorageAccessSettings(profile_);
       break;
     case ContentSettingsType::DEFAULT:
-      UpdateCookieSettings(profile_);
+      // UpdateCookieSettings(profile_);
       UpdateLegacyCookieSettings(profile_);
       UpdateStorageAccessSettings(profile_);
       break;
