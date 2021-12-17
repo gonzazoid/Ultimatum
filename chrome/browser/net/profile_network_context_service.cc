@@ -365,9 +365,9 @@ void ProfileNetworkContextService::UpdateAcceptLanguage() {
       },
       ComputeAcceptLanguage()));
 }
-// XXX remove
-void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
-    bool block_third_party_cookies) {
+
+// void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
+//     bool block_third_party_cookies) {
 //   profile_->ForEachStoragePartition(base::BindRepeating(
 //       [](bool block_third_party_cookies,
 //          content::StoragePartition* storage_partition) {
@@ -375,7 +375,7 @@ void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
 //             ->BlockThirdPartyCookies(block_third_party_cookies);
 //       },
 //       block_third_party_cookies));
-}
+// }
 
 std::string ProfileNetworkContextService::ComputeAcceptLanguage() const {
   if (profile_->IsOffTheRecord()) {
