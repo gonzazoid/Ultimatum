@@ -905,11 +905,11 @@ base::FilePath ProfileNetworkContextService::GetPartitionPath(
     path = path.Append(relative_partition_path);
   return path;
 }
-// XXX remove
-void ProfileNetworkContextService::OnContentSettingChanged(
-    const ContentSettingsPattern& primary_pattern,
-    const ContentSettingsPattern& secondary_pattern,
-    ContentSettingsType content_type) {
+
+// void ProfileNetworkContextService::OnContentSettingChanged(
+//     const ContentSettingsPattern& primary_pattern,
+//     const ContentSettingsPattern& secondary_pattern,
+//     ContentSettingsType content_type) {
   // switch (content_type) {
   //   case ContentSettingsType::COOKIES:
       // UpdateCookieSettings(profile_);
@@ -928,4 +928,4 @@ void ProfileNetworkContextService::OnContentSettingChanged(
   //   default:
   //     return;
   // }
-}
+// }
