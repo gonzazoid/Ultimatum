@@ -50,8 +50,8 @@ class NET_EXPORT CookieStore {
   using SetCookiesCallback =
       base::OnceCallback<void(CookieAccessResult access_result)>;
   // using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
-  using DeletePredicate =
-      base::RepeatingCallback<bool(const CanonicalCookie& cookie)>;
+  // using DeletePredicate =
+  //     base::RepeatingCallback<bool(const CanonicalCookie& cookie)>;
   using SetCookieableSchemesCallback = base::OnceCallback<void(bool success)>;
 
   CookieStore();
