@@ -86,7 +86,7 @@ class NET_EXPORT CookieStore {
   // Returns all the cookies, for use in management UI, etc. This does not mark
   // the cookies as having been accessed. The returned cookies are ordered by
   // longest path, then by earliest creation date.
-  virtual void GetAllCookiesAsync(GetAllCookiesCallback callback) = 0;
+  // virtual void GetAllCookiesAsync(GetAllCookiesCallback callback) = 0;
 
   // Returns all the cookies, for use in management UI, etc. This does not mark
   // the cookies as having been accessed. The returned cookies are ordered by

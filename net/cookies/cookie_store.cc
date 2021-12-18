@@ -17,18 +17,19 @@ CookieStore::~CookieStore() = default;
 // CookieAccessSemantics.
 void CookieStore::GetAllCookiesWithAccessSemanticsAsync(
     GetAllCookiesWithAccessSemanticsCallback callback) {
-  GetAllCookiesCallback adapted_callback = base::BindOnce(
-      [](CookieStore::GetAllCookiesWithAccessSemanticsCallback
-             original_callback,
-         const CookieList& cookies) {
-        std::vector<CookieAccessSemantics> default_access_semantics_list;
-        default_access_semantics_list.assign(cookies.size(),
-                                             CookieAccessSemantics::UNKNOWN);
-        std::move(original_callback)
-            .Run(cookies, default_access_semantics_list);
-      },
-      std::move(callback));
-  GetAllCookiesAsync(std::move(adapted_callback));
+  // GetAllCookiesCallback adapted_callback = base::BindOnce(
+  //     [](CookieStore::GetAllCookiesWithAccessSemanticsCallback
+  //            original_callback,
+  //        const CookieList& cookies) {
+  //       std::vector<CookieAccessSemantics> default_access_semantics_list;
+  //       default_access_semantics_list.assign(cookies.size(),
+  //                                            CookieAccessSemantics::UNKNOWN);
+  //       std::move(original_callback)
+  //           .Run(cookies, default_access_semantics_list);
+  //     },
+  //     std::move(callback));
+  // GetAllCookiesAsync(std::move(adapted_callback));
+  std::move(callback).Run({}, {});
 }
 
 void CookieStore::DeleteAllAsync(DeleteCallback callback) {

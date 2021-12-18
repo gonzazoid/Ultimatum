@@ -424,14 +424,14 @@ void CookieMonster::SetCanonicalCookieAsync(
 //       url);
 // }
 
-void CookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::GetAllCookies, base::Unretained(this),
-      std::move(callback)));
-}
+//       &CookieMonster::GetAllCookies, base::Unretained(this),
+//       std::move(callback)));
+// }
 
 void CookieMonster::GetAllCookiesWithAccessSemanticsAsync(
     GetAllCookiesWithAccessSemanticsCallback callback) {
