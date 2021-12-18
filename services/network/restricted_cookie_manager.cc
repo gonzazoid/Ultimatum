@@ -124,16 +124,16 @@ net::CookieOptions MakeOptionsForGet(
     options.set_full_party_context_size(isolation_info.party_context()->size() +
                                         1);
   }
-  bool is_in_nontrivial_first_party_set =
-      cookie_access_delegate &&
-      cookie_access_delegate->IsInNontrivialFirstPartySet(request_site);
+  bool is_in_nontrivial_first_party_set = false;
+      // cookie_access_delegate &&
+      // cookie_access_delegate->IsInNontrivialFirstPartySet(request_site);
   options.set_is_in_nontrivial_first_party_set(
       is_in_nontrivial_first_party_set);
 
   UMA_HISTOGRAM_ENUMERATION(
       "Cookie.FirstPartySetsContextType.JS.Read",
       net::cookie_util::ComputeFirstPartySetsContextType(
-          request_site, isolation_info, cookie_access_delegate,
+          request_site, isolation_info, nullptr, /* cookie_access_delegate, */
           force_ignore_top_frame_party));
 
   return options;
@@ -257,10 +257,10 @@ class RestrictedCookieManager::Listener : public base::LinkNode<Listener> {
   void OnCookieChange(const net::CookieChangeInfo& change) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-    bool delegate_treats_url_as_trustworthy =
-        cookie_store_->cookie_access_delegate() &&
-        cookie_store_->cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(
-            url_);
+    bool delegate_treats_url_as_trustworthy = false;
+        // cookie_store_->cookie_access_delegate() &&
+        // cookie_store_->cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(
+        //     url_);
 
     // CookieChangeDispatcher doesn't check for inclusion against `options_`, so
     // we need to double-check that.
@@ -350,7 +350,7 @@ RestrictedCookieManager::~RestrictedCookieManager() {
 
 void RestrictedCookieManager::ComputeCookiePartitionKey() {
   cookie_partition_key_ = net::CookieAccessDelegate::CreateCookiePartitionKey(
-      cookie_store_->cookie_access_delegate(),
+      nullptr, // cookie_store_->cookie_access_delegate(),
       isolation_info_.network_isolation_key());
   cookie_partition_key_collection_ =
       net::CookiePartitionKeyCollection::FromOptional(cookie_partition_key_);
@@ -630,7 +630,7 @@ void RestrictedCookieManager::AddChangeListener(
 
   net::CookieOptions net_options = MakeOptionsForGet(
       role_, url, site_for_cookies, isolation_info_, cookie_settings(),
-      cookie_store_->cookie_access_delegate());
+      nullptr /* cookie_store_->cookie_access_delegate() */);
   auto listener = std::make_unique<Listener>(
       cookie_store_, this, url, site_for_cookies, top_frame_origin,
       cookie_partition_key_, net_options, std::move(mojo_listener));

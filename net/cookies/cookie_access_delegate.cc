@@ -22,13 +22,13 @@ CookieAccessDelegate::CreateCookiePartitionKey(
     const CookieAccessDelegate* delegate,
     const NetworkIsolationKey& network_isolation_key) {
   absl::optional<SchemefulSite> fps_owner_site = absl::nullopt;
-  if (delegate) {
-    absl::optional<SchemefulSite> top_frame_site =
-        network_isolation_key.GetTopFrameSite();
-    if (!top_frame_site)
-      return absl::nullopt;
-    fps_owner_site = delegate->FindFirstPartySetOwner(top_frame_site.value());
-  }
+  // if (delegate) {
+  //   absl::optional<SchemefulSite> top_frame_site =
+  //       network_isolation_key.GetTopFrameSite();
+  //   if (!top_frame_site)
+  //     return absl::nullopt;
+  //   fps_owner_site = delegate->FindFirstPartySetOwner(top_frame_site.value());
+  // }
   return CookiePartitionKey::FromNetworkIsolationKey(
       network_isolation_key, base::OptionalOrNullptr(fps_owner_site));
 }
