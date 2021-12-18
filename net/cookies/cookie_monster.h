@@ -198,7 +198,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // void DeleteMatchingCookiesAsync(DeletePredicate predicate,
   //                                 DeleteCallback callback) override;
   // void FlushStore(base::OnceClosure callback) override;
-  void SetForceKeepSessionState() override;
+  // void SetForceKeepSessionState() override;
   CookieChangeDispatcher& GetChangeDispatcher() override;
   // void SetCookieableSchemes(const std::vector<std::string>& schemes,
   //                           SetCookieableSchemesCallback callback) override;
@@ -795,7 +795,7 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
   virtual void DeleteCookie(const CanonicalCookie& cc) = 0;
 
   // Instructs the store to not discard session only cookies on shutdown.
-  virtual void SetForceKeepSessionState() = 0;
+  // virtual void SetForceKeepSessionState() = 0;
 
   // Sets a callback that will be run before the store flushes.  If |callback|
   // performs any async operations, the store will not wait for those to finish

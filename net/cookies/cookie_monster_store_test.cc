@@ -88,7 +88,7 @@ void MockPersistentCookieStore::DeleteCookie(const CanonicalCookie& cookie) {
   commands_.push_back(CookieStoreCommand(CookieStoreCommand::REMOVE, cookie));
 }
 
-void MockPersistentCookieStore::SetForceKeepSessionState() {}
+// void MockPersistentCookieStore::SetForceKeepSessionState() {}
 
 void MockPersistentCookieStore::SetBeforeCommitCallback(
     base::RepeatingClosure callback) {}
@@ -187,7 +187,7 @@ void MockSimplePersistentCookieStore::DeleteCookie(
   cookies_.erase(it);
 }
 
-void MockSimplePersistentCookieStore::SetForceKeepSessionState() {}
+// void MockSimplePersistentCookieStore::SetForceKeepSessionState() {}
 
 void MockSimplePersistentCookieStore::SetBeforeCommitCallback(
     base::RepeatingClosure callback) {}

@@ -230,7 +230,7 @@ void FlushablePersistentStore::UpdateCookieAccessTime(const CanonicalCookie&) {}
 
 void FlushablePersistentStore::DeleteCookie(const CanonicalCookie&) {}
 
-void FlushablePersistentStore::SetForceKeepSessionState() {}
+// void FlushablePersistentStore::SetForceKeepSessionState() {}
 
 void FlushablePersistentStore::SetBeforeCommitCallback(
     base::RepeatingClosure callback) {}

@@ -51,7 +51,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
   void AddCookie(const net::CanonicalCookie& cc) override;
   void UpdateCookieAccessTime(const net::CanonicalCookie& cc) override;
   void DeleteCookie(const net::CanonicalCookie& cc) override;
-  void SetForceKeepSessionState() override;
+  // void SetForceKeepSessionState() override;
   void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
   void Flush(base::OnceClosure callback) override;
 

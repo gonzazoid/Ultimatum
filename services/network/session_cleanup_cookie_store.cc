@@ -115,9 +115,9 @@ void SessionCleanupCookieStore::DeleteCookie(const net::CanonicalCookie& cc) {
   persistent_store_->DeleteCookie(cc);
 }
 
-void SessionCleanupCookieStore::SetForceKeepSessionState() {
-  force_keep_session_state_ = true;
-}
+// void SessionCleanupCookieStore::SetForceKeepSessionState() {
+//   force_keep_session_state_ = true;
+// }
 
 void SessionCleanupCookieStore::SetBeforeCommitCallback(
     base::RepeatingClosure callback) {

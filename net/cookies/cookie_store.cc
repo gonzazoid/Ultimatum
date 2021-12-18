@@ -37,9 +37,9 @@ CookieStore::~CookieStore() = default;
 //                                    std::move(callback));
 // }
 
-void CookieStore::SetForceKeepSessionState() {
+// void CookieStore::SetForceKeepSessionState() {
   // By default, do nothing.
-}
+// }
 
 // void CookieStore::SetCookieAccessDelegate(
 //     std::unique_ptr<CookieAccessDelegate> delegate) {

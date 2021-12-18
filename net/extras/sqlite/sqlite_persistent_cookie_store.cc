@@ -1686,9 +1686,9 @@ void SQLitePersistentCookieStore::DeleteCookie(const CanonicalCookie& cc) {
   backend_->DeleteCookie(cc);
 }
 
-void SQLitePersistentCookieStore::SetForceKeepSessionState() {
+// void SQLitePersistentCookieStore::SetForceKeepSessionState() {
   // This store never discards session-only cookies, so this call has no effect.
-}
+// }
 
 void SQLitePersistentCookieStore::SetBeforeCommitCallback(
     base::RepeatingClosure callback) {
