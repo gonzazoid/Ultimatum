@@ -128,9 +128,9 @@ void DelayedCookieMonster::SetCanonicalCookieAsync(
 //       base::Milliseconds(kDelayedTime));
 // }
 
-void DelayedCookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
-  cookie_monster_->GetAllCookiesAsync(std::move(callback));
-}
+// void DelayedCookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
+//   cookie_monster_->GetAllCookiesAsync(std::move(callback));
+// }
 
 void DelayedCookieMonster::InvokeSetCookiesCallback(
     CookieMonster::SetCookiesCallback callback) {
@@ -138,12 +138,12 @@ void DelayedCookieMonster::InvokeSetCookiesCallback(
     std::move(callback).Run(result_);
 }
 
-void DelayedCookieMonster::InvokeGetCookieListCallback(
-    CookieMonster::GetCookieListCallback callback) {
-  if (!callback.is_null())
-    std::move(callback).Run(cookie_access_result_list_,
-                            CookieAccessResultList());
-}
+// void DelayedCookieMonster::InvokeGetCookieListCallback(
+//     CookieMonster::GetCookieListCallback callback) {
+//   if (!callback.is_null())
+//     std::move(callback).Run(cookie_access_result_list_,
+//                             CookieAccessResultList());
+// }
 
 void DelayedCookieMonster::DeleteCanonicalCookieAsync(
     const CanonicalCookie& cookie,

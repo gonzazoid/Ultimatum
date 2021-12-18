@@ -377,11 +377,11 @@ class NET_EXPORT CookieMonster : public CookieStore {
       GetAllCookiesWithAccessSemanticsCallback callback,
       const CookieList& cookie_list);
 
-  void GetCookieListWithOptions(
-      const GURL& url,
-      const CookieOptions& options,
-      const CookiePartitionKeyCollection& cookie_partition_key_collection,
-      GetCookieListCallback callback);
+  // void GetCookieListWithOptions(
+  //     const GURL& url,
+  //     const CookieOptions& options,
+  //     const CookiePartitionKeyCollection& cookie_partition_key_collection,
+  //     GetCookieListCallback callback);
 
   void DeleteAllCreatedInTimeRange(
       const CookieDeletionInfo::TimeRange& creation_range,
