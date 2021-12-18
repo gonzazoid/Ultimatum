@@ -198,7 +198,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //                                 DeleteCallback callback) override;
   // void FlushStore(base::OnceClosure callback) override;
   // void SetForceKeepSessionState() override;
-  CookieChangeDispatcher& GetChangeDispatcher() override;
+  // CookieChangeDispatcher& GetChangeDispatcher() override;
   // void SetCookieableSchemes(const std::vector<std::string>& schemes,
   //                           SetCookieableSchemesCallback callback) override;
 
@@ -696,7 +696,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // global maximum on the number of partitioned cookies.
   size_t num_partitioned_cookies_;
 
-  CookieMonsterChangeDispatcher change_dispatcher_;
+  // CookieMonsterChangeDispatcher change_dispatcher_;
 
   // Indicates whether the cookie store has been initialized.
   bool initialized_;
