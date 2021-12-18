@@ -372,7 +372,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
                           const CookieOptions& options,
                           SetCookiesCallback callback);
 
-  void GetAllCookies(GetAllCookiesCallback callback);
+  // void GetAllCookies(GetAllCookiesCallback callback);
 
   void AttachAccessSemanticsListForCookieList(
       GetAllCookiesWithAccessSemanticsCallback callback,

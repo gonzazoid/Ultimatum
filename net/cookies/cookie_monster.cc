@@ -556,8 +556,8 @@ bool CookieMonster::CookieSorter(const CanonicalCookie* cc1,
   return cc1->Path().length() > cc2->Path().length();
 }
 
-void CookieMonster::GetAllCookies(GetAllCookiesCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::GetAllCookies(GetAllCookiesCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // This function is being called to scrape the cookie list for management UI
   // or similar.  We shouldn't show expired cookies in this list since it will
@@ -567,31 +567,31 @@ void CookieMonster::GetAllCookies(GetAllCookiesCallback callback) {
   //
   // Note that this does not prune cookies to be below our limits (if we've
   // exceeded them) the way that calling GarbageCollect() would.
-  GarbageCollectExpired(
-      Time::Now(), CookieMapItPair(cookies_.begin(), cookies_.end()), nullptr);
-  GarbageCollectAllExpiredPartitionedCookies(Time::Now());
+//   GarbageCollectExpired(
+//       Time::Now(), CookieMapItPair(cookies_.begin(), cookies_.end()), nullptr);
+//   GarbageCollectAllExpiredPartitionedCookies(Time::Now());
 
   // Copy the CanonicalCookie pointers from the map so that we can use the same
   // sorter as elsewhere, then copy the result out.
-  std::vector<CanonicalCookie*> cookie_ptrs;
-  cookie_ptrs.reserve(cookies_.size());
-  for (const auto& cookie : cookies_)
-    cookie_ptrs.push_back(cookie.second.get());
+//   std::vector<CanonicalCookie*> cookie_ptrs;
+//   cookie_ptrs.reserve(cookies_.size());
+//   for (const auto& cookie : cookies_)
+//     cookie_ptrs.push_back(cookie.second.get());
 
-  for (const auto& cookie_partition : partitioned_cookies_) {
-    for (const auto& cookie : *cookie_partition.second.get())
-      cookie_ptrs.push_back(cookie.second.get());
-  }
+//   for (const auto& cookie_partition : partitioned_cookies_) {
+//     for (const auto& cookie : *cookie_partition.second.get())
+//       cookie_ptrs.push_back(cookie.second.get());
+//   }
 
-  std::sort(cookie_ptrs.begin(), cookie_ptrs.end(), CookieSorter);
+//   std::sort(cookie_ptrs.begin(), cookie_ptrs.end(), CookieSorter);
 
-  CookieList cookie_list;
-  cookie_list.reserve(cookie_ptrs.size());
-  for (auto* cookie_ptr : cookie_ptrs)
-    cookie_list.push_back(*cookie_ptr);
+//   CookieList cookie_list;
+//   cookie_list.reserve(cookie_ptrs.size());
+//   for (auto* cookie_ptr : cookie_ptrs)
+//     cookie_list.push_back(*cookie_ptr);
 
-  MaybeRunCookieCallback(std::move(callback), cookie_list);
-}
+//   MaybeRunCookieCallback(std::move(callback), cookie_list);
+// }
 
 void CookieMonster::AttachAccessSemanticsListForCookieList(
     GetAllCookiesWithAccessSemanticsCallback callback,
