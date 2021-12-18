@@ -41,9 +41,9 @@ void CookieStore::SetForceKeepSessionState() {
   // By default, do nothing.
 }
 
-void CookieStore::SetCookieAccessDelegate(
-    std::unique_ptr<CookieAccessDelegate> delegate) {
-  cookie_access_delegate_ = std::move(delegate);
-}
+// void CookieStore::SetCookieAccessDelegate(
+//     std::unique_ptr<CookieAccessDelegate> delegate) {
+//   cookie_access_delegate_ = std::move(delegate);
+// }
 
 }  // namespace net

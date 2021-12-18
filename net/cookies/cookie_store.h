@@ -152,7 +152,7 @@ class NET_EXPORT CookieStore {
   //                                   SetCookieableSchemesCallback callback) = 0;
 
   // Transfer ownership of a CookieAccessDelegate.
-  void SetCookieAccessDelegate(std::unique_ptr<CookieAccessDelegate> delegate);
+  // void SetCookieAccessDelegate(std::unique_ptr<CookieAccessDelegate> delegate);
 
   // This may be null if no delegate has been set yet, or the delegate has been
   // reset to null.
