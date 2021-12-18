@@ -63,11 +63,11 @@ class DelayedCookieMonster : public CookieStore {
                                const CookieOptions& options,
                                SetCookiesCallback callback) override;
 
-  void GetCookieListWithOptionsAsync(
-      const GURL& url,
-      const CookieOptions& options,
-      const CookiePartitionKeychain& cookie_partition_keychain,
-      GetCookieListCallback callback) override;
+  // void GetCookieListWithOptionsAsync(
+  //     const GURL& url,
+  //     const CookieOptions& options,
+  //     const CookiePartitionKeychain& cookie_partition_keychain,
+  //     GetCookieListCallback callback) override;
 
   void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
 

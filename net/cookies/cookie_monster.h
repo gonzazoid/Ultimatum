@@ -180,10 +180,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
                                const GURL& source_url,
                                const CookieOptions& options,
                                SetCookiesCallback callback) override;
-  void GetCookieListWithOptionsAsync(const GURL& url,
-                                     const CookieOptions& options,
-                                     const CookiePartitionKeychain& s,
-                                     GetCookieListCallback callback) override;
+  // void GetCookieListWithOptionsAsync(const GURL& url,
+  //                                    const CookieOptions& options,
+  //                                    const CookiePartitionKeychain& s,
+  //                                    GetCookieListCallback callback) override;
   void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
   void GetAllCookiesWithAccessSemanticsAsync(
       GetAllCookiesWithAccessSemanticsCallback callback) override;

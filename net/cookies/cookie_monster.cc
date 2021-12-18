@@ -409,20 +409,20 @@ void CookieMonster::SetCanonicalCookieAsync(
       domain);
 }
 
-void CookieMonster::GetCookieListWithOptionsAsync(
-    const GURL& url,
-    const CookieOptions& options,
-    const CookiePartitionKeychain& cookie_partition_keychain,
-    GetCookieListCallback callback) {
-  DoCookieCallbackForURL(
-      base::BindOnce(
+// void CookieMonster::GetCookieListWithOptionsAsync(
+//     const GURL& url,
+//     const CookieOptions& options,
+//     const CookiePartitionKeychain& cookie_partition_keychain,
+//     GetCookieListCallback callback) {
+//   DoCookieCallbackForURL(
+//       base::BindOnce(
           // base::Unretained is safe as DoCookieCallbackForURL stores
           // the callback on |*this|, so the callback will not outlive
           // the object.
-          &CookieMonster::GetCookieListWithOptions, base::Unretained(this), url,
-          options, cookie_partition_keychain, std::move(callback)),
-      url);
-}
+//           &CookieMonster::GetCookieListWithOptions, base::Unretained(this), url,
+//           options, cookie_partition_keychain, std::move(callback)),
+//       url);
+// }
 
 void CookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
   DoCookieCallback(base::BindOnce(

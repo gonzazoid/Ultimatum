@@ -132,15 +132,15 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) RestrictedCookieManager
   void ComputeCookiePartitionKey();
 
   // Feeds a net::CookieList to a GetAllForUrl() callback.
-  void CookieListToGetAllForUrlCallback(
-      const GURL& url,
-      const net::SiteForCookies& site_for_cookies,
-      const url::Origin& top_frame_origin,
-      const net::CookieOptions& net_options,
-      mojom::CookieManagerGetOptionsPtr options,
-      GetAllForUrlCallback callback,
-      const net::CookieAccessResultList& cookie_list,
-      const net::CookieAccessResultList& excluded_cookies);
+  // void CookieListToGetAllForUrlCallback(
+  //     const GURL& url,
+  //     const net::SiteForCookies& site_for_cookies,
+  //     const url::Origin& top_frame_origin,
+  //     const net::CookieOptions& net_options,
+  //     mojom::CookieManagerGetOptionsPtr options,
+  //     GetAllForUrlCallback callback,
+  //     const net::CookieAccessResultList& cookie_list,
+  //     const net::CookieAccessResultList& excluded_cookies);
 
   // Reports the result of setting the cookie to |network_context_client_|, and
   // invokes the user callback.
