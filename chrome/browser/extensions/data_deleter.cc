@@ -46,12 +46,12 @@ void DeleteOrigin(Profile* profile,
                   const GURL& origin,
                   base::OnceClosure done_callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(profile);
-  DCHECK(partition);
+  // DCHECK(profile);
+  // DCHECK(partition);
 
-  if (origin.SchemeIs(kExtensionScheme)) {
-    auto subtask_done_callback =
-        base::BarrierClosure(2, std::move(done_callback));
+  // if (origin.SchemeIs(kExtensionScheme)) {
+    // auto subtask_done_callback =
+    //     base::BarrierClosure(2, std::move(done_callback));
 
     // TODO(ajwong): Cookies are not properly isolated for
     // chrome-extension:// scheme.  (http://crbug.com/158386).
@@ -62,23 +62,24 @@ void DeleteOrigin(Profile* profile,
     // preserve this code path without checking for isolation because it's
     // simpler than special casing.  This code should go away once we merge
     // the various URLRequestContexts (http://crbug.com/159193).
-    partition->ClearDataForOrigin(
-        ~StoragePartition::REMOVE_DATA_MASK_SHADER_CACHE,
-        StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, origin,
-        subtask_done_callback);
+    // partition->ClearDataForOrigin(
+    //     ~StoragePartition::REMOVE_DATA_MASK_SHADER_CACHE,
+    //     StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, origin,
+    //     subtask_done_callback);
 
     // Delete cookies separately from other data so that the request context
     // for extensions doesn't need to be passed into the StoragePartition.
-    extensions::ChromeExtensionCookies::Get(profile)->ClearCookies(
-        origin, subtask_done_callback);
-  } else {
+    // extensions::ChromeExtensionCookies::Get(profile)->ClearCookies(
+    //     origin, subtask_done_callback);
+    std::move(done_callback).Run();
+  // } else {
     // We don't need to worry about the media request context because that
     // shares the same cookie store as the main request context.
-    partition->ClearDataForOrigin(
-        ~StoragePartition::REMOVE_DATA_MASK_SHADER_CACHE,
-        StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, origin,
-        std::move(done_callback));
-  }
+  //   partition->ClearDataForOrigin(
+  //       ~StoragePartition::REMOVE_DATA_MASK_SHADER_CACHE,
+  //       StoragePartition::QUOTA_MANAGED_STORAGE_MASK_ALL, origin,
+  //       std::move(done_callback));
+  // }
 }
 
 void OnNeedsToGarbageCollectIsolatedStorage(WeakPtr<ExtensionService> es) {
