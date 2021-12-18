@@ -44,9 +44,9 @@ class NET_EXPORT CookieStore {
   // using GetAllCookiesCallback =
   //     base::OnceCallback<void(const CookieList& cookies)>;
   // |access_semantics_list| is guaranteed to the same length as |cookies|.
-  using GetAllCookiesWithAccessSemanticsCallback = base::OnceCallback<void(
-      const CookieList& cookies,
-      const std::vector<CookieAccessSemantics>& access_semantics_list)>;
+  // using GetAllCookiesWithAccessSemanticsCallback = base::OnceCallback<void(
+  //     const CookieList& cookies,
+  //     const std::vector<CookieAccessSemantics>& access_semantics_list)>;
   using SetCookiesCallback =
       base::OnceCallback<void(CookieAccessResult access_result)>;
   // using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
