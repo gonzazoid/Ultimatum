@@ -726,12 +726,12 @@ bool CookieMonster::MatchCookieDeletionInfo(
     const CookieDeletionInfo& delete_info,
     const net::CanonicalCookie& cookie) {
   bool delegate_treats_url_as_trustworthy = false;  // irrelevant if no URL.
-  if (delete_info.url.has_value()) {
-    delegate_treats_url_as_trustworthy =
-        cookie_access_delegate() &&
-        cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(
-            delete_info.url.value());
-  }
+  // if (delete_info.url.has_value()) {
+    // delegate_treats_url_as_trustworthy =
+    //     cookie_access_delegate() &&
+    //     cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(
+    //         delete_info.url.value());
+  // }
 
   // Deletion uses all inclusive options, so it's ok to get the
   // `CookieSamePartyStatus` wrong here.
@@ -1180,10 +1180,10 @@ void CookieMonster::FilterCookiesWithOptions(
   Time current_time = Time::Now();
   RecordPeriodicStats(current_time);
 
-  bool delegate_treats_url_as_trustworthy =
-      cookie_access_delegate() &&
-      cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(url);
-
+  // bool delegate_treats_url_as_trustworthy =
+  //     cookie_access_delegate() &&
+  //     cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(url);
+  bool delegate_treats_url_as_trustworthy = false;
   for (CanonicalCookie* cookie_ptr : *cookie_ptrs) {
     // Filter out cookies that should not be included for a request to the
     // given |url|. HTTP only cookies are filtered depending on the passed
@@ -2201,8 +2201,8 @@ bool CookieMonster::HasCookieableScheme(const GURL& url) {
 
 CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
     const CanonicalCookie& cookie) const {
-  if (cookie_access_delegate())
-    return cookie_access_delegate()->GetAccessSemantics(cookie);
+  // if (cookie_access_delegate())
+  //   return cookie_access_delegate()->GetAccessSemantics(cookie);
   return CookieAccessSemantics::UNKNOWN;
 }
 
@@ -2238,19 +2238,19 @@ bool CookieMonster::DoRecordPeriodicStats() {
 
   base::UmaHistogramCounts100000("Cookie.Count2", cookies_.size());
 
-  if (cookie_access_delegate()) {
-    for (const auto& set : cookie_access_delegate()->RetrieveFirstPartySets()) {
-      int sample = std::accumulate(
-          set.second.begin(), set.second.end(), 0,
-          [this](int acc, const net::SchemefulSite& site) -> int {
-            if (!site.has_registrable_domain_or_host())
-              return acc;
-            return acc + cookies_.count(site.registrable_domain_or_host());
-          });
-      base::UmaHistogramCustomCounts("Cookie.PerFirstPartySetCount", sample, 0,
-                                     4000, 50);
-    }
-  }
+  // if (cookie_access_delegate()) {
+  //   for (const auto& set : cookie_access_delegate()->RetrieveFirstPartySets()) {
+  //     int sample = std::accumulate(
+  //         set.second.begin(), set.second.end(), 0,
+  //         [this](int acc, const net::SchemefulSite& site) -> int {
+  //           if (!site.has_registrable_domain_or_host())
+  //             return acc;
+  //           return acc + cookies_.count(site.registrable_domain_or_host());
+  //         });
+  //     base::UmaHistogramCustomCounts("Cookie.PerFirstPartySetCount", sample, 0,
+  //                                    4000, 50);
+  //   }
+  // }
 
   // Can be up to kMaxDomainPurgedKeys.
   UMA_HISTOGRAM_COUNTS_100("Cookie.NumDomainPurgedKeys",

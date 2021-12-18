@@ -102,7 +102,7 @@ void CookieMonsterChangeDispatcher::Subscription::DoDispatchChange(
 
 CookieMonsterChangeDispatcher::CookieMonsterChangeDispatcher(
     const CookieMonster* cookie_monster)
-    : cookie_monster_(cookie_monster) {}
+    /* : cookie_monster_(cookie_monster) */ {}
 
 CookieMonsterChangeDispatcher::~CookieMonsterChangeDispatcher() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -208,16 +208,16 @@ void CookieMonsterChangeDispatcher::DispatchChangeToNameKey(
     const std::string& name_key) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
-  auto it = cookie_name_map.find(name_key);
-  if (it == cookie_name_map.end())
-    return;
+  // auto it = cookie_name_map.find(name_key);
+  // if (it == cookie_name_map.end())
+  //   return;
 
-  SubscriptionList& subscription_list = it->second;
-  for (base::LinkNode<Subscription>* node = subscription_list.head();
-       node != subscription_list.end(); node = node->next()) {
-    node->value()->DispatchChange(change,
-                                  cookie_monster_->cookie_access_delegate());
-  }
+  // SubscriptionList& subscription_list = it->second;
+  // for (base::LinkNode<Subscription>* node = subscription_list.head();
+  //      node != subscription_list.end(); node = node->next()) {
+  //   node->value()->DispatchChange(change,
+  //                                 cookie_monster_->cookie_access_delegate());
+  // }
 }
 
 void CookieMonsterChangeDispatcher::LinkSubscription(

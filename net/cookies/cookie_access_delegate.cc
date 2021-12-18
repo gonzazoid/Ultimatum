@@ -13,5 +13,4 @@ CookieAccessDelegate::~CookieAccessDelegate() = default;
 bool CookieAccessDelegate::ShouldTreatUrlAsTrustworthy(const GURL& url) const {
   return false;
 }
-
 }  // namespace net

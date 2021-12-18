@@ -156,14 +156,14 @@ class NET_EXPORT CookieStore {
 
   // This may be null if no delegate has been set yet, or the delegate has been
   // reset to null.
-  const CookieAccessDelegate* cookie_access_delegate() const {
-    return cookie_access_delegate_.get();
-  }
+  // const CookieAccessDelegate* cookie_access_delegate() const {
+  //   return cookie_access_delegate_.get();
+  // }
 
  private:
   // Used to determine whether a particular cookie should be subject to legacy
   // or non-legacy access semantics.
-  std::unique_ptr<CookieAccessDelegate> cookie_access_delegate_;
+  // std::unique_ptr<CookieAccessDelegate> cookie_access_delegate_;
 };
 
 }  // namespace net

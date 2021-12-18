@@ -150,7 +150,7 @@ class CookieMonsterChangeDispatcher : public CookieChangeDispatcher {
   // Called by the Subscription destructor.
   void UnlinkSubscription(Subscription* subscription);
 
-  const CookieMonster* cookie_monster_;
+  // const CookieMonster* cookie_monster_;
 
   CookieDomainMap cookie_domain_map_;
 
