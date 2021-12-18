@@ -197,7 +197,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // void DeleteSessionCookiesAsync(DeleteCallback callback) override;
   // void DeleteMatchingCookiesAsync(DeletePredicate predicate,
   //                                 DeleteCallback callback) override;
-  void FlushStore(base::OnceClosure callback) override;
+  // void FlushStore(base::OnceClosure callback) override;
   void SetForceKeepSessionState() override;
   CookieChangeDispatcher& GetChangeDispatcher() override;
   void SetCookieableSchemes(const std::vector<std::string>& schemes,

@@ -363,16 +363,16 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
 
 // Asynchronous CookieMonster API
 
-void CookieMonster::FlushStore(base::OnceClosure callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::FlushStore(base::OnceClosure callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (initialized_ && store_.get()) {
-    store_->Flush(std::move(callback));
-  } else if (callback) {
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
-  }
-}
+//   if (initialized_ && store_.get()) {
+//     store_->Flush(std::move(callback));
+//   } else if (callback) {
+//     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
+//                                                   std::move(callback));
+//   }
+// }
 
 void CookieMonster::SetForceKeepSessionState() {
   DCHECK(thread_checker_.CalledOnValidThread());

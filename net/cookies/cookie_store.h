@@ -133,7 +133,7 @@ class NET_EXPORT CookieStore {
 
   // Flush the backing store (if any) to disk and post the given callback when
   // done.
-  virtual void FlushStore(base::OnceClosure callback) = 0;
+  // virtual void FlushStore(base::OnceClosure callback) = 0;
 
   // Protects session cookies from deletion on shutdown, if the underlying
   // CookieStore implemention is currently configured to store them to disk.

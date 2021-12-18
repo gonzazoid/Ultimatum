@@ -170,9 +170,9 @@ void DelayedCookieMonster::InvokeSetCookiesCallback(
 //   ADD_FAILURE();
 // }
 
-void DelayedCookieMonster::FlushStore(base::OnceClosure callback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::FlushStore(base::OnceClosure callback) {
+//   ADD_FAILURE();
+// }
 
 CookieChangeDispatcher& DelayedCookieMonster::GetChangeDispatcher() {
   return change_dispatcher_;
