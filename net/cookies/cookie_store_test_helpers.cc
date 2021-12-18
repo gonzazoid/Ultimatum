@@ -178,11 +178,11 @@ CookieChangeDispatcher& DelayedCookieMonster::GetChangeDispatcher() {
   return change_dispatcher_;
 }
 
-void DelayedCookieMonster::SetCookieableSchemes(
-    const std::vector<std::string>& schemes,
-    SetCookieableSchemesCallback callback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::SetCookieableSchemes(
+//     const std::vector<std::string>& schemes,
+//     SetCookieableSchemesCallback callback) {
+//   ADD_FAILURE();
+// }
 
 //
 // CookieURLHelper

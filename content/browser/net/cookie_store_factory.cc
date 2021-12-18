@@ -76,10 +76,10 @@ std::unique_ptr<net::CookieStore> CreateCookieStore(
       cookie_monster->SetPersistSessionCookies(true);
   }
 
-  if (!config.cookieable_schemes.empty())
+  // if (!config.cookieable_schemes.empty())
     // No need to wait for callback, the work happens synchronously.
-    cookie_monster->SetCookieableSchemes(config.cookieable_schemes,
-                                         base::DoNothing());
+    // cookie_monster->SetCookieableSchemes(config.cookieable_schemes,
+    //                                      base::DoNothing());
 
   return std::move(cookie_monster);
 }

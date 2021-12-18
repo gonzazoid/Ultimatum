@@ -52,7 +52,7 @@ class NET_EXPORT CookieStore {
   // using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
   // using DeletePredicate =
   //     base::RepeatingCallback<bool(const CanonicalCookie& cookie)>;
-  using SetCookieableSchemesCallback = base::OnceCallback<void(bool success)>;
+  // using SetCookieableSchemesCallback = base::OnceCallback<void(bool success)>;
 
   CookieStore();
   virtual ~CookieStore();
@@ -148,8 +148,8 @@ class NET_EXPORT CookieStore {
   // the instance initialization process). Otherwise, this returns true to
   // indicate success. CookieStores which do not support modifying cookieable
   // schemes will always return false.
-  virtual void SetCookieableSchemes(const std::vector<std::string>& schemes,
-                                    SetCookieableSchemesCallback callback) = 0;
+  // virtual void SetCookieableSchemes(const std::vector<std::string>& schemes,
+  //                                   SetCookieableSchemesCallback callback) = 0;
 
   // Transfer ownership of a CookieAccessDelegate.
   void SetCookieAccessDelegate(std::unique_ptr<CookieAccessDelegate> delegate);

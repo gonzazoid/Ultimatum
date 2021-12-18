@@ -505,21 +505,21 @@ void CookieMonster::SetForceKeepSessionState() {
 //       std::move(predicate), DELETE_COOKIE_EXPLICIT, std::move(callback)));
 // }
 
-void CookieMonster::SetCookieableSchemes(
-    const std::vector<std::string>& schemes,
-    SetCookieableSchemesCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::SetCookieableSchemes(
+//     const std::vector<std::string>& schemes,
+//     SetCookieableSchemesCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Calls to this method will have no effect if made after a WebView or
   // CookieManager instance has been created.
-  if (initialized_) {
-    MaybeRunCookieCallback(std::move(callback), false);
-    return;
-  }
+//   if (initialized_) {
+//     MaybeRunCookieCallback(std::move(callback), false);
+//     return;
+//   }
 
-  cookieable_schemes_ = schemes;
-  MaybeRunCookieCallback(std::move(callback), true);
-}
+//   cookieable_schemes_ = schemes;
+//   MaybeRunCookieCallback(std::move(callback), true);
+// }
 
 // This function must be called before the CookieMonster is used.
 void CookieMonster::SetPersistSessionCookies(bool persist_session_cookies) {
