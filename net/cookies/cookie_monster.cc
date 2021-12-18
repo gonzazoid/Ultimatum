@@ -593,16 +593,16 @@ bool CookieMonster::CookieSorter(const CanonicalCookie* cc1,
 //   MaybeRunCookieCallback(std::move(callback), cookie_list);
 // }
 
-void CookieMonster::AttachAccessSemanticsListForCookieList(
-    GetAllCookiesWithAccessSemanticsCallback callback,
-    const CookieList& cookie_list) {
-  std::vector<CookieAccessSemantics> access_semantics_list;
-  for (const CanonicalCookie& cookie : cookie_list) {
-    access_semantics_list.push_back(GetAccessSemanticsForCookie(cookie));
-  }
-  MaybeRunCookieCallback(std::move(callback), cookie_list,
-                         access_semantics_list);
-}
+// void CookieMonster::AttachAccessSemanticsListForCookieList(
+//     GetAllCookiesWithAccessSemanticsCallback callback,
+//     const CookieList& cookie_list) {
+//   std::vector<CookieAccessSemantics> access_semantics_list;
+//   for (const CanonicalCookie& cookie : cookie_list) {
+//     access_semantics_list.push_back(GetAccessSemanticsForCookie(cookie));
+//   }
+//   MaybeRunCookieCallback(std::move(callback), cookie_list,
+//                          access_semantics_list);
+// }
 
 // void CookieMonster::GetCookieListWithOptions(
 //     const GURL& url,

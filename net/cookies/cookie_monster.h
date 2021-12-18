@@ -374,9 +374,9 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // void GetAllCookies(GetAllCookiesCallback callback);
 
-  void AttachAccessSemanticsListForCookieList(
-      GetAllCookiesWithAccessSemanticsCallback callback,
-      const CookieList& cookie_list);
+  // void AttachAccessSemanticsListForCookieList(
+  //     GetAllCookiesWithAccessSemanticsCallback callback,
+  //     const CookieList& cookie_list);
 
   // void GetCookieListWithOptions(
   //     const GURL& url,
