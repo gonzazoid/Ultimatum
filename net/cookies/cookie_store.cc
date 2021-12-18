@@ -32,10 +32,10 @@ CookieStore::~CookieStore() = default;
   // std::move(callback).Run({}, {});
 // }
 
-void CookieStore::DeleteAllAsync(DeleteCallback callback) {
-  DeleteAllCreatedInTimeRangeAsync(CookieDeletionInfo::TimeRange(),
-                                   std::move(callback));
-}
+// void CookieStore::DeleteAllAsync(DeleteCallback callback) {
+//   DeleteAllCreatedInTimeRangeAsync(CookieDeletionInfo::TimeRange(),
+//                                    std::move(callback));
+// }
 
 void CookieStore::SetForceKeepSessionState() {
   // By default, do nothing.

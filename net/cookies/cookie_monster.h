@@ -187,16 +187,16 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
   // void GetAllCookiesWithAccessSemanticsAsync(
   //     GetAllCookiesWithAccessSemanticsCallback callback) override;
-  void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
-                                  DeleteCallback callback) override;
-  void DeleteAllCreatedInTimeRangeAsync(
-      const CookieDeletionInfo::TimeRange& creation_range,
-      DeleteCallback callback) override;
-  void DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
-                                  DeleteCallback callback) override;
-  void DeleteSessionCookiesAsync(DeleteCallback callback) override;
-  void DeleteMatchingCookiesAsync(DeletePredicate predicate,
-                                  DeleteCallback callback) override;
+  // void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
+  //                                 DeleteCallback callback) override;
+  // void DeleteAllCreatedInTimeRangeAsync(
+  //     const CookieDeletionInfo::TimeRange& creation_range,
+  //     DeleteCallback callback) override;
+  // void DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
+  //                                 DeleteCallback callback) override;
+  // void DeleteSessionCookiesAsync(DeleteCallback callback) override;
+  // void DeleteMatchingCookiesAsync(DeletePredicate predicate,
+  //                                 DeleteCallback callback) override;
   void FlushStore(base::OnceClosure callback) override;
   void SetForceKeepSessionState() override;
   CookieChangeDispatcher& GetChangeDispatcher() override;
@@ -384,20 +384,20 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //     const CookiePartitionKeychain& cookie_partition_keychain,
   //     GetCookieListCallback callback);
 
-  void DeleteAllCreatedInTimeRange(
-      const CookieDeletionInfo::TimeRange& creation_range,
-      DeleteCallback callback);
+  // void DeleteAllCreatedInTimeRange(
+  //     const CookieDeletionInfo::TimeRange& creation_range,
+  //     DeleteCallback callback);
 
   // Returns whether |cookie| matches |delete_info|.
   bool MatchCookieDeletionInfo(const CookieDeletionInfo& delete_info,
                                const net::CanonicalCookie& cookie);
 
-  void DeleteCanonicalCookie(const CanonicalCookie& cookie,
-                             DeleteCallback callback);
+  // void DeleteCanonicalCookie(const CanonicalCookie& cookie,
+  //                            DeleteCallback callback);
 
-  void DeleteMatchingCookies(DeletePredicate predicate,
-                             DeletionCause cause,
-                             DeleteCallback callback);
+  // void DeleteMatchingCookies(DeletePredicate predicate,
+  //                            DeletionCause cause,
+  //                            DeleteCallback callback);
 
   // The first access to the cookie store initializes it. This method should be
   // called before any access to the cookie store.

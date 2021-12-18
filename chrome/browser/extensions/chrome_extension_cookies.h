@@ -61,7 +61,7 @@ class ChromeExtensionCookies
 
   // Deletes all cookies matching the host of |origin| and
   // synchronously invokes |done_callback| once all cookies are deleted.
-  void ClearCookies(const GURL& origin, base::OnceClosure done_callback);
+  // void ClearCookies(const GURL& origin, base::OnceClosure done_callback);
 
   // Test-only method to get the raw underlying test store. This can only be
   // called when the UI thread and the IO thread are actually the same thread
@@ -90,8 +90,8 @@ class ChromeExtensionCookies
 
     // Asynchronously deletes all cookie info matching |origin| and
     // synchronously invokes |done_callback| once all cookie info is deleted.
-    void ClearCookies(const GURL& origin,
-                      net::CookieStore::DeleteCallback done_callback);
+    // void ClearCookies(const GURL& origin,
+    //                   net::CookieStore::DeleteCallback done_callback);
 
     void OnContentSettingChanged(ContentSettingsForOneType settings);
     void OnThirdPartyCookieBlockingChanged(bool block_third_party_cookies);

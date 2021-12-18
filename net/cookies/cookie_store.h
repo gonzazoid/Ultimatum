@@ -49,7 +49,7 @@ class NET_EXPORT CookieStore {
       const std::vector<CookieAccessSemantics>& access_semantics_list)>;
   using SetCookiesCallback =
       base::OnceCallback<void(CookieAccessResult access_result)>;
-  using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
+  // using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
   using DeletePredicate =
       base::RepeatingCallback<bool(const CanonicalCookie& cookie)>;
   using SetCookieableSchemesCallback = base::OnceCallback<void(bool success)>;
@@ -103,33 +103,33 @@ class NET_EXPORT CookieStore {
   // Deletes one specific cookie. |cookie| must have been returned by a previous
   // query on this CookieStore. Invokes |callback| with 1 if a cookie was
   // deleted, 0 otherwise.
-  virtual void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
-                                          DeleteCallback callback) = 0;
+  // virtual void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
+  //                                         DeleteCallback callback) = 0;
 
   // Deletes all of the cookies that have a creation_date matching
   // |creation_range|. See CookieDeletionInfo::TimeRange::Matches().
   // Calls |callback| with the number of cookies deleted.
-  virtual void DeleteAllCreatedInTimeRangeAsync(
-      const CookieDeletionInfo::TimeRange& creation_range,
-      DeleteCallback callback) = 0;
+  // virtual void DeleteAllCreatedInTimeRangeAsync(
+  //     const CookieDeletionInfo::TimeRange& creation_range,
+  //     DeleteCallback callback) = 0;
 
   // Deletes all of the cookies matching |delete_info|. This includes all
   // http_only and secure cookies. Avoid deleting cookies that could leave
   // websites with a partial set of visible cookies.
   // Calls |callback| with the number of cookies deleted.
-  virtual void DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
-                                          DeleteCallback callback) = 0;
+  // virtual void DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
+  //                                         DeleteCallback callback) = 0;
 
   // Deletes all cookies without expiration data.
-  virtual void DeleteSessionCookiesAsync(DeleteCallback callback) = 0;
+  // virtual void DeleteSessionCookiesAsync(DeleteCallback callback) = 0;
 
   // Deletes all cookies where |predicate| returns true.
   // Calls |callback| with the number of cookies deleted.
-  virtual void DeleteMatchingCookiesAsync(DeletePredicate predicate,
-                                          DeleteCallback callback) = 0;
+  // virtual void DeleteMatchingCookiesAsync(DeletePredicate predicate,
+  //                                         DeleteCallback callback) = 0;
 
   // Deletes all cookies in the store.
-  void DeleteAllAsync(DeleteCallback callback);
+  // void DeleteAllAsync(DeleteCallback callback);
 
   // Flush the backing store (if any) to disk and post the given callback when
   // done.

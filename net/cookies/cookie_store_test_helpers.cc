@@ -143,32 +143,32 @@ void DelayedCookieMonster::InvokeSetCookiesCallback(
 //                             CookieAccessResultList());
 // }
 
-void DelayedCookieMonster::DeleteCanonicalCookieAsync(
-    const CanonicalCookie& cookie,
-    DeleteCallback callback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::DeleteCanonicalCookieAsync(
+//     const CanonicalCookie& cookie,
+//     DeleteCallback callback) {
+//   ADD_FAILURE();
+// }
 
-void DelayedCookieMonster::DeleteAllCreatedInTimeRangeAsync(
-    const TimeRange& creation_range,
-    DeleteCallback callback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::DeleteAllCreatedInTimeRangeAsync(
+//     const TimeRange& creation_range,
+//     DeleteCallback callback) {
+//   ADD_FAILURE();
+// }
 
-void DelayedCookieMonster::DeleteAllMatchingInfoAsync(
-    net::CookieDeletionInfo delete_info,
-    DeleteCallback callback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::DeleteAllMatchingInfoAsync(
+//     net::CookieDeletionInfo delete_info,
+//     DeleteCallback callback) {
+//   ADD_FAILURE();
+// }
 
-void DelayedCookieMonster::DeleteMatchingCookiesAsync(DeletePredicate,
-                                                      DeleteCallback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::DeleteMatchingCookiesAsync(DeletePredicate,
+//                                                       DeleteCallback) {
+//   ADD_FAILURE();
+// }
 
-void DelayedCookieMonster::DeleteSessionCookiesAsync(DeleteCallback) {
-  ADD_FAILURE();
-}
+// void DelayedCookieMonster::DeleteSessionCookiesAsync(DeleteCallback) {
+//   ADD_FAILURE();
+// }
 
 void DelayedCookieMonster::FlushStore(base::OnceClosure callback) {
   ADD_FAILURE();

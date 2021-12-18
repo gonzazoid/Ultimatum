@@ -110,11 +110,11 @@ static const int kMinutesInTenYears = kDaysInTenYears * 24 * 60;
 
 namespace {
 
-void MaybeRunDeleteCallback(base::WeakPtr<net::CookieMonster> cookie_monster,
-                            base::OnceClosure callback) {
-  if (cookie_monster && callback)
-    std::move(callback).Run();
-}
+// void MaybeRunDeleteCallback(base::WeakPtr<net::CookieMonster> cookie_monster,
+//                             base::OnceClosure callback) {
+//   if (cookie_monster && callback)
+//     std::move(callback).Run();
+// }
 
 template <typename T>
 void MaybeRunCookieCallback(base::OnceCallback<void(const T&)> callback,
@@ -444,66 +444,66 @@ void CookieMonster::SetCanonicalCookieAsync(
 //                      base::Unretained(this), std::move(callback))));
 // }
 
-void CookieMonster::DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
-                                               DeleteCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
+//                                                DeleteCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::DeleteCanonicalCookie, base::Unretained(this), cookie,
-      std::move(callback)));
-}
+//       &CookieMonster::DeleteCanonicalCookie, base::Unretained(this), cookie,
+//       std::move(callback)));
+// }
 
-void CookieMonster::DeleteAllCreatedInTimeRangeAsync(
-    const TimeRange& creation_range,
-    DeleteCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::DeleteAllCreatedInTimeRangeAsync(
+//     const TimeRange& creation_range,
+//     DeleteCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::DeleteAllCreatedInTimeRange, base::Unretained(this),
-      creation_range, std::move(callback)));
-}
+//       &CookieMonster::DeleteAllCreatedInTimeRange, base::Unretained(this),
+//       creation_range, std::move(callback)));
+// }
 
-void CookieMonster::DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
-                                               DeleteCallback callback) {
-  auto cookie_matcher =
-      base::BindRepeating(&CookieMonster::MatchCookieDeletionInfo,
-                          base::Unretained(this), std::move(delete_info));
+// void CookieMonster::DeleteAllMatchingInfoAsync(CookieDeletionInfo delete_info,
+//                                                DeleteCallback callback) {
+//   auto cookie_matcher =
+//       base::BindRepeating(&CookieMonster::MatchCookieDeletionInfo,
+//                           base::Unretained(this), std::move(delete_info));
 
-  DoCookieCallback(base::BindOnce(
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
-      std::move(cookie_matcher), DELETE_COOKIE_EXPLICIT, std::move(callback)));
-}
+//       &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
+//       std::move(cookie_matcher), DELETE_COOKIE_EXPLICIT, std::move(callback)));
+// }
 
-void CookieMonster::DeleteSessionCookiesAsync(
-    CookieStore::DeleteCallback callback) {
-  auto session_cookie_matcher =
-      base::BindRepeating([](const net::CanonicalCookie& cookie) {
-        return !cookie.IsPersistent();
-      });
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::DeleteSessionCookiesAsync(
+//     CookieStore::DeleteCallback callback) {
+//   auto session_cookie_matcher =
+//       base::BindRepeating([](const net::CanonicalCookie& cookie) {
+//         return !cookie.IsPersistent();
+//       });
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
-      std::move(session_cookie_matcher), DELETE_COOKIE_EXPIRED,
-      std::move(callback)));
-}
+//       &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
+//       std::move(session_cookie_matcher), DELETE_COOKIE_EXPIRED,
+//       std::move(callback)));
+// }
 
-void CookieMonster::DeleteMatchingCookiesAsync(
-    CookieStore::DeletePredicate predicate,
-    CookieStore::DeleteCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::DeleteMatchingCookiesAsync(
+//     CookieStore::DeletePredicate predicate,
+//     CookieStore::DeleteCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
-      std::move(predicate), DELETE_COOKIE_EXPLICIT, std::move(callback)));
-}
+//       &CookieMonster::DeleteMatchingCookies, base::Unretained(this),
+//       std::move(predicate), DELETE_COOKIE_EXPLICIT, std::move(callback)));
+// }
 
 void CookieMonster::SetCookieableSchemes(
     const std::vector<std::string>& schemes,
@@ -675,52 +675,52 @@ void CookieMonster::AttachAccessSemanticsListForCookieList(
 //                          excluded_cookies);
 // }
 
-void CookieMonster::DeleteAllCreatedInTimeRange(const TimeRange& creation_range,
-                                                DeleteCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::DeleteAllCreatedInTimeRange(const TimeRange& creation_range,
+//                                                 DeleteCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  uint32_t num_deleted = 0;
-  for (auto it = cookies_.begin(); it != cookies_.end();) {
-    auto curit = it;
-    CanonicalCookie* cc = curit->second.get();
-    ++it;
+//   uint32_t num_deleted = 0;
+//   for (auto it = cookies_.begin(); it != cookies_.end();) {
+//     auto curit = it;
+//     CanonicalCookie* cc = curit->second.get();
+//     ++it;
 
-    if (creation_range.Contains(cc->CreationDate())) {
-      InternalDeleteCookie(curit, true, /*sync_to_store*/
-                           DELETE_COOKIE_EXPLICIT);
-      ++num_deleted;
-    }
-  }
+//     if (creation_range.Contains(cc->CreationDate())) {
+//       InternalDeleteCookie(curit, true, /*sync_to_store*/
+//                            DELETE_COOKIE_EXPLICIT);
+//       ++num_deleted;
+//     }
+//   }
 
-  for (PartitionedCookieMap::iterator partition_it =
-           partitioned_cookies_.begin();
-       partition_it != partitioned_cookies_.end();) {
-    auto cur_partition_it = partition_it;
-    CookieMap::iterator cookie_it = cur_partition_it->second->begin();
-    CookieMap::iterator cookie_end = cur_partition_it->second->end();
+//   for (PartitionedCookieMap::iterator partition_it =
+//            partitioned_cookies_.begin();
+//        partition_it != partitioned_cookies_.end();) {
+//     auto cur_partition_it = partition_it;
+//     CookieMap::iterator cookie_it = cur_partition_it->second->begin();
+//     CookieMap::iterator cookie_end = cur_partition_it->second->end();
     // InternalDeletePartitionedCookie may delete this cookie partition if it
     // only has one cookie, so we need to increment the iterator beforehand.
-    ++partition_it;
+//     ++partition_it;
 
-    while (cookie_it != cookie_end) {
-      auto cur_cookie_it = cookie_it;
-      CanonicalCookie* cc = cur_cookie_it->second.get();
-      ++cookie_it;
+//     while (cookie_it != cookie_end) {
+//       auto cur_cookie_it = cookie_it;
+//       CanonicalCookie* cc = cur_cookie_it->second.get();
+//       ++cookie_it;
 
-      if (creation_range.Contains(cc->CreationDate())) {
-        InternalDeletePartitionedCookie(cur_partition_it, cur_cookie_it,
-                                        true /*sync_to_store*/,
-                                        DELETE_COOKIE_EXPLICIT);
-        ++num_deleted;
-      }
-    }
-  }
+//       if (creation_range.Contains(cc->CreationDate())) {
+//         InternalDeletePartitionedCookie(cur_partition_it, cur_cookie_it,
+//                                         true /*sync_to_store*/,
+//                                         DELETE_COOKIE_EXPLICIT);
+//         ++num_deleted;
+//       }
+//     }
+//   }
 
-  FlushStore(
-      base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
-                     callback ? base::BindOnce(std::move(callback), num_deleted)
-                              : base::OnceClosure()));
-}
+//   FlushStore(
+//       base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
+//                      callback ? base::BindOnce(std::move(callback), num_deleted)
+//                               : base::OnceClosure()));
+// }
 
 bool CookieMonster::MatchCookieDeletionInfo(
     const CookieDeletionInfo& delete_info,
@@ -742,91 +742,91 @@ bool CookieMonster::MatchCookieDeletionInfo(
                          CookieSamePartyStatus::kNoSamePartyEnforcement});
 }
 
-void CookieMonster::DeleteCanonicalCookie(const CanonicalCookie& cookie,
-                                          DeleteCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  uint32_t result = 0u;
-  CookieMap* cookie_map = nullptr;
-  PartitionedCookieMap::iterator cookie_partition_it;
+// void CookieMonster::DeleteCanonicalCookie(const CanonicalCookie& cookie,
+//                                           DeleteCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   uint32_t result = 0u;
+//   CookieMap* cookie_map = nullptr;
+//   PartitionedCookieMap::iterator cookie_partition_it;
+ 
+//   if (cookie.IsPartitioned()) {
+//     cookie_partition_it =
+//         partitioned_cookies_.find(cookie.PartitionKey().value());
+//     if (cookie_partition_it != partitioned_cookies_.end())
+//       cookie_map = cookie_partition_it->second.get();
+//   } else {
+//     cookie_map = &cookies_;
+//   }
+//   if (cookie_map) {
+//     for (CookieMapItPair its = cookie_map->equal_range(GetKey(cookie.Domain()));
+//          its.first != its.second; ++its.first) {
+//       const std::unique_ptr<CanonicalCookie>& candidate = its.first->second;
+//       // Historically, this has refused modification if the cookie has changed
+//       // value in between the CanonicalCookie object was returned by a getter
+//       // and when this ran.  The later parts of the conditional (everything but
+//       // the equivalence check) attempt to preserve this behavior.
+//       if (candidate->IsEquivalent(cookie) &&
+//           candidate->Value() == cookie.Value()) {
+//         if (cookie.IsPartitioned()) {
+//           InternalDeletePartitionedCookie(cookie_partition_it, its.first, true,
+//                                           DELETE_COOKIE_EXPLICIT);
+//         } else {
+//           InternalDeleteCookie(its.first, true, DELETE_COOKIE_EXPLICIT);
+//         }
+//         result = 1u;
+//         break;
+//       }
+//     }
+//   }
+//   FlushStore(
+//       base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
+//                      callback ? base::BindOnce(std::move(callback), result)
+//                               : base::OnceClosure()));
+// }
 
-  if (cookie.IsPartitioned()) {
-    cookie_partition_it =
-        partitioned_cookies_.find(cookie.PartitionKey().value());
-    if (cookie_partition_it != partitioned_cookies_.end())
-      cookie_map = cookie_partition_it->second.get();
-  } else {
-    cookie_map = &cookies_;
-  }
-  if (cookie_map) {
-    for (CookieMapItPair its = cookie_map->equal_range(GetKey(cookie.Domain()));
-         its.first != its.second; ++its.first) {
-      const std::unique_ptr<CanonicalCookie>& candidate = its.first->second;
-      // Historically, this has refused modification if the cookie has changed
-      // value in between the CanonicalCookie object was returned by a getter
-      // and when this ran.  The later parts of the conditional (everything but
-      // the equivalence check) attempt to preserve this behavior.
-      if (candidate->IsEquivalent(cookie) &&
-          candidate->Value() == cookie.Value()) {
-        if (cookie.IsPartitioned()) {
-          InternalDeletePartitionedCookie(cookie_partition_it, its.first, true,
-                                          DELETE_COOKIE_EXPLICIT);
-        } else {
-          InternalDeleteCookie(its.first, true, DELETE_COOKIE_EXPLICIT);
-        }
-        result = 1u;
-        break;
-      }
-    }
-  }
-  FlushStore(
-      base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
-                     callback ? base::BindOnce(std::move(callback), result)
-                              : base::OnceClosure()));
-}
+// void CookieMonster::DeleteMatchingCookies(DeletePredicate predicate,
+//                                           DeletionCause cause,
+//                                           DeleteCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   DCHECK(predicate);
 
-void CookieMonster::DeleteMatchingCookies(DeletePredicate predicate,
-                                          DeletionCause cause,
-                                          DeleteCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK(predicate);
+//   uint32_t num_deleted = 0;
+//   for (auto it = cookies_.begin(); it != cookies_.end();) {
+//     auto curit = it;
+//     CanonicalCookie* cc = curit->second.get();
+//     ++it;
+//     if (predicate.Run(*cc)) {
+//       InternalDeleteCookie(curit, true /*sync_to_store*/, cause);
+//       ++num_deleted;
+//     }
+//   }
+//   for (auto partition_it = partitioned_cookies_.begin();
+//        partition_it != partitioned_cookies_.end();) {
+//     // InternalDeletePartitionedCookie may invalidate |partition_it| if that
+//     // cookie partition only has one cookie.
+//     auto cur_partition_it = partition_it;
+//     CookieMap::iterator cookie_it = cur_partition_it->second->begin();
+//     CookieMap::iterator cookie_end = cur_partition_it->second->end();
+//     ++partition_it;
+// 
+//     while (cookie_it != cookie_end) {
+//       auto cur_cookie_it = cookie_it;
+//       CanonicalCookie* cc = cur_cookie_it->second.get();
+//       ++cookie_it;
+// 
+//       if (predicate.Run(*cc)) {
+//         InternalDeletePartitionedCookie(cur_partition_it, cur_cookie_it, true,
+//                                         cause);
+//         ++num_deleted;
+//       }
+//     }
+//   }
 
-  uint32_t num_deleted = 0;
-  for (auto it = cookies_.begin(); it != cookies_.end();) {
-    auto curit = it;
-    CanonicalCookie* cc = curit->second.get();
-    ++it;
-    if (predicate.Run(*cc)) {
-      InternalDeleteCookie(curit, true /*sync_to_store*/, cause);
-      ++num_deleted;
-    }
-  }
-  for (auto partition_it = partitioned_cookies_.begin();
-       partition_it != partitioned_cookies_.end();) {
-    // InternalDeletePartitionedCookie may invalidate |partition_it| if that
-    // cookie partition only has one cookie.
-    auto cur_partition_it = partition_it;
-    CookieMap::iterator cookie_it = cur_partition_it->second->begin();
-    CookieMap::iterator cookie_end = cur_partition_it->second->end();
-    ++partition_it;
-
-    while (cookie_it != cookie_end) {
-      auto cur_cookie_it = cookie_it;
-      CanonicalCookie* cc = cur_cookie_it->second.get();
-      ++cookie_it;
-
-      if (predicate.Run(*cc)) {
-        InternalDeletePartitionedCookie(cur_partition_it, cur_cookie_it, true,
-                                        cause);
-        ++num_deleted;
-      }
-    }
-  }
-
-  FlushStore(
-      base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
-                     callback ? base::BindOnce(std::move(callback), num_deleted)
-                              : base::OnceClosure()));
-}
+//   FlushStore(
+//       base::BindOnce(&MaybeRunDeleteCallback, weak_ptr_factory_.GetWeakPtr(),
+//                      callback ? base::BindOnce(std::move(callback), num_deleted)
+//                               : base::OnceClosure()));
+// }
 
 void CookieMonster::MarkCookieStoreAsInitialized() {
   DCHECK(thread_checker_.CalledOnValidThread());
