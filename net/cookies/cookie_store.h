@@ -38,9 +38,9 @@ class CookieChangeDispatcher;
 class NET_EXPORT CookieStore {
  public:
   // Callback definitions.
-  using GetCookieListCallback =
-      base::OnceCallback<void(const CookieAccessResultList& included_cookies,
-                              const CookieAccessResultList& excluded_list)>;
+  // using GetCookieListCallback =
+  //     base::OnceCallback<void(const CookieAccessResultList& included_cookies,
+  //                             const CookieAccessResultList& excluded_list)>;
   // using GetAllCookiesCallback =
   //     base::OnceCallback<void(const CookieList& cookies)>;
   // |access_semantics_list| is guaranteed to the same length as |cookies|.

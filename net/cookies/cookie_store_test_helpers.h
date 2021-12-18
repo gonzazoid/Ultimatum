@@ -69,7 +69,7 @@ class DelayedCookieMonster : public CookieStore {
   //     const CookiePartitionKeychain& cookie_partition_keychain,
   //     GetCookieListCallback callback) override;
 
-  void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
+  // void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
 
   void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
                                   DeleteCallback callback) override;
@@ -106,8 +106,8 @@ class DelayedCookieMonster : public CookieStore {
 
   void InvokeSetCookiesCallback(CookieMonster::SetCookiesCallback callback);
 
-  void InvokeGetCookieListCallback(
-      CookieMonster::GetCookieListCallback callback);
+  // void InvokeGetCookieListCallback(
+  //     CookieMonster::GetCookieListCallback callback);
 
   friend class base::RefCountedThreadSafe<DelayedCookieMonster>;
 

@@ -604,46 +604,76 @@ void CookieMonster::AttachAccessSemanticsListForCookieList(
                          access_semantics_list);
 }
 
-void CookieMonster::GetCookieListWithOptions(
-    const GURL& url,
-    const CookieOptions& options,
-    const CookiePartitionKeychain& cookie_partition_keychain,
-    GetCookieListCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::GetCookieListWithOptions(
+//     const GURL& url,
+//     const CookieOptions& options,
+//     const CookiePartitionKeychain& cookie_partition_keychain,
+//     GetCookieListCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  CookieAccessResultList included_cookies;
-  CookieAccessResultList excluded_cookies;
-  if (HasCookieableScheme(url)) {
-    std::vector<CanonicalCookie*> cookie_ptrs =
-        FindCookiesForRegistryControlledHost(url);
-    if (!cookie_partition_keychain.IsEmpty()) {
-      if (cookie_partition_keychain.ContainsAllKeys()) {
-        for (const auto& it : partitioned_cookies_) {
-          std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
-              FindPartitionedCookiesForRegistryControlledHost(it.first, url);
-          cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
-                             partitioned_cookie_ptrs.end());
-        }
-      } else {
-        for (const CookiePartitionKey& key :
-             cookie_partition_keychain.PartitionKeys()) {
-          std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
-              FindPartitionedCookiesForRegistryControlledHost(key, url);
-          cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
-                             partitioned_cookie_ptrs.end());
-        }
-      }
-    }
-    std::sort(cookie_ptrs.begin(), cookie_ptrs.end(), CookieSorter);
+//   CookieAccessResultList included_cookies;
+//   CookieAccessResultList excluded_cookies;
+//   if (HasCookieableScheme(url)) {
+//     std::vector<CanonicalCookie*> cookie_ptrs =
+//         FindCookiesForRegistryControlledHost(url);
+//     if (!cookie_partition_keychain.IsEmpty()) {
+//       if (cookie_partition_keychain.ContainsAllKeys()) {
+//         for (const auto& it : partitioned_cookies_) {
+//           std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
+//               FindPartitionedCookiesForRegistryControlledHost(it.first, url);
+//           cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
+//                              partitioned_cookie_ptrs.end());
+//         }
+//       } else {
+//         for (const CookiePartitionKey& key :
+//              cookie_partition_keychain.PartitionKeys()) {
+//           std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
+//               FindPartitionedCookiesForRegistryControlledHost(key, url);
+//           cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
+//                              partitioned_cookie_ptrs.end());
+//         }
+//       }
+//     }
+//     std::sort(cookie_ptrs.begin(), cookie_ptrs.end(), CookieSorter);
 
-    included_cookies.reserve(cookie_ptrs.size());
-    FilterCookiesWithOptions(url, options, &cookie_ptrs, &included_cookies,
-                             &excluded_cookies);
-  }
+//   CookieAccessResultList included_cookies;
+//   CookieAccessResultList excluded_cookies;
+//   if (HasCookieableScheme(url)) {
+//     std::vector<CanonicalCookie*> cookie_ptrs;
+//     if (IncludeUnpartitionedCookies(cookie_partition_key_collection)) {
+//       cookie_ptrs = FindCookiesForRegistryControlledHost(url);
+//     } else {
+//       DCHECK(!cookie_partition_key_collection.IsEmpty());
+//     }
 
-  MaybeRunCookieCallback(std::move(callback), included_cookies,
-                         excluded_cookies);
-}
+//     if (!cookie_partition_key_collection.IsEmpty()) {
+//       if (cookie_partition_key_collection.ContainsAllKeys()) {
+//         for (const auto& it : partitioned_cookies_) {
+//           std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
+//               FindPartitionedCookiesForRegistryControlledHost(it.first, url);
+//           cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
+//                              partitioned_cookie_ptrs.end());
+//         }
+//       } else {
+//         for (const CookiePartitionKey& key :
+//              cookie_partition_key_collection.PartitionKeys()) {
+//           std::vector<CanonicalCookie*> partitioned_cookie_ptrs =
+//               FindPartitionedCookiesForRegistryControlledHost(key, url);
+//           cookie_ptrs.insert(cookie_ptrs.end(), partitioned_cookie_ptrs.begin(),
+//                              partitioned_cookie_ptrs.end());
+//         }
+//       }
+//     }
+//     std::sort(cookie_ptrs.begin(), cookie_ptrs.end(), CookieSorter);
+
+//     included_cookies.reserve(cookie_ptrs.size());
+//     FilterCookiesWithOptions(url, options, &cookie_ptrs, &included_cookies,
+//                              &excluded_cookies);
+//   }
+
+//   MaybeRunCookieCallback(std::move(callback), included_cookies,
+//                          excluded_cookies);
+// }
 
 void CookieMonster::DeleteAllCreatedInTimeRange(const TimeRange& creation_range,
                                                 DeleteCallback callback) {
