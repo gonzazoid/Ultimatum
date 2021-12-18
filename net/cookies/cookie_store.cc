@@ -15,8 +15,8 @@ CookieStore::~CookieStore() = default;
 
 // Default implementation which returns a default vector of UNKNOWN
 // CookieAccessSemantics.
-void CookieStore::GetAllCookiesWithAccessSemanticsAsync(
-    GetAllCookiesWithAccessSemanticsCallback callback) {
+// void CookieStore::GetAllCookiesWithAccessSemanticsAsync(
+//     GetAllCookiesWithAccessSemanticsCallback callback) {
   // GetAllCookiesCallback adapted_callback = base::BindOnce(
   //     [](CookieStore::GetAllCookiesWithAccessSemanticsCallback
   //            original_callback,
@@ -29,8 +29,8 @@ void CookieStore::GetAllCookiesWithAccessSemanticsAsync(
   //     },
   //     std::move(callback));
   // GetAllCookiesAsync(std::move(adapted_callback));
-  std::move(callback).Run({}, {});
-}
+  // std::move(callback).Run({}, {});
+// }
 
 void CookieStore::DeleteAllAsync(DeleteCallback callback) {
   DeleteAllCreatedInTimeRangeAsync(CookieDeletionInfo::TimeRange(),

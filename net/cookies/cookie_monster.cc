@@ -433,16 +433,16 @@ void CookieMonster::SetCanonicalCookieAsync(
 //       std::move(callback)));
 // }
 
-void CookieMonster::GetAllCookiesWithAccessSemanticsAsync(
-    GetAllCookiesWithAccessSemanticsCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::GetAllCookiesWithAccessSemanticsAsync(
+//     GetAllCookiesWithAccessSemanticsCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::GetAllCookies, base::Unretained(this),
-      base::BindOnce(&CookieMonster::AttachAccessSemanticsListForCookieList,
-                     base::Unretained(this), std::move(callback))));
-}
+//       &CookieMonster::GetAllCookies, base::Unretained(this),
+//       base::BindOnce(&CookieMonster::AttachAccessSemanticsListForCookieList,
+//                      base::Unretained(this), std::move(callback))));
+// }
 
 void CookieMonster::DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
                                                DeleteCallback callback) {

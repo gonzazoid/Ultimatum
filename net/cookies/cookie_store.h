@@ -97,8 +97,8 @@ class NET_EXPORT CookieStore {
   // (if the default implementation is used), or each entry in the
   // vector of CookieAccessSemantics will indicate the access semantics
   // applicable to the cookie at the same index in the returned CookieList.
-  virtual void GetAllCookiesWithAccessSemanticsAsync(
-      GetAllCookiesWithAccessSemanticsCallback callback);
+  // virtual void GetAllCookiesWithAccessSemanticsAsync(
+  //     GetAllCookiesWithAccessSemanticsCallback callback);
 
   // Deletes one specific cookie. |cookie| must have been returned by a previous
   // query on this CookieStore. Invokes |callback| with 1 if a cookie was
