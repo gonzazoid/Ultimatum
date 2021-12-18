@@ -47,8 +47,8 @@ class NET_EXPORT CookieStore {
   // using GetAllCookiesWithAccessSemanticsCallback = base::OnceCallback<void(
   //     const CookieList& cookies,
   //     const std::vector<CookieAccessSemantics>& access_semantics_list)>;
-  using SetCookiesCallback =
-      base::OnceCallback<void(CookieAccessResult access_result)>;
+  // using SetCookiesCallback =
+  //     base::OnceCallback<void(CookieAccessResult access_result)>;
   // using DeleteCallback = base::OnceCallback<void(uint32_t num_deleted)>;
   // using DeletePredicate =
   //     base::RepeatingCallback<bool(const CanonicalCookie& cookie)>;
@@ -64,10 +64,10 @@ class NET_EXPORT CookieStore {
   // which cookies it can alter (e.g. http only, or same site).
   //
   // The current time will be used in place of a null creation time.
-  virtual void SetCanonicalCookieAsync(std::unique_ptr<CanonicalCookie> cookie,
-                                       const GURL& source_url,
-                                       const CookieOptions& options,
-                                       SetCookiesCallback callback) = 0;
+  // virtual void SetCanonicalCookieAsync(std::unique_ptr<CanonicalCookie> cookie,
+  //                                      const GURL& source_url,
+  //                                      const CookieOptions& options,
+  //                                      SetCookiesCallback callback) = 0;
 
   // Obtains a CookieList for the given |url| and |options|. The returned
   // cookies are passed into |callback|, ordered by longest path, then earliest

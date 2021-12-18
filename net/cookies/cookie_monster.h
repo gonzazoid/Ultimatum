@@ -173,13 +173,13 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // TODO(rdsmith, mmenke): Do not use this function; it is deprecated
   // and should be removed.
   // See https://codereview.chromium.org/2882063002/#msg64.
-  void SetAllCookiesAsync(const CookieList& list, SetCookiesCallback callback);
+  // void SetAllCookiesAsync(const CookieList& list, SetCookiesCallback callback);
 
   // CookieStore implementation.
-  void SetCanonicalCookieAsync(std::unique_ptr<CanonicalCookie> cookie,
-                               const GURL& source_url,
-                               const CookieOptions& options,
-                               SetCookiesCallback callback) override;
+  // void SetCanonicalCookieAsync(std::unique_ptr<CanonicalCookie> cookie,
+  //                              const GURL& source_url,
+  //                              const CookieOptions& options,
+  //                              SetCookiesCallback callback) override;
   // void GetCookieListWithOptionsAsync(const GURL& url,
   //                                    const CookieOptions& options,
   //                                    const CookiePartitionKeychain& s,
@@ -367,10 +367,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //
   // |options| indicates if this setting operation is allowed
   // to affect http_only or same-site cookies.
-  void SetCanonicalCookie(std::unique_ptr<CanonicalCookie> cookie,
-                          const GURL& source_url,
-                          const CookieOptions& options,
-                          SetCookiesCallback callback);
+  // void SetCanonicalCookie(std::unique_ptr<CanonicalCookie> cookie,
+  //                         const GURL& source_url,
+  //                         const CookieOptions& options,
+  //                         SetCookiesCallback callback);
 
   // void GetAllCookies(GetAllCookiesCallback callback);
 
@@ -536,7 +536,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Sets all cookies from |list| after deleting any equivalent cookie.
   // For data gathering purposes, this routine is treated as if it is
   // restoring saved cookies; some statistics are not gathered in this case.
-  void SetAllCookies(CookieList list, SetCookiesCallback callback);
+  // void SetAllCookies(CookieList list, SetCookiesCallback callback);
 
   void InternalUpdateCookieAccessTime(CanonicalCookie* cc,
                                       const base::Time& current_time);

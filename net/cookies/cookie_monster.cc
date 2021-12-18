@@ -105,8 +105,8 @@ using TimeRange = net::CookieDeletionInfo::TimeRange;
 // notification of key load completion triggered by the first request for the
 // same eTLD+1.
 
-static const int kDaysInTenYears = 10 * 365;
-static const int kMinutesInTenYears = kDaysInTenYears * 24 * 60;
+// static const int kDaysInTenYears = 10 * 365;
+// static const int kMinutesInTenYears = kDaysInTenYears * 24 * 60;
 
 namespace {
 
@@ -300,35 +300,35 @@ size_t CountCookiesForPossibleDeletion(
 // Records minutes until the expiration date of a cookie to the appropriate
 // histogram. Only histograms cookies that have an expiration date (i.e. are
 // persistent).
-void HistogramExpirationDuration(const CanonicalCookie& cookie,
-                                 base::Time creation_time) {
-  if (!cookie.IsPersistent())
-    return;
+// void HistogramExpirationDuration(const CanonicalCookie& cookie,
+//                                  base::Time creation_time) {
+//   if (!cookie.IsPersistent())
+//     return;
 
-  int expiration_duration_minutes =
-      (cookie.ExpiryDate() - creation_time).InMinutes();
-  if (cookie.IsSecure()) {
-    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDurationMinutesSecure",
-                                expiration_duration_minutes, 1,
-                                kMinutesInTenYears, 50);
-  } else {
-    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDurationMinutesNonSecure",
-                                expiration_duration_minutes, 1,
-                                kMinutesInTenYears, 50);
-  }
-  // The proposed rfc6265bis sets an upper limit on Expires/Max-Age attribute
-  // values of 400 days. We need to study the impact this change would have:
-  // https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html
-  int expiration_duration_days = (cookie.ExpiryDate() - creation_time).InDays();
-  if (expiration_duration_days > 400) {
-    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDuration400DaysGT",
-                                expiration_duration_days, 401, kDaysInTenYears,
-                                100);
-  } else {
-    UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDuration400DaysLTE",
-                                expiration_duration_days, 1, 400, 50);
-  }
-}
+//   int expiration_duration_minutes =
+//       (cookie.ExpiryDate() - creation_time).InMinutes();
+//   if (cookie.IsSecure()) {
+//     UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDurationMinutesSecure",
+//                                 expiration_duration_minutes, 1,
+//                                 kMinutesInTenYears, 50);
+//   } else {
+//     UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDurationMinutesNonSecure",
+//                                 expiration_duration_minutes, 1,
+//                                 kMinutesInTenYears, 50);
+//   }
+//   // The proposed rfc6265bis sets an upper limit on Expires/Max-Age attribute
+//   // values of 400 days. We need to study the impact this change would have:
+//   // https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html
+//   int expiration_duration_days = (cookie.ExpiryDate() - creation_time).InDays();
+//   if (expiration_duration_days > 400) {
+//     UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDuration400DaysGT",
+//                                 expiration_duration_days, 401, kDaysInTenYears,
+//                                 100);
+//   } else {
+//     UMA_HISTOGRAM_CUSTOM_COUNTS("Cookie.ExpirationDuration400DaysLTE",
+//                                 expiration_duration_days, 1, 400, 50);
+//   }
+// }
 
 }  // namespace
 
@@ -381,33 +381,33 @@ void CookieMonster::SetForceKeepSessionState() {
     store_->SetForceKeepSessionState();
 }
 
-void CookieMonster::SetAllCookiesAsync(const CookieList& list,
-                                       SetCookiesCallback callback) {
-  DoCookieCallback(base::BindOnce(
+// void CookieMonster::SetAllCookiesAsync(const CookieList& list,
+//                                        SetCookiesCallback callback) {
+//   DoCookieCallback(base::BindOnce(
       // base::Unretained is safe as DoCookieCallback stores
       // the callback on |*this|, so the callback will not outlive
       // the object.
-      &CookieMonster::SetAllCookies, base::Unretained(this), list,
-      std::move(callback)));
-}
+//       &CookieMonster::SetAllCookies, base::Unretained(this), list,
+//       std::move(callback)));
+// }
 
-void CookieMonster::SetCanonicalCookieAsync(
-    std::unique_ptr<CanonicalCookie> cookie,
-    const GURL& source_url,
-    const CookieOptions& options,
-    SetCookiesCallback callback) {
-  DCHECK(cookie->IsCanonical());
+// void CookieMonster::SetCanonicalCookieAsync(
+//     std::unique_ptr<CanonicalCookie> cookie,
+//     const GURL& source_url,
+//     const CookieOptions& options,
+//     SetCookiesCallback callback) {
+//   DCHECK(cookie->IsCanonical());
 
-  std::string domain = cookie->Domain();
-  DoCookieCallbackForHostOrDomain(
-      base::BindOnce(
+//   std::string domain = cookie->Domain();
+//   DoCookieCallbackForHostOrDomain(
+//       base::BindOnce(
           // base::Unretained is safe as DoCookieCallbackForHostOrDomain stores
           // the callback on |*this|, so the callback will not outlive
           // the object.
-          &CookieMonster::SetCanonicalCookie, base::Unretained(this),
-          std::move(cookie), source_url, options, std::move(callback)),
-      domain);
-}
+//           &CookieMonster::SetCanonicalCookie, base::Unretained(this),
+//           std::move(cookie), source_url, options, std::move(callback)),
+//       domain);
+// }
 
 // void CookieMonster::GetCookieListWithOptionsAsync(
 //     const GURL& url,
@@ -1471,199 +1471,199 @@ CookieMonster::InternalInsertPartitionedCookie(
   return std::make_pair(partition_it, cookie_it);
 }
 
-void CookieMonster::SetCanonicalCookie(std::unique_ptr<CanonicalCookie> cc,
-                                       const GURL& source_url,
-                                       const CookieOptions& options,
-                                       SetCookiesCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::SetCanonicalCookie(std::unique_ptr<CanonicalCookie> cc,
+//                                        const GURL& source_url,
+//                                        const CookieOptions& options,
+//                                        SetCookiesCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  bool delegate_treats_url_as_trustworthy =
-      cookie_access_delegate() &&
-      cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(source_url);
+//   bool delegate_treats_url_as_trustworthy =
+//       cookie_access_delegate() &&
+//       cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(source_url);
 
-  CookieAccessResult access_result = cc->IsSetPermittedInContext(
-      source_url, options,
-      CookieAccessParams(GetAccessSemanticsForCookie(*cc),
-                         delegate_treats_url_as_trustworthy,
-                         cookie_util::GetSamePartyStatus(*cc, options)),
-      cookieable_schemes_);
+//   CookieAccessResult access_result = cc->IsSetPermittedInContext(
+//       source_url, options,
+//       CookieAccessParams(GetAccessSemanticsForCookie(*cc),
+//                          delegate_treats_url_as_trustworthy,
+//                          cookie_util::GetSamePartyStatus(*cc, options)),
+//       cookieable_schemes_);
 
-  const std::string key(GetKey(cc->Domain()));
+//   const std::string key(GetKey(cc->Domain()));
 
-  base::Time creation_date = cc->CreationDate();
-  if (creation_date.is_null()) {
-    creation_date = Time::Now();
-    cc->SetCreationDate(creation_date);
-  }
-  bool already_expired = cc->IsExpired(creation_date);
+//   base::Time creation_date = cc->CreationDate();
+//   if (creation_date.is_null()) {
+//     creation_date = Time::Now();
+//     cc->SetCreationDate(creation_date);
+//   }
+//   bool already_expired = cc->IsExpired(creation_date);
 
-  base::Time creation_date_to_inherit;
+//   base::Time creation_date_to_inherit;
 
-  absl::optional<PartitionedCookieMap::iterator> cookie_partition_it;
-  bool should_try_to_delete_duplicates = true;
+//   absl::optional<PartitionedCookieMap::iterator> cookie_partition_it;
+//   bool should_try_to_delete_duplicates = true;
 
-  if (cc->IsPartitioned()) {
-    auto it = partitioned_cookies_.find(cc->PartitionKey().value());
-    if (it == partitioned_cookies_.end()) {
-      // This is the first cookie in its partition, so it won't have any
-      // duplicates.
-      should_try_to_delete_duplicates = false;
-    } else {
-      cookie_partition_it = absl::make_optional(it);
-    }
-  }
+//   if (cc->IsPartitioned()) {
+//     auto it = partitioned_cookies_.find(cc->PartitionKey().value());
+//     if (it == partitioned_cookies_.end()) {
+//       // This is the first cookie in its partition, so it won't have any
+//       // duplicates.
+//       should_try_to_delete_duplicates = false;
+//     } else {
+//       cookie_partition_it = absl::make_optional(it);
+//     }
+//   }
 
-  // Iterates through existing cookies for the same eTLD+1, and potentially
-  // deletes an existing cookie, so any ExclusionReasons in |status| that would
-  // prevent such deletion should be finalized beforehand.
-  if (should_try_to_delete_duplicates) {
-    MaybeDeleteEquivalentCookieAndUpdateStatus(
-        key, *cc, access_result.is_allowed_to_access_secure_cookies,
-        options.exclude_httponly(), already_expired, &creation_date_to_inherit,
-        &access_result.status, cookie_partition_it);
-  }
+//   // Iterates through existing cookies for the same eTLD+1, and potentially
+//   // deletes an existing cookie, so any ExclusionReasons in |status| that would
+//   // prevent such deletion should be finalized beforehand.
+//   if (should_try_to_delete_duplicates) {
+//     MaybeDeleteEquivalentCookieAndUpdateStatus(
+//         key, *cc, access_result.is_allowed_to_access_secure_cookies,
+//         options.exclude_httponly(), already_expired, &creation_date_to_inherit,
+//         &access_result.status, cookie_partition_it);
+//   }
 
-  if (access_result.status.HasExclusionReason(
-          CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE) ||
-      access_result.status.HasExclusionReason(
-          CookieInclusionStatus::EXCLUDE_OVERWRITE_HTTP_ONLY)) {
-    DVLOG(net::cookie_util::kVlogSetCookies)
-        << "SetCookie() not clobbering httponly cookie or secure cookie for "
-           "insecure scheme";
-  }
+//   if (access_result.status.HasExclusionReason(
+//           CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE) ||
+//       access_result.status.HasExclusionReason(
+//           CookieInclusionStatus::EXCLUDE_OVERWRITE_HTTP_ONLY)) {
+//     DVLOG(net::cookie_util::kVlogSetCookies)
+//         << "SetCookie() not clobbering httponly cookie or secure cookie for "
+//            "insecure scheme";
+//   }
 
-  if (access_result.status.IsInclude()) {
-    DVLOG(net::cookie_util::kVlogSetCookies)
-        << "SetCookie() key: " << key << " cc: " << cc->DebugString();
+//   if (access_result.status.IsInclude()) {
+//     DVLOG(net::cookie_util::kVlogSetCookies)
+//         << "SetCookie() key: " << key << " cc: " << cc->DebugString();
 
-    if (cc->IsSameParty()) {
-      UMA_HISTOGRAM_BOOLEAN("Cookie.SamePartySetIncluded.IsHTTP",
-                            !options.exclude_httponly());
-      UMA_HISTOGRAM_EXACT_LINEAR("Cookie.SamePartySetIncluded.PartyContextSize",
-                                 options.full_party_context_size(),
-                                 1 + IsolationInfo::kPartyContextMaxSize);
-    }
+//     if (cc->IsSameParty()) {
+//       UMA_HISTOGRAM_BOOLEAN("Cookie.SamePartySetIncluded.IsHTTP",
+//                             !options.exclude_httponly());
+//       UMA_HISTOGRAM_EXACT_LINEAR("Cookie.SamePartySetIncluded.PartyContextSize",
+//                                  options.full_party_context_size(),
+//                                  1 + IsolationInfo::kPartyContextMaxSize);
+//     }
 
-    bool is_partitioned_cookie = cc->IsPartitioned();
-    CookiePartitionKey cookie_partition_key;
-    if (is_partitioned_cookie)
-      cookie_partition_key = cc->PartitionKey().value();
+//     bool is_partitioned_cookie = cc->IsPartitioned();
+//     CookiePartitionKey cookie_partition_key;
+//     if (is_partitioned_cookie)
+//       cookie_partition_key = cc->PartitionKey().value();
 
-    // Realize that we might be setting an expired cookie, and the only point
-    // was to delete the cookie which we've already done.
-    if (!already_expired) {
-      HistogramExpirationDuration(*cc, creation_date);
+//     // Realize that we might be setting an expired cookie, and the only point
+//     // was to delete the cookie which we've already done.
+//     if (!already_expired) {
+//       HistogramExpirationDuration(*cc, creation_date);
 
-      // Histogram the type of scheme used on URLs that set cookies. This
-      // intentionally includes cookies that are set or overwritten by
-      // http:// URLs, but not cookies that are cleared by http:// URLs, to
-      // understand if the former behavior can be deprecated for Secure
-      // cookies.
-      // TODO(crbug.com/993120): Consider removing this histogram. The decision
-      // it was added to evaluate has been implemented and standardized.
-      CookieSource cookie_source_sample =
-          (source_url.SchemeIsCryptographic()
-               ? (cc->IsSecure()
-                      ? COOKIE_SOURCE_SECURE_COOKIE_CRYPTOGRAPHIC_SCHEME
-                      : COOKIE_SOURCE_NONSECURE_COOKIE_CRYPTOGRAPHIC_SCHEME)
-               : (cc->IsSecure()
-                      ? COOKIE_SOURCE_SECURE_COOKIE_NONCRYPTOGRAPHIC_SCHEME
-                      : COOKIE_SOURCE_NONSECURE_COOKIE_NONCRYPTOGRAPHIC_SCHEME));
-      UMA_HISTOGRAM_ENUMERATION("Cookie.CookieSourceScheme",
-                                cookie_source_sample);
+//       // Histogram the type of scheme used on URLs that set cookies. This
+//       // intentionally includes cookies that are set or overwritten by
+//       // http:// URLs, but not cookies that are cleared by http:// URLs, to
+//       // understand if the former behavior can be deprecated for Secure
+//       // cookies.
+//       // TODO(crbug.com/993120): Consider removing this histogram. The decision
+//       // it was added to evaluate has been implemented and standardized.
+//       CookieSource cookie_source_sample =
+//           (source_url.SchemeIsCryptographic()
+//                ? (cc->IsSecure()
+//                       ? COOKIE_SOURCE_SECURE_COOKIE_CRYPTOGRAPHIC_SCHEME
+//                       : COOKIE_SOURCE_NONSECURE_COOKIE_CRYPTOGRAPHIC_SCHEME)
+//                : (cc->IsSecure()
+//                       ? COOKIE_SOURCE_SECURE_COOKIE_NONCRYPTOGRAPHIC_SCHEME
+//                       : COOKIE_SOURCE_NONSECURE_COOKIE_NONCRYPTOGRAPHIC_SCHEME));
+//       UMA_HISTOGRAM_ENUMERATION("Cookie.CookieSourceScheme",
+//                                 cookie_source_sample);
 
-      UMA_HISTOGRAM_BOOLEAN("Cookie.DomainSet", cc->IsDomainCookie());
+//       UMA_HISTOGRAM_BOOLEAN("Cookie.DomainSet", cc->IsDomainCookie());
 
-      if (!creation_date_to_inherit.is_null()) {
-        cc->SetCreationDate(creation_date_to_inherit);
-      }
+//       if (!creation_date_to_inherit.is_null()) {
+//         cc->SetCreationDate(creation_date_to_inherit);
+//       }
 
-      if (is_partitioned_cookie) {
-        InternalInsertPartitionedCookie(key, std::move(cc), true,
-                                        access_result);
-      } else {
-        InternalInsertCookie(key, std::move(cc), true, access_result);
-      }
-    } else {
-      DVLOG(net::cookie_util::kVlogSetCookies)
-          << "SetCookie() not storing already expired cookie.";
-    }
+//       if (is_partitioned_cookie) {
+//         InternalInsertPartitionedCookie(key, std::move(cc), true,
+//                                         access_result);
+//       } else {
+//         InternalInsertCookie(key, std::move(cc), true, access_result);
+//       }
+//     } else {
+//       DVLOG(net::cookie_util::kVlogSetCookies)
+//           << "SetCookie() not storing already expired cookie.";
+//     }
 
-    // We assume that hopefully setting a cookie will be less common than
-    // querying a cookie.  Since setting a cookie can put us over our limits,
-    // make sure that we garbage collect...  We can also make the assumption
-    // that if a cookie was set, in the common case it will be used soon after,
-    // and we will purge the expired cookies in GetCookies().
-    if (is_partitioned_cookie) {
-      GarbageCollectPartitionedCookies(creation_date, cookie_partition_key,
-                                       key);
-    } else {
-      GarbageCollect(creation_date, key);
-    }
+//     // We assume that hopefully setting a cookie will be less common than
+//     // querying a cookie.  Since setting a cookie can put us over our limits,
+//     // make sure that we garbage collect...  We can also make the assumption
+//     // that if a cookie was set, in the common case it will be used soon after,
+//     // and we will purge the expired cookies in GetCookies().
+//     if (is_partitioned_cookie) {
+//       GarbageCollectPartitionedCookies(creation_date, cookie_partition_key,
+//                                        key);
+//     } else {
+//       GarbageCollect(creation_date, key);
+//     }
 
-    if (IsLocalhost(source_url)) {
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.Set.Localhost",
-          ReducePortRangeForCookieHistogram(source_url.EffectiveIntPort()));
-    } else {
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.Set.RemoteHost",
-          ReducePortRangeForCookieHistogram(source_url.EffectiveIntPort()));
-    }
+//     if (IsLocalhost(source_url)) {
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.Set.Localhost",
+//           ReducePortRangeForCookieHistogram(source_url.EffectiveIntPort()));
+//     } else {
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.Set.RemoteHost",
+//           ReducePortRangeForCookieHistogram(source_url.EffectiveIntPort()));
+//     }
 
-    UMA_HISTOGRAM_ENUMERATION("Cookie.CookieSourceSchemeName",
-                              GetSchemeNameEnum(source_url));
-  } else {
-    UMA_HISTOGRAM_BOOLEAN(
-        "Cookie.SameParty.SetExclusionDecidedBySameParty",
-        access_result.status.HasOnlyExclusionReason(
-            CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT));
-  }
+//     UMA_HISTOGRAM_ENUMERATION("Cookie.CookieSourceSchemeName",
+//                               GetSchemeNameEnum(source_url));
+//   } else {
+//     UMA_HISTOGRAM_BOOLEAN(
+//         "Cookie.SameParty.SetExclusionDecidedBySameParty",
+//         access_result.status.HasOnlyExclusionReason(
+//             CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT));
+//   }
 
-  // TODO(chlily): Log metrics.
-  MaybeRunCookieCallback(std::move(callback), access_result);
-}
+//   // TODO(chlily): Log metrics.
+//   MaybeRunCookieCallback(std::move(callback), access_result);
+// }
 
-void CookieMonster::SetAllCookies(CookieList list,
-                                  SetCookiesCallback callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::SetAllCookies(CookieList list,
+//                                   SetCookiesCallback callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  // Nuke the existing store.
-  while (!cookies_.empty()) {
-    // TODO(rdsmith): The CANONICAL is a lie.
-    InternalDeleteCookie(cookies_.begin(), true, DELETE_COOKIE_EXPLICIT);
-  }
+//   // Nuke the existing store.
+//   while (!cookies_.empty()) {
+//     // TODO(rdsmith): The CANONICAL is a lie.
+//     InternalDeleteCookie(cookies_.begin(), true, DELETE_COOKIE_EXPLICIT);
+//   }
 
-  // Set all passed in cookies.
-  for (const auto& cookie : list) {
-    const std::string key(GetKey(cookie.Domain()));
-    Time creation_time = cookie.CreationDate();
-    if (cookie.IsExpired(creation_time))
-      continue;
+//   // Set all passed in cookies.
+//   for (const auto& cookie : list) {
+//     const std::string key(GetKey(cookie.Domain()));
+//     Time creation_time = cookie.CreationDate();
+//     if (cookie.IsExpired(creation_time))
+//       continue;
 
-    HistogramExpirationDuration(cookie, creation_time);
+//     HistogramExpirationDuration(cookie, creation_time);
 
-    CookieAccessResult access_result;
-    access_result.access_semantics = GetAccessSemanticsForCookie(cookie);
+//     CookieAccessResult access_result;
+//     access_result.access_semantics = GetAccessSemanticsForCookie(cookie);
 
-    if (cookie.IsPartitioned()) {
-      InternalInsertPartitionedCookie(
-          key, std::make_unique<CanonicalCookie>(cookie), true, access_result);
-      GarbageCollectPartitionedCookies(creation_time,
-                                       cookie.PartitionKey().value(), key);
-    } else {
-      InternalInsertCookie(key, std::make_unique<CanonicalCookie>(cookie), true,
-                           access_result);
-      GarbageCollect(creation_time, key);
-    }
-  }
+//     if (cookie.IsPartitioned()) {
+//       InternalInsertPartitionedCookie(
+//           key, std::make_unique<CanonicalCookie>(cookie), true, access_result);
+//       GarbageCollectPartitionedCookies(creation_time,
+//                                        cookie.PartitionKey().value(), key);
+//     } else {
+//       InternalInsertCookie(key, std::make_unique<CanonicalCookie>(cookie), true,
+//                            access_result);
+//       GarbageCollect(creation_time, key);
+//     }
+//   }
 
-  // TODO(rdsmith): If this function always returns the same value, it
-  // shouldn't have a return value.  But it should also be deleted (see
-  // https://codereview.chromium.org/2882063002/#msg64), which would
-  // solve the return value problem.
-  MaybeRunCookieCallback(std::move(callback), CookieAccessResult());
-}
+//   // TODO(rdsmith): If this function always returns the same value, it
+//   // shouldn't have a return value.  But it should also be deleted (see
+//   // https://codereview.chromium.org/2882063002/#msg64), which would
+//   // solve the return value problem.
+//   MaybeRunCookieCallback(std::move(callback), CookieAccessResult());
+// }
 
 void CookieMonster::InternalUpdateCookieAccessTime(CanonicalCookie* cc,
                                                    const Time& current) {

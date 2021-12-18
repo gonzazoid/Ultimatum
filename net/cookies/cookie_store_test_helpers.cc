@@ -35,7 +35,7 @@ std::string GetRegistry(const GURL& url) {
 
 namespace net {
 
-const int kDelayedTime = 0;
+// const int kDelayedTime = 0;
 
 DelayedCookieMonsterChangeDispatcher::DelayedCookieMonsterChangeDispatcher() =
     default;
@@ -89,23 +89,23 @@ void DelayedCookieMonster::GetCookieListWithOptionsInternalCallback(
   did_run_ = true;
 }
 
-void DelayedCookieMonster::SetCanonicalCookieAsync(
-    std::unique_ptr<CanonicalCookie> cookie,
-    const GURL& source_url,
-    const CookieOptions& options,
-    SetCookiesCallback callback) {
-  did_run_ = false;
-  cookie_monster_->SetCanonicalCookieAsync(
-      std::move(cookie), source_url, options,
-      base::BindOnce(&DelayedCookieMonster::SetCookiesInternalCallback,
-                     base::Unretained(this)));
-  DCHECK_EQ(did_run_, true);
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(&DelayedCookieMonster::InvokeSetCookiesCallback,
-                     base::Unretained(this), std::move(callback)),
-      base::Milliseconds(kDelayedTime));
-}
+// void DelayedCookieMonster::SetCanonicalCookieAsync(
+//     std::unique_ptr<CanonicalCookie> cookie,
+//     const GURL& source_url,
+//     const CookieOptions& options,
+//     SetCookiesCallback callback) {
+//   did_run_ = false;
+//   cookie_monster_->SetCanonicalCookieAsync(
+//       std::move(cookie), source_url, options,
+//       base::BindOnce(&DelayedCookieMonster::SetCookiesInternalCallback,
+//                      base::Unretained(this)));
+//   DCHECK_EQ(did_run_, true);
+//   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+//       FROM_HERE,
+//       base::BindOnce(&DelayedCookieMonster::InvokeSetCookiesCallback,
+//                      base::Unretained(this), std::move(callback)),
+//       base::Milliseconds(kDelayedTime));
+// }
 
 // void DelayedCookieMonster::GetCookieListWithOptionsAsync(
 //     const GURL& url,
@@ -130,11 +130,11 @@ void DelayedCookieMonster::SetCanonicalCookieAsync(
 //   cookie_monster_->GetAllCookiesAsync(std::move(callback));
 // }
 
-void DelayedCookieMonster::InvokeSetCookiesCallback(
-    CookieMonster::SetCookiesCallback callback) {
-  if (!callback.is_null())
-    std::move(callback).Run(result_);
-}
+// void DelayedCookieMonster::InvokeSetCookiesCallback(
+//     CookieMonster::SetCookiesCallback callback) {
+//   if (!callback.is_null())
+//     std::move(callback).Run(result_);
+// }
 
 // void DelayedCookieMonster::InvokeGetCookieListCallback(
 //     CookieMonster::GetCookieListCallback callback) {
