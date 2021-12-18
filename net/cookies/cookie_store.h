@@ -26,7 +26,7 @@ class GURL;
 
 namespace net {
 
-class CookieChangeDispatcher;
+// class CookieChangeDispatcher;
 
 // An interface for storing and retrieving cookies. Implementations are not
 // thread safe, as with most other net classes. All methods must be invoked on
@@ -160,7 +160,7 @@ class NET_EXPORT CookieStore {
   //   return cookie_access_delegate_.get();
   // }
 
- private:
+ // private:
   // Used to determine whether a particular cookie should be subject to legacy
   // or non-legacy access semantics.
   // std::unique_ptr<CookieAccessDelegate> cookie_access_delegate_;

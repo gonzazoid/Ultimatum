@@ -145,22 +145,22 @@ namespace net {
 
 // See comments at declaration of these variables in cookie_monster.h
 // for details.
-const size_t CookieMonster::kDomainMaxCookies = 180;
-const size_t CookieMonster::kDomainPurgeCookies = 30;
-const size_t CookieMonster::kMaxCookies = 3300;
-const size_t CookieMonster::kPurgeCookies = 300;
+// const size_t CookieMonster::kDomainMaxCookies = 180;
+// const size_t CookieMonster::kDomainPurgeCookies = 30;
+// const size_t CookieMonster::kMaxCookies = 3300;
+// const size_t CookieMonster::kPurgeCookies = 300;
 
-const size_t CookieMonster::kMaxDomainPurgedKeys = 100;
+// const size_t CookieMonster::kMaxDomainPurgedKeys = 100;
 
-const size_t CookieMonster::kPerPartitionDomainMaxCookies = 10;
+// const size_t CookieMonster::kPerPartitionDomainMaxCookies = 10;
 
-const size_t CookieMonster::kDomainCookiesQuotaLow = 30;
-const size_t CookieMonster::kDomainCookiesQuotaMedium = 50;
-const size_t CookieMonster::kDomainCookiesQuotaHigh =
-    kDomainMaxCookies - kDomainPurgeCookies - kDomainCookiesQuotaLow -
-    kDomainCookiesQuotaMedium;
+// const size_t CookieMonster::kDomainCookiesQuotaLow = 30;
+// const size_t CookieMonster::kDomainCookiesQuotaMedium = 50;
+// const size_t CookieMonster::kDomainCookiesQuotaHigh =
+//     kDomainMaxCookies - kDomainPurgeCookies - kDomainCookiesQuotaLow -
+//     kDomainCookiesQuotaMedium;
 
-const int CookieMonster::kSafeFromGlobalPurgeDays = 30;
+// const int CookieMonster::kSafeFromGlobalPurgeDays = 30;
 
 namespace {
 
@@ -205,18 +205,18 @@ void SortLeastRecentlyAccessed(CookieMonster::CookieItVector::iterator it_begin,
 // |cookie_its| into |secure_cookie_its| and all of the non-secure cookies into
 // |non_secure_cookie_its|. Both |secure_cookie_its| and |non_secure_cookie_its|
 // must be non-NULL.
-void SplitCookieVectorIntoSecureAndNonSecure(
-    const CookieMonster::CookieItVector& cookie_its,
-    CookieMonster::CookieItVector* secure_cookie_its,
-    CookieMonster::CookieItVector* non_secure_cookie_its) {
-  DCHECK(secure_cookie_its && non_secure_cookie_its);
-  for (const auto& curit : cookie_its) {
-    if (curit->second->IsSecure())
-      secure_cookie_its->push_back(curit);
-    else
-      non_secure_cookie_its->push_back(curit);
-  }
-}
+// void SplitCookieVectorIntoSecureAndNonSecure(
+//     const CookieMonster::CookieItVector& cookie_its,
+//     CookieMonster::CookieItVector* secure_cookie_its,
+//     CookieMonster::CookieItVector* non_secure_cookie_its) {
+//   DCHECK(secure_cookie_its && non_secure_cookie_its);
+//   for (const auto& curit : cookie_its) {
+//     if (curit->second->IsSecure())
+//       secure_cookie_its->push_back(curit);
+//     else
+//       non_secure_cookie_its->push_back(curit);
+//   }
+// }
 
 bool LowerBoundAccessDateComparator(const CookieMonster::CookieMap::iterator it,
                                     const Time& access_date) {
@@ -1788,33 +1788,33 @@ size_t CookieMonster::GarbageCollect(const Time& current,
   DCHECK(thread_checker_.CalledOnValidThread());
 
   size_t num_deleted = 0;
-  Time safe_date(Time::Now() - base::Days(kSafeFromGlobalPurgeDays));
+  // Time safe_date(Time::Now() - base::Days(kSafeFromGlobalPurgeDays));
 
   // Collect garbage for this key, minding cookie priorities.
-  if (cookies_.count(key) > kDomainMaxCookies) {
-    DVLOG(net::cookie_util::kVlogGarbageCollection)
-        << "GarbageCollect() key: " << key;
+  // if (cookies_.count(key) > kDomainMaxCookies) {
+  //   DVLOG(net::cookie_util::kVlogGarbageCollection)
+  //       << "GarbageCollect() key: " << key;
 
-    CookieItVector* cookie_its;
+  //   CookieItVector* cookie_its;
 
-    CookieItVector non_expired_cookie_its;
-    cookie_its = &non_expired_cookie_its;
-    num_deleted +=
-        GarbageCollectExpired(current, cookies_.equal_range(key), cookie_its);
+  //   CookieItVector non_expired_cookie_its;
+  //   cookie_its = &non_expired_cookie_its;
+  //   num_deleted +=
+  //       GarbageCollectExpired(current, cookies_.equal_range(key), cookie_its);
 
-    if (cookie_its->size() > kDomainMaxCookies) {
-      DVLOG(net::cookie_util::kVlogGarbageCollection)
-          << "Deep Garbage Collect domain.";
+  //   if (cookie_its->size() > kDomainMaxCookies) {
+  //     DVLOG(net::cookie_util::kVlogGarbageCollection)
+  //         << "Deep Garbage Collect domain.";
 
-      if (domain_purged_keys_.size() < kMaxDomainPurgedKeys)
-        domain_purged_keys_.insert(key);
+  //     if (domain_purged_keys_.size() < kMaxDomainPurgedKeys)
+  //       domain_purged_keys_.insert(key);
 
-      size_t purge_goal =
-          cookie_its->size() - (kDomainMaxCookies - kDomainPurgeCookies);
-      DCHECK(purge_goal > kDomainPurgeCookies);
+  //     size_t purge_goal =
+  //         cookie_its->size() - (kDomainMaxCookies - kDomainPurgeCookies);
+  //     DCHECK(purge_goal > kDomainPurgeCookies);
 
       // Sort the cookies by access date, from least-recent to most-recent.
-      std::sort(cookie_its->begin(), cookie_its->end(), LRACookieSorter);
+  //     std::sort(cookie_its->begin(), cookie_its->end(), LRACookieSorter);
 
       // Remove all but the kDomainCookiesQuotaLow most-recently accessed
       // cookies with low-priority. Then, if cookies still need to be removed,
@@ -1828,123 +1828,123 @@ size_t CookieMonster::GarbageCollect(const Time& current,
       // 4.  High-priority non-secure cookies.
       // 5.  Medium-priority secure cookies.
       // 6.  High-priority secure cookies.
-      constexpr struct {
-        CookiePriority priority;
-        bool protect_secure_cookies;
-      } kPurgeRounds[] = {
+  //     constexpr struct {
+  //       CookiePriority priority;
+  //       bool protect_secure_cookies;
+  //     } kPurgeRounds[] = {
           // 1.  Low-priority non-secure cookies.
-          {COOKIE_PRIORITY_LOW, true},
+  //         {COOKIE_PRIORITY_LOW, true},
           // 2.  Low-priority secure cookies.
-          {COOKIE_PRIORITY_LOW, false},
+  //         {COOKIE_PRIORITY_LOW, false},
           // 3.  Medium-priority non-secure cookies.
-          {COOKIE_PRIORITY_MEDIUM, true},
+  //         {COOKIE_PRIORITY_MEDIUM, true},
           // 4.  High-priority non-secure cookies.
-          {COOKIE_PRIORITY_HIGH, true},
+  //         {COOKIE_PRIORITY_HIGH, true},
           // 5.  Medium-priority secure cookies.
-          {COOKIE_PRIORITY_MEDIUM, false},
+  //         {COOKIE_PRIORITY_MEDIUM, false},
           // 6.  High-priority secure cookies.
-          {COOKIE_PRIORITY_HIGH, false},
-      };
+  //         {COOKIE_PRIORITY_HIGH, false},
+  //     };
 
-      size_t quota = 0;
-      for (const auto& purge_round : kPurgeRounds) {
+  //     size_t quota = 0;
+  //     for (const auto& purge_round : kPurgeRounds) {
         // Adjust quota according to the priority of cookies. Each round should
         // protect certain number of cookies in order to avoid starvation.
         // For example, when each round starts to remove cookies, the number of
         // cookies of that priority are counted and a decision whether they
         // should be deleted or not is made. If yes, some number of cookies of
         // that priority are deleted considering the quota.
-        switch (purge_round.priority) {
-          case COOKIE_PRIORITY_LOW:
-            quota = kDomainCookiesQuotaLow;
-            break;
-          case COOKIE_PRIORITY_MEDIUM:
-            quota = kDomainCookiesQuotaMedium;
-            break;
-          case COOKIE_PRIORITY_HIGH:
-            quota = kDomainCookiesQuotaHigh;
-            break;
-        }
-        size_t just_deleted = 0u;
+  //       switch (purge_round.priority) {
+  //         case COOKIE_PRIORITY_LOW:
+  //           quota = kDomainCookiesQuotaLow;
+  //           break;
+  //         case COOKIE_PRIORITY_MEDIUM:
+  //           quota = kDomainCookiesQuotaMedium;
+  //           break;
+  //         case COOKIE_PRIORITY_HIGH:
+  //           quota = kDomainCookiesQuotaHigh;
+  //           break;
+  //       }
+  //       size_t just_deleted = 0u;
         // Purge up to |purge_goal| for all cookies at the given priority.  This
         // path will be taken only if the initial non-secure purge did not evict
         // enough cookies.
-        if (purge_goal > 0) {
-          just_deleted = PurgeLeastRecentMatches(
-              cookie_its, purge_round.priority, quota, purge_goal,
-              purge_round.protect_secure_cookies);
-          DCHECK_LE(just_deleted, purge_goal);
-          purge_goal -= just_deleted;
-          num_deleted += just_deleted;
-        }
-      }
+  //       if (purge_goal > 0) {
+  //         just_deleted = PurgeLeastRecentMatches(
+  //             cookie_its, purge_round.priority, quota, purge_goal,
+  //             purge_round.protect_secure_cookies);
+  //         DCHECK_LE(just_deleted, purge_goal);
+  //         purge_goal -= just_deleted;
+  //         num_deleted += just_deleted;
+  //       }
+  //     }
 
-      DCHECK_EQ(0u, purge_goal);
-    }
-  }
+  //     DCHECK_EQ(0u, purge_goal);
+  //   }
+  // }
 
   // Collect garbage for everything. With firefox style we want to preserve
   // cookies accessed in kSafeFromGlobalPurgeDays, otherwise evict.
-  if (cookies_.size() > kMaxCookies && earliest_access_time_ < safe_date) {
-    DVLOG(net::cookie_util::kVlogGarbageCollection)
-        << "GarbageCollect() everything";
-    CookieItVector cookie_its;
+  // if (cookies_.size() > kMaxCookies && earliest_access_time_ < safe_date) {
+    // DVLOG(net::cookie_util::kVlogGarbageCollection)
+    //     << "GarbageCollect() everything";
+    // CookieItVector cookie_its;
 
-    num_deleted += GarbageCollectExpired(
-        current, CookieMapItPair(cookies_.begin(), cookies_.end()),
-        &cookie_its);
+    // num_deleted += GarbageCollectExpired(
+    //     current, CookieMapItPair(cookies_.begin(), cookies_.end()),
+    //     &cookie_its);
 
-    if (cookie_its.size() > kMaxCookies) {
-      DVLOG(net::cookie_util::kVlogGarbageCollection)
-          << "Deep Garbage Collect everything.";
-      size_t purge_goal = cookie_its.size() - (kMaxCookies - kPurgeCookies);
-      DCHECK(purge_goal > kPurgeCookies);
+    // if (cookie_its.size() > kMaxCookies) {
+      // DVLOG(net::cookie_util::kVlogGarbageCollection)
+      //     << "Deep Garbage Collect everything.";
+      // size_t purge_goal = cookie_its.size() - (kMaxCookies - kPurgeCookies);
+      // DCHECK(purge_goal > kPurgeCookies);
 
-      CookieItVector secure_cookie_its;
-      CookieItVector non_secure_cookie_its;
-      SplitCookieVectorIntoSecureAndNonSecure(cookie_its, &secure_cookie_its,
-                                              &non_secure_cookie_its);
-      size_t non_secure_purge_goal =
-          std::min<size_t>(purge_goal, non_secure_cookie_its.size());
+      // CookieItVector secure_cookie_its;
+      // CookieItVector non_secure_cookie_its;
+      // SplitCookieVectorIntoSecureAndNonSecure(cookie_its, &secure_cookie_its,
+      //                                         &non_secure_cookie_its);
+      // size_t non_secure_purge_goal =
+      //     std::min<size_t>(purge_goal, non_secure_cookie_its.size());
 
-      base::Time earliest_non_secure_access_time;
-      size_t just_deleted = GarbageCollectLeastRecentlyAccessed(
-          current, safe_date, non_secure_purge_goal, non_secure_cookie_its,
-          &earliest_non_secure_access_time);
-      num_deleted += just_deleted;
+      // base::Time earliest_non_secure_access_time;
+      // size_t just_deleted = GarbageCollectLeastRecentlyAccessed(
+      //     current, safe_date, non_secure_purge_goal, non_secure_cookie_its,
+      //     &earliest_non_secure_access_time);
+      // num_deleted += just_deleted;
 
-      if (secure_cookie_its.size() == 0) {
+      // if (secure_cookie_its.size() == 0) {
         // This case is unlikely, but should still update
         // |earliest_access_time_| if only have non-secure cookies.
-        earliest_access_time_ = earliest_non_secure_access_time;
+        // earliest_access_time_ = earliest_non_secure_access_time;
         // Garbage collection can't delete all cookies.
-        DCHECK(!earliest_access_time_.is_null());
-      } else if (just_deleted < purge_goal) {
-        size_t secure_purge_goal = std::min<size_t>(purge_goal - just_deleted,
-                                                    secure_cookie_its.size());
-        base::Time earliest_secure_access_time;
-        num_deleted += GarbageCollectLeastRecentlyAccessed(
-            current, safe_date, secure_purge_goal, secure_cookie_its,
-            &earliest_secure_access_time);
+        // DCHECK(!earliest_access_time_.is_null());
+      // } else if (just_deleted < purge_goal) {
+        // size_t secure_purge_goal = std::min<size_t>(purge_goal - just_deleted,
+        //                                             secure_cookie_its.size());
+        // base::Time earliest_secure_access_time;
+        // num_deleted += GarbageCollectLeastRecentlyAccessed(
+        //     current, safe_date, secure_purge_goal, secure_cookie_its,
+        //     &earliest_secure_access_time);
 
-        if (!earliest_non_secure_access_time.is_null() &&
-            earliest_non_secure_access_time < earliest_secure_access_time) {
-          earliest_access_time_ = earliest_non_secure_access_time;
-        } else {
-          earliest_access_time_ = earliest_secure_access_time;
-        }
+        // if (!earliest_non_secure_access_time.is_null() &&
+        //     earliest_non_secure_access_time < earliest_secure_access_time) {
+        //   earliest_access_time_ = earliest_non_secure_access_time;
+        // } else {
+        //   earliest_access_time_ = earliest_secure_access_time;
+        // }
 
         // Garbage collection can't delete all cookies.
-        DCHECK(!earliest_access_time_.is_null());
-      }
+        // DCHECK(!earliest_access_time_.is_null());
+      // }
 
       // If there are secure cookies, but deleting non-secure cookies was enough
       // to meet the purge goal, secure cookies are never examined, so
       // |earliest_access_time_| can't be determined. Leaving it alone will mean
       // it's no later than the real earliest last access time, so this won't
       // lead to any problems.
-    }
-  }
+    // }
+  // }
 
   return num_deleted;
 }
@@ -1956,37 +1956,37 @@ size_t CookieMonster::GarbageCollectPartitionedCookies(
   DCHECK(thread_checker_.CalledOnValidThread());
 
   size_t num_deleted = 0;
-  PartitionedCookieMap::iterator cookie_partition_it =
-      partitioned_cookies_.find(cookie_partition_key);
-  DCHECK(cookie_partition_it != partitioned_cookies_.end());
+  // PartitionedCookieMap::iterator cookie_partition_it =
+  //     partitioned_cookies_.find(cookie_partition_key);
+  // DCHECK(cookie_partition_it != partitioned_cookies_.end());
 
-  if (cookie_partition_it->second->count(key) > kPerPartitionDomainMaxCookies) {
+  // if (cookie_partition_it->second->count(key) > kPerPartitionDomainMaxCookies) {
     // TODO(crbug.com/1225444): Log garbage collection for partitioned cookies.
 
-    CookieItVector non_expired_cookie_its;
-    num_deleted += GarbageCollectExpiredPartitionedCookies(
-        current, cookie_partition_it,
-        cookie_partition_it->second->equal_range(key), &non_expired_cookie_its);
+    // CookieItVector non_expired_cookie_its;
+    // num_deleted += GarbageCollectExpiredPartitionedCookies(
+    //     current, cookie_partition_it,
+    //     cookie_partition_it->second->equal_range(key), &non_expired_cookie_its);
 
-    if (non_expired_cookie_its.size() > kPerPartitionDomainMaxCookies) {
+    // if (non_expired_cookie_its.size() > kPerPartitionDomainMaxCookies) {
       // TODO(crbug.com/1225444): Log deep garbage collection for partitioned
       // cookies.
 
       // For now, just delete the least recently accessed partition cookies
       // until we are under the per-partition domain limit. All partitioned
       // cookies are Secure since they require the __Host- prefix.
-      std::sort(non_expired_cookie_its.begin(), non_expired_cookie_its.end(),
-                LRACookieSorter);
-      for (size_t i = 0;
-           i < (non_expired_cookie_its.size() - kPerPartitionDomainMaxCookies);
-           ++i) {
-        InternalDeletePartitionedCookie(
-            cookie_partition_it, non_expired_cookie_its[i], true,
-            DELETE_COOKIE_EVICTED_PER_PARTITION_DOMAIN);
-        ++num_deleted;
-      }
-    }
-  }
+      // std::sort(non_expired_cookie_its.begin(), non_expired_cookie_its.end(),
+      //           LRACookieSorter);
+      // for (size_t i = 0;
+      //      i < (non_expired_cookie_its.size() - kPerPartitionDomainMaxCookies);
+      //      ++i) {
+      //   InternalDeletePartitionedCookie(
+      //       cookie_partition_it, non_expired_cookie_its[i], true,
+      //       DELETE_COOKIE_EVICTED_PER_PARTITION_DOMAIN);
+      //   ++num_deleted;
+      // }
+    // }
+  // }
 
   // TODO(crbug.com/1225444): Enforce global limit on partitioned cookies.
 

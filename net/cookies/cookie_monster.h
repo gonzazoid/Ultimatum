@@ -37,7 +37,7 @@
 
 namespace net {
 
-class CookieChangeDispatcher;
+// class CookieChangeDispatcher;
 
 // The cookie monster is the system for storing and retrieving cookies. It has
 // an in-memory list of all cookies, and synchronizes non-session cookies to an
@@ -127,26 +127,26 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Any cookies accessed more recently than kSafeFromGlobalPurgeDays will not
   // be evicted by global garbage collection, even if we have more than
   // kMaxCookies.  This does not affect domain garbage collection.
-  static const size_t kDomainMaxCookies;
-  static const size_t kDomainPurgeCookies;
-  static const size_t kMaxCookies;
-  static const size_t kPurgeCookies;
+  // static const size_t kDomainMaxCookies;
+  // static const size_t kDomainPurgeCookies;
+  // static const size_t kMaxCookies;
+  // static const size_t kPurgeCookies;
 
   // Max number of keys to store for domains that have been purged.
-  static const size_t kMaxDomainPurgedKeys;
+  // static const size_t kMaxDomainPurgedKeys;
 
   // Partitioned cookie garbage collection thresholds.
-  static const size_t kPerPartitionDomainMaxCookies;
+  // static const size_t kPerPartitionDomainMaxCookies;
   // TODO(crbug.com/1225444): Add global limit to number of partitioned cookies.
 
   // Quota for cookies with {low, medium, high} priorities within a domain.
-  static const size_t kDomainCookiesQuotaLow;
-  static const size_t kDomainCookiesQuotaMedium;
-  static const size_t kDomainCookiesQuotaHigh;
+  // static const size_t kDomainCookiesQuotaLow;
+  // static const size_t kDomainCookiesQuotaMedium;
+  // static const size_t kDomainCookiesQuotaHigh;
 
   // The number of days since last access that cookies will not be subject
   // to global garbage collection.
-  static const int kSafeFromGlobalPurgeDays;
+  // static const int kSafeFromGlobalPurgeDays;
 
   // The store passed in should not have had Init() called on it yet. This
   // class will take care of initializing it. The backing store is NOT owned by
