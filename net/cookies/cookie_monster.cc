@@ -392,12 +392,12 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
 //   }
 // }
 
-void CookieMonster::SetForceKeepSessionState() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::SetForceKeepSessionState() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  if (store_)
-    store_->SetForceKeepSessionState();
-}
+//   if (store_)
+//     store_->SetForceKeepSessionState();
+// }
 
 // void CookieMonster::SetAllCookiesAsync(const CookieList& list,
 //                                        SetCookiesCallback callback) {
