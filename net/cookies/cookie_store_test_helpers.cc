@@ -109,24 +109,24 @@ void DelayedCookieMonster::SetCanonicalCookieAsync(
       base::Milliseconds(kDelayedTime));
 }
 
-void DelayedCookieMonster::GetCookieListWithOptionsAsync(
-    const GURL& url,
-    const CookieOptions& options,
-    const CookiePartitionKeyCollection& cookie_partition_key_collection,
-    CookieMonster::GetCookieListCallback callback) {
-  did_run_ = false;
-  cookie_monster_->GetCookieListWithOptionsAsync(
-      url, options, cookie_partition_key_collection,
-      base::BindOnce(
-          &DelayedCookieMonster::GetCookieListWithOptionsInternalCallback,
-          base::Unretained(this)));
-  DCHECK_EQ(did_run_, true);
-  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(&DelayedCookieMonster::InvokeGetCookieListCallback,
-                     base::Unretained(this), std::move(callback)),
-      base::Milliseconds(kDelayedTime));
-}
+// void DelayedCookieMonster::GetCookieListWithOptionsAsync(
+//     const GURL& url,
+//     const CookieOptions& options,
+//     const CookiePartitionKeyCollection& cookie_partition_key_collection,
+//     CookieMonster::GetCookieListCallback callback) {
+//   did_run_ = false;
+//   cookie_monster_->GetCookieListWithOptionsAsync(
+//       url, options, cookie_partition_key_collection,
+//       base::BindOnce(
+//           &DelayedCookieMonster::GetCookieListWithOptionsInternalCallback,
+//           base::Unretained(this)));
+//   DCHECK_EQ(did_run_, true);
+//   base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+//       FROM_HERE,
+//       base::BindOnce(&DelayedCookieMonster::InvokeGetCookieListCallback,
+//                      base::Unretained(this), std::move(callback)),
+//       base::Milliseconds(kDelayedTime));
+// }
 
 void DelayedCookieMonster::GetAllCookiesAsync(GetAllCookiesCallback callback) {
   cookie_monster_->GetAllCookiesAsync(std::move(callback));

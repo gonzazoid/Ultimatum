@@ -78,11 +78,11 @@ class NET_EXPORT CookieStore {
   // return the partitioned cookies for that URL whose partition keys are in the
   // cookie_partition_key_collection *in addition to* the unpartitioned cookies
   // for that URL.
-  virtual void GetCookieListWithOptionsAsync(
-      const GURL& url,
-      const CookieOptions& options,
-      const CookiePartitionKeyCollection& cookie_partition_key_collection,
-      GetCookieListCallback callback) = 0;
+  // virtual void GetCookieListWithOptionsAsync(
+  //     const GURL& url,
+  //     const CookieOptions& options,
+  //     const CookiePartitionKeyCollection& cookie_partition_key_collection,
+  //     GetCookieListCallback callback) = 0;
 
   // Returns all the cookies, for use in management UI, etc. This does not mark
   // the cookies as having been accessed. The returned cookies are ordered by
