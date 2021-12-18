@@ -244,10 +244,10 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForSet(
   return MakeSameSiteCookieContext(result, schemeful_result);
 }
 
-bool CookieWithAccessResultSorter(const CookieWithAccessResult& a,
-                                  const CookieWithAccessResult& b) {
-  return CookieMonster::CookieSorter(&a.cookie, &b.cookie);
-}
+// bool CookieWithAccessResultSorter(const CookieWithAccessResult& a,
+//                                   const CookieWithAccessResult& b) {
+//   return CookieMonster::CookieSorter(&a.cookie, &b.cookie);
+// }
 
 }  // namespace
 
@@ -847,8 +847,8 @@ NET_EXPORT void DCheckIncludedAndExcludedCookieLists(
                                }));
 
   // Check that the included cookies are still in the correct order.
-  DCHECK(
-      base::ranges::is_sorted(included_cookies, CookieWithAccessResultSorter));
+  // DCHECK(
+  //     base::ranges::is_sorted(included_cookies, CookieWithAccessResultSorter));
 }
 
 }  // namespace cookie_util

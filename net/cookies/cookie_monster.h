@@ -219,8 +219,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   static std::string GetKey(base::StringPiece domain);
 
   // Exposes the comparison function used when sorting cookies.
-  static bool CookieSorter(const CanonicalCookie* cc1,
-                           const CanonicalCookie* cc2);
+  // static bool CookieSorter(const CanonicalCookie* cc1,
+  //                         const CanonicalCookie* cc2);
 
   // Triggers immediate recording of stats that are typically reported
   // periodically.
@@ -264,44 +264,44 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // the CookieChangeCause mapping inside ChangeCauseMapping. New items (if
   // necessary) should be added at the end of the list, just before
   // DELETE_COOKIE_LAST_ENTRY.
-  enum DeletionCause {
-    DELETE_COOKIE_EXPLICIT = 0,
-    DELETE_COOKIE_OVERWRITE = 1,
-    DELETE_COOKIE_EXPIRED = 2,
-    DELETE_COOKIE_EVICTED = 3,
-    DELETE_COOKIE_DUPLICATE_IN_BACKING_STORE = 4,
-    DELETE_COOKIE_DONT_RECORD = 5,  // For final cleanup after flush to store.
+  // enum DeletionCause {
+  //   DELETE_COOKIE_EXPLICIT = 0,
+  //   DELETE_COOKIE_OVERWRITE = 1,
+  //   DELETE_COOKIE_EXPIRED = 2,
+  //   DELETE_COOKIE_EVICTED = 3,
+  //   DELETE_COOKIE_DUPLICATE_IN_BACKING_STORE = 4,
+  //   DELETE_COOKIE_DONT_RECORD = 5,  // For final cleanup after flush to store.
 
     // Cookies evicted during domain-level garbage collection.
-    DELETE_COOKIE_EVICTED_DOMAIN = 6,
+  //   DELETE_COOKIE_EVICTED_DOMAIN = 6,
 
     // Cookies evicted during global garbage collection, which takes place after
     // domain-level garbage collection fails to bring the cookie store under
     // the overall quota.
-    DELETE_COOKIE_EVICTED_GLOBAL = 7,
+  //   DELETE_COOKIE_EVICTED_GLOBAL = 7,
 
     // #8 was DELETE_COOKIE_EVICTED_DOMAIN_PRE_SAFE
     // #9 was DELETE_COOKIE_EVICTED_DOMAIN_POST_SAFE
 
     // A common idiom is to remove a cookie by overwriting it with an
     // already-expired expiration date. This captures that case.
-    DELETE_COOKIE_EXPIRED_OVERWRITE = 10,
+  //   DELETE_COOKIE_EXPIRED_OVERWRITE = 10,
 
     // Cookies are not allowed to contain control characters in the name or
     // value. However, we used to allow them, so we are now evicting any such
     // cookies as we load them. See http://crbug.com/238041.
-    DELETE_COOKIE_CONTROL_CHAR = 11,
+  //   DELETE_COOKIE_CONTROL_CHAR = 11,
 
     // When strict secure cookies is enabled, non-secure cookies are evicted
     // right after expired cookies.
-    DELETE_COOKIE_NON_SECURE = 12,
+  //   DELETE_COOKIE_NON_SECURE = 12,
 
     // Partitioned cookies evicted during per-partition domain-level garbage
     // collection.
-    DELETE_COOKIE_EVICTED_PER_PARTITION_DOMAIN = 13,
+  //   DELETE_COOKIE_EVICTED_PER_PARTITION_DOMAIN = 13,
 
-    DELETE_COOKIE_LAST_ENTRY = 14,
-  };
+  //   DELETE_COOKIE_LAST_ENTRY = 14,
+  // };
 
   // This enum is used to generate a histogramed bitmask measureing the types
   // of stored cookies. Please do not reorder the list when adding new entries.
@@ -544,9 +544,9 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // |deletion_cause| argument is used for collecting statistics and choosing
   // the correct CookieChangeCause for OnCookieChange notifications. Guarantee:
   // All iterators to cookies_, except for the deleted entry, remain valid.
-  void InternalDeleteCookie(CookieMap::iterator it,
-                            bool sync_to_store,
-                            DeletionCause deletion_cause);
+  // void InternalDeleteCookie(CookieMap::iterator it,
+  //                           bool sync_to_store,
+  //                           DeletionCause deletion_cause);
 
   // Deletes a Partitioned cookie. Returns true if the deletion operation
   // resulted in the CookieMap the cookie was stored in was deleted.
@@ -554,11 +554,11 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // If the CookieMap which contains the deleted cookie only has one entry, then
   // this function will also delete the CookieMap from PartitionedCookieMap.
   // This may invalidate the |cookie_partition_it| argument.
-  void InternalDeletePartitionedCookie(
-      PartitionedCookieMap::iterator partition_it,
-      CookieMap::iterator cookie_it,
-      bool sync_to_store,
-      DeletionCause deletion_cause);
+  // void InternalDeletePartitionedCookie(
+  //     PartitionedCookieMap::iterator partition_it,
+  //     CookieMap::iterator cookie_it,
+  //     bool sync_to_store,
+  //     DeletionCause deletion_cause);
 
   // If the number of cookies for CookieMap key |key|, or globally, are
   // over the preset maximums above, garbage collect, first for the host and
@@ -621,10 +621,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Helper for GarbageCollect(). Deletes all cookies in the range specified by
   // [|it_begin|, |it_end|). Returns the number of cookies deleted.
-  size_t GarbageCollectDeleteRange(const base::Time& current,
-                                   DeletionCause cause,
-                                   CookieItVector::iterator cookie_its_begin,
-                                   CookieItVector::iterator cookie_its_end);
+  // size_t GarbageCollectDeleteRange(const base::Time& current,
+  //                                  DeletionCause cause,
+  //                                  CookieItVector::iterator cookie_its_begin,
+  //                                  CookieItVector::iterator cookie_its_end);
 
   // Helper for GarbageCollect(). Deletes cookies in |cookie_its| from least to
   // most recently used, but only before |safe_date|. Also will stop deleting
