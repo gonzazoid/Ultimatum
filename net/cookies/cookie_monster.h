@@ -184,8 +184,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //                                    const CookiePartitionKeyCollection& s,
   //                                    GetCookieListCallback callback) override;
   // void GetAllCookiesAsync(GetAllCookiesCallback callback) override;
-  void GetAllCookiesWithAccessSemanticsAsync(
-      GetAllCookiesWithAccessSemanticsCallback callback) override;
+  // void GetAllCookiesWithAccessSemanticsAsync(
+  //     GetAllCookiesWithAccessSemanticsCallback callback) override;
   void DeleteCanonicalCookieAsync(const CanonicalCookie& cookie,
                                   DeleteCallback callback) override;
   void DeleteAllCreatedInTimeRangeAsync(
