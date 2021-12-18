@@ -87,7 +87,7 @@ class DelayedCookieMonster : public CookieStore {
 
   // void FlushStore(base::OnceClosure callback) override;
 
-  CookieChangeDispatcher& GetChangeDispatcher() override;
+  // CookieChangeDispatcher& GetChangeDispatcher() override;
 
   // void SetCookieableSchemes(const std::vector<std::string>& schemes,
   //                           SetCookieableSchemesCallback callback) override;
@@ -112,7 +112,7 @@ class DelayedCookieMonster : public CookieStore {
   friend class base::RefCountedThreadSafe<DelayedCookieMonster>;
 
   std::unique_ptr<CookieMonster> cookie_monster_;
-  DelayedCookieMonsterChangeDispatcher change_dispatcher_;
+  // DelayedCookieMonsterChangeDispatcher change_dispatcher_;
 
   bool did_run_;
   CookieAccessResult result_;

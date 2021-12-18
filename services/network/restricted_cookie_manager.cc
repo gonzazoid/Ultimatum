@@ -229,16 +229,16 @@ class RestrictedCookieManager::Listener : public base::LinkNode<Listener> {
         options_(options),
         mojo_listener_(std::move(mojo_listener)) {
     // TODO(pwnall): add a constructor w/options to net::CookieChangeDispatcher.
-    cookie_store_subscription_ =
-        cookie_store->GetChangeDispatcher().AddCallbackForUrl(
-            url, cookie_partition_key,
-            base::BindRepeating(
-                &Listener::OnCookieChange,
+    // cookie_store_subscription_ =
+    //     cookie_store->GetChangeDispatcher().AddCallbackForUrl(
+    //         url, cookie_partition_key,
+    //         base::BindRepeating(
+    //             &Listener::OnCookieChange,
                 // Safe because net::CookieChangeDispatcher guarantees that
                 // the callback will stop being called immediately after we
                 // remove the subscription, and the cookie store lives on
                 // the same thread as we do.
-                base::Unretained(this)));
+    //             base::Unretained(this)));
   }
 
   Listener(const Listener&) = delete;
@@ -292,7 +292,7 @@ class RestrictedCookieManager::Listener : public base::LinkNode<Listener> {
   // const net::CookieStore* cookie_store_;
 
   // The CookieChangeDispatcher subscription used by this listener.
-  std::unique_ptr<net::CookieChangeSubscription> cookie_store_subscription_;
+  // std::unique_ptr<net::CookieChangeSubscription> cookie_store_subscription_;
 
   // Raw pointer usage is safe because RestrictedCookieManager owns this
   // instance and is guaranteed to outlive it.

@@ -343,7 +343,7 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
                              NetLog* net_log)
     : num_keys_(0u),
       num_partitioned_cookies_(0u),
-      change_dispatcher_(this),
+      // change_dispatcher_(this),
       initialized_(false),
       started_fetching_all_cookies_(false),
       finished_fetching_all_cookies_(false),
@@ -536,9 +536,9 @@ const char* const CookieMonster::kDefaultCookieableSchemes[] = {"http", "https",
 const int CookieMonster::kDefaultCookieableSchemesCount =
     base::size(kDefaultCookieableSchemes);
 
-CookieChangeDispatcher& CookieMonster::GetChangeDispatcher() {
-  return change_dispatcher_;
-}
+// CookieChangeDispatcher& CookieMonster::GetChangeDispatcher() {
+//   return change_dispatcher_;
+// }
 
 CookieMonster::~CookieMonster() {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -1385,11 +1385,11 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
   LogCookieTypeToUMA(cc_ptr, access_result);
 
   DCHECK(access_result.status.IsInclude());
-  if (dispatch_change) {
-    change_dispatcher_.DispatchChange(
-        CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
-        true);
-  }
+  // if (dispatch_change) {
+  //   change_dispatcher_.DispatchChange(
+  //       CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
+  //       true);
+  // }
 
   // If this is the first cookie in |cookies_| with this key, increment the
   // |num_keys_| counter.
@@ -1462,11 +1462,11 @@ CookieMonster::InternalInsertPartitionedCookie(
   LogCookieTypeToUMA(cc_ptr, access_result);
 
   DCHECK(access_result.status.IsInclude());
-  if (dispatch_change) {
-    change_dispatcher_.DispatchChange(
-        CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
-        true);
-  }
+  // if (dispatch_change) {
+  //   change_dispatcher_.DispatchChange(
+  //       CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
+  //       true);
+  // }
 
   return std::make_pair(partition_it, cookie_it);
 }
@@ -1711,15 +1711,15 @@ void CookieMonster::InternalDeleteCookie(CookieMap::iterator it,
   if (ShouldUpdatePersistentStore(cc) && sync_to_store)
     store_->DeleteCookie(*cc);
 
-  change_dispatcher_.DispatchChange(
-      CookieChangeInfo(
-          *cc,
-          CookieAccessResult(CookieEffectiveSameSite::UNDEFINED,
-                             CookieInclusionStatus(),
-                             GetAccessSemanticsForCookie(*cc),
-                             true /* is_allowed_to_access_secure_cookies */),
-          mapping.cause),
-      mapping.notify);
+  // change_dispatcher_.DispatchChange(
+  //     CookieChangeInfo(
+  //         *cc,
+  //         CookieAccessResult(CookieEffectiveSameSite::UNDEFINED,
+  //                            CookieInclusionStatus(),
+  //                            GetAccessSemanticsForCookie(*cc),
+  //                            true /* is_allowed_to_access_secure_cookies */),
+  //         mapping.cause),
+  //     mapping.notify);
 
   // If this is the last cookie in |cookies_| with this key, decrement the
   // |num_keys_| counter.
@@ -1764,15 +1764,15 @@ void CookieMonster::InternalDeletePartitionedCookie(
   if (ShouldUpdatePersistentStore(cc) && sync_to_store)
     store_->DeleteCookie(*cc);
 
-  change_dispatcher_.DispatchChange(
-      CookieChangeInfo(
-          *cc,
-          CookieAccessResult(CookieEffectiveSameSite::UNDEFINED,
-                             CookieInclusionStatus(),
-                             GetAccessSemanticsForCookie(*cc),
-                             true /* is_allowed_to_access_secure_cookies */),
-          mapping.cause),
-      mapping.notify);
+  // change_dispatcher_.DispatchChange(
+  //     CookieChangeInfo(
+  //         *cc,
+  //         CookieAccessResult(CookieEffectiveSameSite::UNDEFINED,
+  //                            CookieInclusionStatus(),
+  //                            GetAccessSemanticsForCookie(*cc),
+  //                            true /* is_allowed_to_access_secure_cookies */),
+  //         mapping.cause),
+  //     mapping.notify);
 
   partition_it->second->erase(cookie_it);
   --num_partitioned_cookies_;

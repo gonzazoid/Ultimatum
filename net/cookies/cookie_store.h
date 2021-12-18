@@ -141,7 +141,7 @@ class NET_EXPORT CookieStore {
   // virtual void SetForceKeepSessionState();
 
   // The interface used to observe changes to this CookieStore's contents.
-  virtual CookieChangeDispatcher& GetChangeDispatcher() = 0;
+  // virtual CookieChangeDispatcher& GetChangeDispatcher() = 0;
 
   // Resets the list of cookieable schemes to the supplied schemes. Does nothing
   // (and returns false) if called after first use of the instance (i.e. after

@@ -174,9 +174,9 @@ void DelayedCookieMonster::GetCookieListWithOptionsInternalCallback(
 //   ADD_FAILURE();
 // }
 
-CookieChangeDispatcher& DelayedCookieMonster::GetChangeDispatcher() {
-  return change_dispatcher_;
-}
+// CookieChangeDispatcher& DelayedCookieMonster::GetChangeDispatcher() {
+//   return change_dispatcher_;
+// }
 
 // void DelayedCookieMonster::SetCookieableSchemes(
 //     const std::vector<std::string>& schemes,
