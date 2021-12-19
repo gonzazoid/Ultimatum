@@ -101,7 +101,7 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
   void LoadCookiesForKey(const std::string& key,
                          LoadedCallback loaded_callback) override;
 
-  void AddCookie(const CanonicalCookie& cookie) override;
+  // void AddCookie(const CanonicalCookie& cookie) override;
 
   void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
 
@@ -154,7 +154,7 @@ class MockSimplePersistentCookieStore
   void LoadCookiesForKey(const std::string& key,
                          LoadedCallback loaded_callback) override;
 
-  void AddCookie(const CanonicalCookie& cookie) override;
+  // void AddCookie(const CanonicalCookie& cookie) override;
 
   void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
 

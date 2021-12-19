@@ -76,9 +76,9 @@ void MockPersistentCookieStore::LoadCookiesForKey(
   }
 }
 
-void MockPersistentCookieStore::AddCookie(const CanonicalCookie& cookie) {
-  commands_.push_back(CookieStoreCommand(CookieStoreCommand::ADD, cookie));
-}
+// void MockPersistentCookieStore::AddCookie(const CanonicalCookie& cookie) {
+//   commands_.push_back(CookieStoreCommand(CookieStoreCommand::ADD, cookie));
+// }
 
 void MockPersistentCookieStore::UpdateCookieAccessTime(
     const CanonicalCookie& cookie) {
@@ -166,11 +166,11 @@ void MockSimplePersistentCookieStore::LoadCookiesForKey(
   }
 }
 
-void MockSimplePersistentCookieStore::AddCookie(const CanonicalCookie& cookie) {
-  const auto& key = cookie.UniqueKey();
-  EXPECT_TRUE(cookies_.find(key) == cookies_.end());
-  cookies_[key] = cookie;
-}
+// void MockSimplePersistentCookieStore::AddCookie(const CanonicalCookie& cookie) {
+//   const auto& key = cookie.UniqueKey();
+//   EXPECT_TRUE(cookies_.find(key) == cookies_.end());
+//   cookies_[key] = cookie;
+// }
 
 void MockSimplePersistentCookieStore::UpdateCookieAccessTime(
     const CanonicalCookie& cookie) {
@@ -237,7 +237,7 @@ std::unique_ptr<CookieMonster> CreateMonsterFromStoreForGC(
             creation_time, expiration_time, base::Time(), secure, false,
             CookieSameSite::NO_RESTRICTION, COOKIE_PRIORITY_DEFAULT, false);
     cc->SetLastAccessDate(last_access_time);
-    store->AddCookie(*cc);
+    // store->AddCookie(*cc);
   }
 
   return std::make_unique<CookieMonster>(store.get(), nullptr);
