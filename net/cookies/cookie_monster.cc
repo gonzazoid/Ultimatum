@@ -522,14 +522,14 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
 // }
 
 // This function must be called before the CookieMonster is used.
-void CookieMonster::SetPersistSessionCookies(bool persist_session_cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK(!initialized_);
+// void CookieMonster::SetPersistSessionCookies(bool persist_session_cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   DCHECK(!initialized_);
   // net_log_.AddEntryWithBoolParams(
   //     NetLogEventType::COOKIE_STORE_SESSION_PERSISTENCE, NetLogEventPhase::NONE,
   //     "persistence", persist_session_cookies);
   // persist_session_cookies_ = persist_session_cookies;
-}
+// }
 
 const char* const CookieMonster::kDefaultCookieableSchemes[] = {"http", "https",
                                                                 "ws", "wss"};

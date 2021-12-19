@@ -206,7 +206,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Enables writing session cookies into the cookie database. If this this
   // method is called, it must be called before first use of the instance
   // (i.e. as part of the instance initialization process).
-  void SetPersistSessionCookies(bool persist_session_cookies);
+  // void SetPersistSessionCookies(bool persist_session_cookies);
 
   // The default list of schemes the cookie monster can handle.
   static const char* const kDefaultCookieableSchemes[];
