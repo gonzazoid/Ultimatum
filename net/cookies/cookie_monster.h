@@ -727,7 +727,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // for typical use.
   bool seen_global_task_;
 
-  NetLogWithSource net_log_;
+  // NetLogWithSource net_log_;
 
   scoped_refptr<PersistentCookieStore> store_;
 

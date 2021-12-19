@@ -348,7 +348,7 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
       started_fetching_all_cookies_(false),
       finished_fetching_all_cookies_(false),
       seen_global_task_(false),
-      net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
+      // net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
       store_(std::move(store)),
       last_access_threshold_(last_access_threshold),
       last_statistic_record_time_(base::Time::Now()),
@@ -356,9 +356,9 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
   cookieable_schemes_.insert(
       cookieable_schemes_.begin(), kDefaultCookieableSchemes,
       kDefaultCookieableSchemes + kDefaultCookieableSchemesCount);
-  net_log_.BeginEvent(NetLogEventType::COOKIE_STORE_ALIVE, [&] {
-    return NetLogCookieMonsterConstructorParams(store != nullptr);
-  });
+  // net_log_.BeginEvent(NetLogEventType::COOKIE_STORE_ALIVE, [&] {
+  //   return NetLogCookieMonsterConstructorParams(store != nullptr);
+  // });
 }
 
 // Asynchronous CookieMonster API
@@ -525,9 +525,9 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
 void CookieMonster::SetPersistSessionCookies(bool persist_session_cookies) {
   DCHECK(thread_checker_.CalledOnValidThread());
   DCHECK(!initialized_);
-  net_log_.AddEntryWithBoolParams(
-      NetLogEventType::COOKIE_STORE_SESSION_PERSISTENCE, NetLogEventPhase::NONE,
-      "persistence", persist_session_cookies);
+  // net_log_.AddEntryWithBoolParams(
+  //     NetLogEventType::COOKIE_STORE_SESSION_PERSISTENCE, NetLogEventPhase::NONE,
+  //     "persistence", persist_session_cookies);
   persist_session_cookies_ = persist_session_cookies;
 }
 
@@ -542,7 +542,7 @@ const int CookieMonster::kDefaultCookieableSchemesCount =
 
 CookieMonster::~CookieMonster() {
   DCHECK(thread_checker_.CalledOnValidThread());
-  net_log_.EndEvent(NetLogEventType::COOKIE_STORE_ALIVE);
+  // net_log_.EndEvent(NetLogEventType::COOKIE_STORE_ALIVE);
 }
 
 // static
@@ -849,19 +849,20 @@ void CookieMonster::FetchAllCookies() {
 
   // We bind in the current time so that we can report the wall-clock time for
   // loading cookies.
-  store_->Load(base::BindOnce(&CookieMonster::OnLoaded,
-                              weak_ptr_factory_.GetWeakPtr(), TimeTicks::Now()),
-               net_log_);
+  // store_->Load(base::BindOnce(&CookieMonster::OnLoaded,
+  //                             weak_ptr_factory_.GetWeakPtr(), TimeTicks::Now()),
+  //              net_log_);
+  OnLoaded(TimeTicks::Now(), {});
 }
 
 void CookieMonster::OnLoaded(
     TimeTicks beginning_time,
     std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  StoreLoadedCookies(std::move(cookies));
-  base::UmaHistogramCustomTimes("Cookie.TimeBlockedOnLoad",
-                                base::TimeTicks::Now() - beginning_time,
-                                base::Milliseconds(1), base::Minutes(1), 50);
+  // StoreLoadedCookies(std::move(cookies));
+  // base::UmaHistogramCustomTimes("Cookie.TimeBlockedOnLoad",
+  //                               base::TimeTicks::Now() - beginning_time,
+  //                               base::Milliseconds(1), base::Minutes(1), 50);
 
   // Invoke the task queue of cookie request.
   InvokeQueue();
@@ -1373,11 +1374,11 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
   DCHECK(thread_checker_.CalledOnValidThread());
   // CanonicalCookie* cc_ptr = cc.get();
 
-  net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
-                    [&](NetLogCaptureMode capture_mode) {
-                      return NetLogCookieMonsterCookieAdded(
-                          cc.get(), sync_to_store, capture_mode);
-                    });
+  // net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
+  //                   [&](NetLogCaptureMode capture_mode) {
+  //                     return NetLogCookieMonsterCookieAdded(
+  //                         cc.get(), sync_to_store, capture_mode);
+  //                   });
   // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
   //   store_->AddCookie(*cc_ptr);
   auto inserted = cookies_.insert(CookieMap::value_type(key, std::move(cc)));
@@ -1436,11 +1437,11 @@ CookieMonster::InternalInsertPartitionedCookie(
   DCHECK(thread_checker_.CalledOnValidThread());
   // CanonicalCookie* cc_ptr = cc.get();
 
-  net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
-                    [&](NetLogCaptureMode capture_mode) {
-                      return NetLogCookieMonsterCookieAdded(
-                          cc.get(), sync_to_store, capture_mode);
-                    });
+  // net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
+  //                   [&](NetLogCaptureMode capture_mode) {
+  //                     return NetLogCookieMonsterCookieAdded(
+  //                         cc.get(), sync_to_store, capture_mode);
+  //                   });
   // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
   //   store_->AddCookie(*cc_ptr);
 
