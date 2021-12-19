@@ -777,8 +777,8 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
   // |loaded_callback| may not be NULL.
   // |net_log| is a NetLogWithSource that may be copied if the persistent
   // store wishes to log NetLog events.
-  virtual void Load(LoadedCallback loaded_callback,
-                    const NetLogWithSource& net_log) = 0;
+  // virtual void Load(LoadedCallback loaded_callback,
+  //                   const NetLogWithSource& net_log) = 0;
 
   // Does a priority load of all cookies for the domain key (eTLD+1). The
   // callback will return all the cookies that are not yet returned by previous

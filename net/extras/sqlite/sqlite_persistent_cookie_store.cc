@@ -264,7 +264,7 @@ class SQLitePersistentCookieStore::Backend
   Backend& operator=(const Backend&) = delete;
 
   // Creates or loads the SQLite database.
-  void Load(LoadedCallback loaded_callback);
+  // void Load(LoadedCallback loaded_callback);
 
   // Loads cookies for the domain key (eTLD+1).
   void LoadCookiesForKey(const std::string& domain,
@@ -689,12 +689,12 @@ bool CreateV16Schema(sql::Database* db) {
 
 }  // namespace
 
-void SQLitePersistentCookieStore::Backend::Load(
-    LoadedCallback loaded_callback) {
-  PostBackgroundTask(
-      FROM_HERE, base::BindOnce(&Backend::LoadAndNotifyInBackground, this,
-                                std::move(loaded_callback), base::Time::Now()));
-}
+// void SQLitePersistentCookieStore::Backend::Load(
+//     LoadedCallback loaded_callback) {
+//   PostBackgroundTask(
+//       FROM_HERE, base::BindOnce(&Backend::LoadAndNotifyInBackground, this,
+//                                 std::move(loaded_callback), base::Time::Now()));
+// }
 
 void SQLitePersistentCookieStore::Backend::LoadCookiesForKey(
     const std::string& key,
@@ -1641,19 +1641,19 @@ void SQLitePersistentCookieStore::DeleteAllInList(
   backend_->DeleteAllInList(cookies);
 }
 
-void SQLitePersistentCookieStore::Load(LoadedCallback loaded_callback,
-                                       const NetLogWithSource& net_log) {
-  DCHECK(!loaded_callback.is_null());
-  net_log_ = net_log;
-  net_log_.BeginEvent(NetLogEventType::COOKIE_PERSISTENT_STORE_LOAD);
+// void SQLitePersistentCookieStore::Load(LoadedCallback loaded_callback,
+//                                        const NetLogWithSource& net_log) {
+//   DCHECK(!loaded_callback.is_null());
+//   net_log_ = net_log;
+//   net_log_.BeginEvent(NetLogEventType::COOKIE_PERSISTENT_STORE_LOAD);
   // Note that |backend_| keeps |this| alive by keeping a reference count.
   // If this class is ever converted over to a WeakPtr<> pattern (as TODO it
   // should be) this will need to be replaced by a more complex pattern that
   // guarantees |loaded_callback| being called even if the class has been
   // destroyed. |backend_| needs to outlive |this| to commit changes to disk.
-  backend_->Load(base::BindOnce(&SQLitePersistentCookieStore::CompleteLoad,
-                                this, std::move(loaded_callback)));
-}
+//   backend_->Load(base::BindOnce(&SQLitePersistentCookieStore::CompleteLoad,
+//                                 this, std::move(loaded_callback)));
+// }
 
 void SQLitePersistentCookieStore::LoadCookiesForKey(
     const std::string& key,

@@ -40,22 +40,22 @@ void MockPersistentCookieStore::SetLoadExpectation(
   load_result_.swap(result);
 }
 
-void MockPersistentCookieStore::Load(LoadedCallback loaded_callback,
-                                     const NetLogWithSource& /* net_log */) {
-  if (store_load_commands_) {
-    commands_.push_back(CookieStoreCommand(CookieStoreCommand::LOAD,
-                                           std::move(loaded_callback), ""));
-    return;
-  }
-  std::vector<std::unique_ptr<CanonicalCookie>> out_cookies;
-  if (load_return_value_) {
-    out_cookies.swap(load_result_);
-    loaded_ = true;
-  }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
-}
+// void MockPersistentCookieStore::Load(LoadedCallback loaded_callback,
+//                                      const NetLogWithSource& /* net_log */) {
+//   if (store_load_commands_) {
+//     commands_.push_back(CookieStoreCommand(CookieStoreCommand::LOAD,
+//                                            std::move(loaded_callback), ""));
+//     return;
+//   }
+//   std::vector<std::unique_ptr<CanonicalCookie>> out_cookies;
+//   if (load_return_value_) {
+//     out_cookies.swap(load_result_);
+//     loaded_ = true;
+//   }
+//   base::ThreadTaskRunnerHandle::Get()->PostTask(
+//       FROM_HERE,
+//       base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
+// }
 
 void MockPersistentCookieStore::LoadCookiesForKey(
     const std::string& key,
@@ -67,7 +67,7 @@ void MockPersistentCookieStore::LoadCookiesForKey(
     return;
   }
   if (!loaded_) {
-    Load(std::move(loaded_callback), NetLogWithSource());
+    // Load(std::move(loaded_callback), NetLogWithSource());
   } else {
     std::vector<std::unique_ptr<CanonicalCookie>> empty_cookies;
     base::ThreadTaskRunnerHandle::Get()->PostTask(
@@ -139,25 +139,25 @@ MockSimplePersistentCookieStore::MockSimplePersistentCookieStore()
     : loaded_(false) {
 }
 
-void MockSimplePersistentCookieStore::Load(
-    LoadedCallback loaded_callback,
-    const NetLogWithSource& /* net_log */) {
-  std::vector<std::unique_ptr<CanonicalCookie>> out_cookies;
+// void MockSimplePersistentCookieStore::Load(
+//     LoadedCallback loaded_callback,
+//     const NetLogWithSource& /* net_log */) {
+//   std::vector<std::unique_ptr<CanonicalCookie>> out_cookies;
 
-  for (auto it = cookies_.begin(); it != cookies_.end(); it++)
-    out_cookies.push_back(std::make_unique<CanonicalCookie>(it->second));
+//   for (auto it = cookies_.begin(); it != cookies_.end(); it++)
+//     out_cookies.push_back(std::make_unique<CanonicalCookie>(it->second));
 
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
-      FROM_HERE,
-      base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
-  loaded_ = true;
-}
+//   base::ThreadTaskRunnerHandle::Get()->PostTask(
+//       FROM_HERE,
+//       base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
+//   loaded_ = true;
+// }
 
 void MockSimplePersistentCookieStore::LoadCookiesForKey(
     const std::string& key,
     LoadedCallback loaded_callback) {
   if (!loaded_) {
-    Load(std::move(loaded_callback), NetLogWithSource());
+    // Load(std::move(loaded_callback), NetLogWithSource());
   } else {
     std::vector<std::unique_ptr<CanonicalCookie>> empty_cookies;
     base::ThreadTaskRunnerHandle::Get()->PostTask(

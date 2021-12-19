@@ -96,8 +96,8 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
     return std::move(commands_[i].loaded_callback);
   }
 
-  void Load(LoadedCallback loaded_callback,
-            const NetLogWithSource& net_log) override;
+  // void Load(LoadedCallback loaded_callback,
+  //           const NetLogWithSource& net_log) override;
 
   void LoadCookiesForKey(const std::string& key,
                          LoadedCallback loaded_callback) override;
@@ -149,8 +149,8 @@ class MockSimplePersistentCookieStore
  public:
   MockSimplePersistentCookieStore();
 
-  void Load(LoadedCallback loaded_callback,
-            const NetLogWithSource& net_log) override;
+  // void Load(LoadedCallback loaded_callback,
+  //           const NetLogWithSource& net_log) override;
 
   void LoadCookiesForKey(const std::string& key,
                          LoadedCallback loaded_callback) override;
