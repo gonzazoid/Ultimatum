@@ -117,28 +117,28 @@ namespace {
 //     std::move(callback).Run();
 // }
 
-template <typename T>
-void MaybeRunCookieCallback(base::OnceCallback<void(const T&)> callback,
-                            const T& result) {
-  if (callback)
-    std::move(callback).Run(result);
-}
+// template <typename T>
+// void MaybeRunCookieCallback(base::OnceCallback<void(const T&)> callback,
+//                             const T& result) {
+//   if (callback)
+//     std::move(callback).Run(result);
+// }
 
-template <typename T, typename U>
-void MaybeRunCookieCallback(
-    base::OnceCallback<void(const T&, const U&)> callback,
-    const T& first,
-    const U& second) {
-  if (callback)
-    std::move(callback).Run(first, second);
-}
+// template <typename T, typename U>
+// void MaybeRunCookieCallback(
+//     base::OnceCallback<void(const T&, const U&)> callback,
+//     const T& first,
+//     const U& second) {
+//   if (callback)
+//     std::move(callback).Run(first, second);
+// }
 
-template <typename T>
-void MaybeRunCookieCallback(base::OnceCallback<void(T)> callback,
-                            const T& result) {
-  if (callback)
-    std::move(callback).Run(result);
-}
+// template <typename T>
+// void MaybeRunCookieCallback(base::OnceCallback<void(T)> callback,
+//                             const T& result) {
+//   if (callback)
+//     std::move(callback).Run(result);
+// }
 
 // Anonymous and Fenced Frame uses a CookiePartitionKey with a nonce. In these
 // contexts, access to unpartitioned cookie is not granted.
