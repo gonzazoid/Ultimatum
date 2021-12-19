@@ -72,8 +72,8 @@ std::unique_ptr<net::CookieStore> CreateCookieStore(
 
     cookie_monster =
         std::make_unique<net::CookieMonster>(std::move(sqlite_store), net_log);
-    if (config.persist_session_cookies)
-      cookie_monster->SetPersistSessionCookies(true);
+    // if (config.persist_session_cookies)
+    //   cookie_monster->SetPersistSessionCookies(true);
   }
 
   // if (!config.cookieable_schemes.empty())
