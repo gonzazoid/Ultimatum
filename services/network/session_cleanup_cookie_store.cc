@@ -107,13 +107,13 @@ void SessionCleanupCookieStore::UpdateCookieAccessTime(
   persistent_store_->UpdateCookieAccessTime(cc);
 }
 
-void SessionCleanupCookieStore::DeleteCookie(const net::CanonicalCookie& cc) {
-  net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),
-                                                        cc.IsSecure());
-  DCHECK_GE(cookies_per_origin_[origin], 1U);
-  --cookies_per_origin_[origin];
-  persistent_store_->DeleteCookie(cc);
-}
+// void SessionCleanupCookieStore::DeleteCookie(const net::CanonicalCookie& cc) {
+//   net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),
+//                                                         cc.IsSecure());
+//   DCHECK_GE(cookies_per_origin_[origin], 1U);
+//   --cookies_per_origin_[origin];
+//   persistent_store_->DeleteCookie(cc);
+// }
 
 // void SessionCleanupCookieStore::SetForceKeepSessionState() {
 //   force_keep_session_state_ = true;
