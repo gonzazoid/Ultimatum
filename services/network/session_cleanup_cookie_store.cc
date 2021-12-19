@@ -102,10 +102,10 @@ void SessionCleanupCookieStore::LoadCookiesForKey(
 //   persistent_store_->AddCookie(cc);
 // }
 
-void SessionCleanupCookieStore::UpdateCookieAccessTime(
-    const net::CanonicalCookie& cc) {
-  persistent_store_->UpdateCookieAccessTime(cc);
-}
+// void SessionCleanupCookieStore::UpdateCookieAccessTime(
+//     const net::CanonicalCookie& cc) {
+//   persistent_store_->UpdateCookieAccessTime(cc);
+// }
 
 // void SessionCleanupCookieStore::DeleteCookie(const net::CanonicalCookie& cc) {
 //   net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),

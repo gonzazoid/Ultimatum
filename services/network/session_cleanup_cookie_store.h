@@ -49,7 +49,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
   void LoadCookiesForKey(const std::string& key,
                          LoadedCallback callback) override;
   // void AddCookie(const net::CanonicalCookie& cc) override;
-  void UpdateCookieAccessTime(const net::CanonicalCookie& cc) override;
+  // void UpdateCookieAccessTime(const net::CanonicalCookie& cc) override;
   // void DeleteCookie(const net::CanonicalCookie& cc) override;
   // void SetForceKeepSessionState() override;
   void SetBeforeCommitCallback(base::RepeatingClosure callback) override;

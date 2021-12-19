@@ -80,9 +80,9 @@ void MockPersistentCookieStore::LoadCookiesForKey(
 //   commands_.push_back(CookieStoreCommand(CookieStoreCommand::ADD, cookie));
 // }
 
-void MockPersistentCookieStore::UpdateCookieAccessTime(
-    const CanonicalCookie& cookie) {
-}
+// void MockPersistentCookieStore::UpdateCookieAccessTime(
+//     const CanonicalCookie& cookie) {
+// }
 
 // void MockPersistentCookieStore::DeleteCookie(const CanonicalCookie& cookie) {
 //   commands_.push_back(CookieStoreCommand(CookieStoreCommand::REMOVE, cookie));
@@ -172,12 +172,12 @@ void MockSimplePersistentCookieStore::LoadCookiesForKey(
 //   cookies_[key] = cookie;
 // }
 
-void MockSimplePersistentCookieStore::UpdateCookieAccessTime(
-    const CanonicalCookie& cookie) {
-  const auto& key = cookie.UniqueKey();
-  ASSERT_TRUE(cookies_.find(key) != cookies_.end());
-  cookies_[key].SetLastAccessDate(base::Time::Now());
-}
+// void MockSimplePersistentCookieStore::UpdateCookieAccessTime(
+//     const CanonicalCookie& cookie) {
+//   const auto& key = cookie.UniqueKey();
+//   ASSERT_TRUE(cookies_.find(key) != cookies_.end());
+//   cookies_[key].SetLastAccessDate(base::Time::Now());
+// }
 
 // void MockSimplePersistentCookieStore::DeleteCookie(
 //     const CanonicalCookie& cookie) {

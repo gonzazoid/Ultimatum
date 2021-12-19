@@ -1677,8 +1677,8 @@ void CookieMonster::InternalUpdateCookieAccessTime(CanonicalCookie* cc,
     return;
 
   cc->SetLastAccessDate(current);
-  if (ShouldUpdatePersistentStore(cc))
-    store_->UpdateCookieAccessTime(*cc);
+  // if (ShouldUpdatePersistentStore(cc))
+  //   store_->UpdateCookieAccessTime(*cc);
 }
 
 // InternalDeleteCookies must not invalidate iterators other than the one being
