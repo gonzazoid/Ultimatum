@@ -2173,15 +2173,15 @@ size_t CookieMonster::GarbageCollectLeastRecentlyAccessed(
 // non-problem).
 //
 // static
-std::string CookieMonster::GetKey(base::StringPiece domain) {
-  std::string effective_domain(
-      registry_controlled_domains::GetDomainAndRegistry(
-          domain, registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES));
-  if (effective_domain.empty())
-    effective_domain = std::string(domain);
+// std::string CookieMonster::GetKey(base::StringPiece domain) {
+//   std::string effective_domain(
+//       registry_controlled_domains::GetDomainAndRegistry(
+//           domain, registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES));
+//   if (effective_domain.empty())
+//     effective_domain = std::string(domain);
 
-  return cookie_util::CookieDomainAsHost(effective_domain);
-}
+//   return cookie_util::CookieDomainAsHost(effective_domain);
+// }
 
 bool CookieMonster::HasCookieableScheme(const GURL& url) {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -2301,21 +2301,21 @@ void CookieMonster::DoCookieCallbackForHostOrDomain(
     }
 
     // Checks if the domain key has been loaded.
-    std::string key = GetKey(host_or_domain);
-    if (keys_loaded_.find(key) == keys_loaded_.end()) {
-      auto it = tasks_pending_for_key_.find(key);
-      if (it == tasks_pending_for_key_.end()) {
-        store_->LoadCookiesForKey(
-            key, base::BindOnce(&CookieMonster::OnKeyLoaded,
-                                weak_ptr_factory_.GetWeakPtr(), key));
-        it = tasks_pending_for_key_
-                 .insert(std::make_pair(
-                     key, base::circular_deque<base::OnceClosure>()))
-                 .first;
-      }
-      it->second.push_back(std::move(callback));
-      return;
-    }
+    // std::string key = GetKey(host_or_domain);
+    // if (keys_loaded_.find(key) == keys_loaded_.end()) {
+    //   auto it = tasks_pending_for_key_.find(key);
+    //   if (it == tasks_pending_for_key_.end()) {
+    //     store_->LoadCookiesForKey(
+    //         key, base::BindOnce(&CookieMonster::OnKeyLoaded,
+    //                             weak_ptr_factory_.GetWeakPtr(), key));
+    //     it = tasks_pending_for_key_
+    //              .insert(std::make_pair(
+    //                  key, base::circular_deque<base::OnceClosure>()))
+    //              .first;
+    //   }
+    //   it->second.push_back(std::move(callback));
+    //   return;
+    // }
   }
 
   std::move(callback).Run();

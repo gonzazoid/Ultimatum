@@ -216,7 +216,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // cookies potentially relevant to it. This is used for lookup in cookies_ as
   // well as for PersistentCookieStore::LoadCookiesForKey. See comment on keys
   // before the CookieMap typedef.
-  static std::string GetKey(base::StringPiece domain);
+  // static std::string GetKey(base::StringPiece domain);
 
   // Exposes the comparison function used when sorting cookies.
   // static bool CookieSorter(const CanonicalCookie* cc1,
@@ -236,7 +236,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // For validation of key values.
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestDomainTree);
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestImport);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, GetKey);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, GetKey);
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestGetKey);
 
   // For FindCookiesForKey.
