@@ -433,7 +433,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
       std::vector<std::unique_ptr<CanonicalCookie>> cookies);
 
   // Invokes deferred calls.
-  void InvokeQueue();
+  // void InvokeQueue();
 
   // Checks that |cookies_| matches our invariants, and tries to repair any
   // inconsistencies. (In other words, it does not have duplicate cookies).

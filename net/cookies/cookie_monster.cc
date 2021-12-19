@@ -865,7 +865,7 @@ void CookieMonster::OnLoaded(
   //                               base::Milliseconds(1), base::Minutes(1), 50);
 
   // Invoke the task queue of cookie request.
-  InvokeQueue();
+  // InvokeQueue();
 }
 
 void CookieMonster::OnKeyLoaded(
@@ -967,8 +967,8 @@ void CookieMonster::StoreLoadedCookies(
 //   EnsureCookiesMapIsValid();
 }
 
-void CookieMonster::InvokeQueue() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::InvokeQueue() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Move all per-key tasks into the global queue, if there are any.  This is
   // protection about a race where the store learns about all cookies loading
@@ -976,7 +976,7 @@ void CookieMonster::InvokeQueue() {
 
   // Needed to prevent any recursively queued tasks from going back into the
   // per-key queues.
-  seen_global_task_ = true;
+//   seen_global_task_ = true;
   // for (auto& tasks_for_key : tasks_pending_for_key_) {
   //   tasks_pending_.insert(tasks_pending_.begin(),
   //                         std::make_move_iterator(tasks_for_key.second.begin()),
@@ -992,9 +992,9 @@ void CookieMonster::InvokeQueue() {
 
   // DCHECK(tasks_pending_for_key_.empty());
 
-  finished_fetching_all_cookies_ = true;
-  keys_loaded_.clear();
-}
+//   finished_fetching_all_cookies_ = true;
+//   keys_loaded_.clear();
+// }
 
 void CookieMonster::EnsureCookiesMapIsValid() {
   DCHECK(thread_checker_.CalledOnValidThread());
