@@ -408,7 +408,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // void FetchAllCookiesIfNecessary();
 
   // Fetches all cookies from the backing store.
-  void FetchAllCookies();
+  // void FetchAllCookies();
 
   // Whether all cookies should be fetched as soon as any is requested.
   // bool ShouldFetchAllCookiesWhenFetchingAnyCookie();

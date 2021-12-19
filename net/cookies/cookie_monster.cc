@@ -841,11 +841,11 @@ void CookieMonster::MarkCookieStoreAsInitialized() {
 //   }
 // }
 
-void CookieMonster::FetchAllCookies() {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK(store_.get()) << "Store must exist to initialize";
-  DCHECK(!finished_fetching_all_cookies_)
-      << "All cookies have already been fetched.";
+// void CookieMonster::FetchAllCookies() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   DCHECK(store_.get()) << "Store must exist to initialize";
+//   DCHECK(!finished_fetching_all_cookies_)
+//       << "All cookies have already been fetched.";
 
   // We bind in the current time so that we can report the wall-clock time for
   // loading cookies.
@@ -853,7 +853,7 @@ void CookieMonster::FetchAllCookies() {
   //                             weak_ptr_factory_.GetWeakPtr(), TimeTicks::Now()),
   //              net_log_);
   // OnLoaded(TimeTicks::Now(), {});
-}
+// }
 
 // void CookieMonster::OnLoaded(
 //     TimeTicks beginning_time,
