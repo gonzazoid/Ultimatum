@@ -833,13 +833,13 @@ void CookieMonster::MarkCookieStoreAsInitialized() {
   initialized_ = true;
 }
 
-void CookieMonster::FetchAllCookiesIfNecessary() {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  if (store_.get() && !started_fetching_all_cookies_) {
-    started_fetching_all_cookies_ = true;
-    FetchAllCookies();
-  }
-}
+// void CookieMonster::FetchAllCookiesIfNecessary() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   if (store_.get() && !started_fetching_all_cookies_) {
+//     started_fetching_all_cookies_ = true;
+//     FetchAllCookies();
+//   }
+// }
 
 void CookieMonster::FetchAllCookies() {
   DCHECK(thread_checker_.CalledOnValidThread());
@@ -2266,13 +2266,13 @@ void CookieMonster::DoCookieCallback(base::OnceClosure callback) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
   MarkCookieStoreAsInitialized();
-  FetchAllCookiesIfNecessary();
+  // FetchAllCookiesIfNecessary();
   seen_global_task_ = true;
 
-  if (!finished_fetching_all_cookies_ && store_.get()) {
-    tasks_pending_.push_back(std::move(callback));
-    return;
-  }
+  // if (!finished_fetching_all_cookies_ && store_.get()) {
+  //   tasks_pending_.push_back(std::move(callback));
+  //   return;
+  // }
 
   std::move(callback).Run();
 }
@@ -2286,19 +2286,19 @@ void CookieMonster::DoCookieCallbackForHostOrDomain(
     base::OnceClosure callback,
     base::StringPiece host_or_domain) {
   MarkCookieStoreAsInitialized();
-  FetchAllCookiesIfNecessary();
+  // FetchAllCookiesIfNecessary();
 
   // If cookies for the requested domain key (eTLD+1) have been loaded from DB
   // then run the task, otherwise load from DB.
-  if (!finished_fetching_all_cookies_ && store_.get()) {
+  // if (!finished_fetching_all_cookies_ && store_.get()) {
     // If a global task has been previously seen, queue the task as a global
     // task. Note that the CookieMonster may be in the middle of executing
     // the global queue, |tasks_pending_| may be empty, which is why another
     // bool is needed.
-    if (seen_global_task_) {
-      tasks_pending_.push_back(std::move(callback));
-      return;
-    }
+  //   if (seen_global_task_) {
+  //     tasks_pending_.push_back(std::move(callback));
+  //     return;
+  //   }
 
     // Checks if the domain key has been loaded.
     // std::string key = GetKey(host_or_domain);
@@ -2316,7 +2316,7 @@ void CookieMonster::DoCookieCallbackForHostOrDomain(
     //   it->second.push_back(std::move(callback));
     //   return;
     // }
-  }
+  // }
 
   std::move(callback).Run();
 }

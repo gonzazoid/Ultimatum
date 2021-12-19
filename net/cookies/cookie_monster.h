@@ -405,13 +405,13 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Fetches all cookies if the backing store exists and they're not already
   // being fetched.
-  void FetchAllCookiesIfNecessary();
+  // void FetchAllCookiesIfNecessary();
 
   // Fetches all cookies from the backing store.
   void FetchAllCookies();
 
   // Whether all cookies should be fetched as soon as any is requested.
-  bool ShouldFetchAllCookiesWhenFetchingAnyCookie();
+  // bool ShouldFetchAllCookiesWhenFetchingAnyCookie();
 
   // Stores cookies loaded from the backing store and invokes any deferred
   // calls. |beginning_time| should be the moment PersistentCookieStore::Load
