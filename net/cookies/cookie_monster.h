@@ -729,7 +729,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // NetLogWithSource net_log_;
 
-  scoped_refptr<PersistentCookieStore> store_;
+  // scoped_refptr<PersistentCookieStore> store_;
 
   // Minimum delay after updating a cookie's LastAccessDate before we will
   // update it again.
