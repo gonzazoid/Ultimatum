@@ -722,10 +722,10 @@ CookieMonster::~CookieMonster() {
 //                               : base::OnceClosure()));
 // }
 
-bool CookieMonster::MatchCookieDeletionInfo(
-    const CookieDeletionInfo& delete_info,
-    const net::CanonicalCookie& cookie) {
-  bool delegate_treats_url_as_trustworthy = false;  // irrelevant if no URL.
+// bool CookieMonster::MatchCookieDeletionInfo(
+//     const CookieDeletionInfo& delete_info,
+//     const net::CanonicalCookie& cookie) {
+//   bool delegate_treats_url_as_trustworthy = false;  // irrelevant if no URL.
   // if (delete_info.url.has_value()) {
     // delegate_treats_url_as_trustworthy =
     //     cookie_access_delegate() &&
@@ -735,12 +735,12 @@ bool CookieMonster::MatchCookieDeletionInfo(
 
   // Deletion uses all inclusive options, so it's ok to get the
   // `CookieSamePartyStatus` wrong here.
-  return delete_info.Matches(
-      cookie,
-      CookieAccessParams{GetAccessSemanticsForCookie(cookie),
-                         delegate_treats_url_as_trustworthy,
-                         CookieSamePartyStatus::kNoSamePartyEnforcement});
-}
+//   return delete_info.Matches(
+//       cookie,
+//       CookieAccessParams{GetAccessSemanticsForCookie(cookie),
+//                          delegate_treats_url_as_trustworthy,
+//                          CookieSamePartyStatus::kNoSamePartyEnforcement});
+// }
 
 // void CookieMonster::DeleteCanonicalCookie(const CanonicalCookie& cookie,
 //                                           DeleteCallback callback) {
@@ -1371,15 +1371,15 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
     const CookieAccessResult& access_result,
     bool dispatch_change) {
   DCHECK(thread_checker_.CalledOnValidThread());
-  CanonicalCookie* cc_ptr = cc.get();
+  // CanonicalCookie* cc_ptr = cc.get();
 
   net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
                     [&](NetLogCaptureMode capture_mode) {
                       return NetLogCookieMonsterCookieAdded(
                           cc.get(), sync_to_store, capture_mode);
                     });
-  if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
-    store_->AddCookie(*cc_ptr);
+  // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
+  //   store_->AddCookie(*cc_ptr);
   auto inserted = cookies_.insert(CookieMap::value_type(key, std::move(cc)));
 
   // LogCookieTypeToUMA(cc_ptr, access_result);
@@ -1434,15 +1434,15 @@ CookieMonster::InternalInsertPartitionedCookie(
     bool dispatch_change) {
   DCHECK(cc->IsPartitioned());
   DCHECK(thread_checker_.CalledOnValidThread());
-  CanonicalCookie* cc_ptr = cc.get();
+  // CanonicalCookie* cc_ptr = cc.get();
 
   net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
                     [&](NetLogCaptureMode capture_mode) {
                       return NetLogCookieMonsterCookieAdded(
                           cc.get(), sync_to_store, capture_mode);
                     });
-  if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
-    store_->AddCookie(*cc_ptr);
+  // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
+  //   store_->AddCookie(*cc_ptr);
 
   CookiePartitionKey partition_key(cc->PartitionKey().value());
   PartitionedCookieMap::iterator partition_it =
@@ -2215,21 +2215,21 @@ CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
 // last_statistic_record_time_ is initialized to Now() rather than null
 // in the constructor so that we won't take statistics right after
 // startup, to avoid bias from browsers that are started but not used.
-void CookieMonster::RecordPeriodicStats(const base::Time& current_time) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::RecordPeriodicStats(const base::Time& current_time) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  const base::TimeDelta kRecordStatisticsIntervalTime(
-      base::Seconds(kRecordStatisticsIntervalSeconds));
+//   const base::TimeDelta kRecordStatisticsIntervalTime(
+//       base::Seconds(kRecordStatisticsIntervalSeconds));
 
   // If we've taken statistics recently, return.
-  if (current_time - last_statistic_record_time_ <=
-      kRecordStatisticsIntervalTime) {
-    return;
-  }
+//   if (current_time - last_statistic_record_time_ <=
+//       kRecordStatisticsIntervalTime) {
+//     return;
+//   }
 
-  if (DoRecordPeriodicStats())
-    last_statistic_record_time_ = current_time;
-}
+//   if (DoRecordPeriodicStats())
+//     last_statistic_record_time_ = current_time;
+// }
 
 // TODO(crbug.com/1225444): Record periodic stats for Partitioned cookies.
 bool CookieMonster::DoRecordPeriodicStats() {

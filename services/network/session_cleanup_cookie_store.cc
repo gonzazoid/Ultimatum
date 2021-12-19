@@ -95,12 +95,12 @@ void SessionCleanupCookieStore::LoadCookiesForKey(
                           std::move(loaded_callback)));
 }
 
-void SessionCleanupCookieStore::AddCookie(const net::CanonicalCookie& cc) {
-  net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),
-                                                        cc.IsSecure());
-  ++cookies_per_origin_[origin];
-  persistent_store_->AddCookie(cc);
-}
+// void SessionCleanupCookieStore::AddCookie(const net::CanonicalCookie& cc) {
+//   net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),
+//                                                         cc.IsSecure());
+//   ++cookies_per_origin_[origin];
+//   persistent_store_->AddCookie(cc);
+// }
 
 void SessionCleanupCookieStore::UpdateCookieAccessTime(
     const net::CanonicalCookie& cc) {

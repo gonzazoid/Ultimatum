@@ -358,7 +358,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   };
 
   // Record statistics every kRecordStatisticsIntervalSeconds of uptime.
-  static const int kRecordStatisticsIntervalSeconds = 10 * 60;
+  // static const int kRecordStatisticsIntervalSeconds = 10 * 60;
 
   // Sets a canonical cookie, deletes equivalents and performs garbage
   // collection.  |source_url| indicates what URL the cookie is being set
@@ -389,8 +389,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //     DeleteCallback callback);
 
   // Returns whether |cookie| matches |delete_info|.
-  bool MatchCookieDeletionInfo(const CookieDeletionInfo& delete_info,
-                               const net::CanonicalCookie& cookie);
+  // bool MatchCookieDeletionInfo(const CookieDeletionInfo& delete_info,
+  //                              const net::CanonicalCookie& cookie);
 
   // void DeleteCanonicalCookie(const CanonicalCookie& cookie,
   //                            DeleteCallback callback);
@@ -790,7 +790,7 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
   virtual void LoadCookiesForKey(const std::string& key,
                                  LoadedCallback loaded_callback) = 0;
 
-  virtual void AddCookie(const CanonicalCookie& cc) = 0;
+  // virtual void AddCookie(const CanonicalCookie& cc) = 0;
   virtual void UpdateCookieAccessTime(const CanonicalCookie& cc) = 0;
   virtual void DeleteCookie(const CanonicalCookie& cc) = 0;
 

@@ -224,7 +224,7 @@ void FlushablePersistentStore::LoadCookiesForKey(
   Load(std::move(loaded_callback), NetLogWithSource());
 }
 
-void FlushablePersistentStore::AddCookie(const CanonicalCookie&) {}
+// void FlushablePersistentStore::AddCookie(const CanonicalCookie&) {}
 
 void FlushablePersistentStore::UpdateCookieAccessTime(const CanonicalCookie&) {}
 

@@ -279,7 +279,7 @@ class SQLitePersistentCookieStore::Backend
       std::unordered_set<std::string>& top_frame_site_keys_to_delete);
 
   // Batch a cookie addition.
-  void AddCookie(const CanonicalCookie& cc);
+  // void AddCookie(const CanonicalCookie& cc);
 
   // Batch a cookie access time update.
   void UpdateCookieAccessTime(const CanonicalCookie& cc);
@@ -1331,10 +1331,10 @@ SQLitePersistentCookieStore::Backend::DoMigrateDatabaseSchema() {
   return absl::make_optional(cur_version);
 }
 
-void SQLitePersistentCookieStore::Backend::AddCookie(
-    const CanonicalCookie& cc) {
-  BatchOperation(PendingOperation::COOKIE_ADD, cc);
-}
+// void SQLitePersistentCookieStore::Backend::AddCookie(
+//     const CanonicalCookie& cc) {
+//   BatchOperation(PendingOperation::COOKIE_ADD, cc);
+// }
 
 void SQLitePersistentCookieStore::Backend::UpdateCookieAccessTime(
     const CanonicalCookie& cc) {
@@ -1673,9 +1673,9 @@ void SQLitePersistentCookieStore::LoadCookiesForKey(
                           key, std::move(loaded_callback)));
 }
 
-void SQLitePersistentCookieStore::AddCookie(const CanonicalCookie& cc) {
-  backend_->AddCookie(cc);
-}
+// void SQLitePersistentCookieStore::AddCookie(const CanonicalCookie& cc) {
+//   backend_->AddCookie(cc);
+// }
 
 void SQLitePersistentCookieStore::UpdateCookieAccessTime(
     const CanonicalCookie& cc) {
