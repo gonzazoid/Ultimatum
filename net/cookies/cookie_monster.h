@@ -445,11 +445,11 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // If |cookie_partition_it| is not nullopt, then this function trims cookies
   // from the CookieMap in |partitioned_cookies_| at |cookie_partition_it|
   // instead of trimming cookies from |cookies_|.
-  void TrimDuplicateCookiesForKey(
-      const std::string& key,
-      CookieMap::iterator begin,
-      CookieMap::iterator end,
-      absl::optional<PartitionedCookieMap::iterator> cookie_partition_it);
+  // void TrimDuplicateCookiesForKey(
+  //     const std::string& key,
+  //     CookieMap::iterator begin,
+  //     CookieMap::iterator end,
+  //     absl::optional<PartitionedCookieMap::iterator> cookie_partition_it);
 
   void SetDefaultCookieableSchemes();
 

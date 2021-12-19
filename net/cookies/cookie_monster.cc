@@ -1039,12 +1039,12 @@ void CookieMonster::MarkCookieStoreAsInitialized() {
 // (2) For each list with more than 1 entry, keep the cookie having the
 //     most recent creation time, and delete the others.
 //
-void CookieMonster::TrimDuplicateCookiesForKey(
-    const std::string& key,
-    CookieMap::iterator begin,
-    CookieMap::iterator end,
-    absl::optional<PartitionedCookieMap::iterator> cookie_partition_it) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::TrimDuplicateCookiesForKey(
+//     const std::string& key,
+//     CookieMap::iterator begin,
+//     CookieMap::iterator end,
+//     absl::optional<PartitionedCookieMap::iterator> cookie_partition_it) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Set of cookies ordered by creation time.
 //   typedef std::multiset<CookieMap::iterator, OrderByCreationTimeDesc> CookieSet;
@@ -1121,7 +1121,7 @@ void CookieMonster::TrimDuplicateCookiesForKey(
 //     }
 //   }
 //   DCHECK_EQ(num_duplicates, num_duplicates_found);
-}
+// }
 
 std::vector<CanonicalCookie*>
 CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
