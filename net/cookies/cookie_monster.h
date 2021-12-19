@@ -792,7 +792,7 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
 
   // virtual void AddCookie(const CanonicalCookie& cc) = 0;
   virtual void UpdateCookieAccessTime(const CanonicalCookie& cc) = 0;
-  virtual void DeleteCookie(const CanonicalCookie& cc) = 0;
+  // virtual void DeleteCookie(const CanonicalCookie& cc) = 0;
 
   // Instructs the store to not discard session only cookies on shutdown.
   // virtual void SetForceKeepSessionState() = 0;

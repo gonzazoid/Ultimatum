@@ -285,7 +285,7 @@ class SQLitePersistentCookieStore::Backend
   void UpdateCookieAccessTime(const CanonicalCookie& cc);
 
   // Batch a cookie deletion.
-  void DeleteCookie(const CanonicalCookie& cc);
+  // void DeleteCookie(const CanonicalCookie& cc);
 
   size_t GetQueueLengthForTesting();
 
@@ -1341,10 +1341,10 @@ void SQLitePersistentCookieStore::Backend::UpdateCookieAccessTime(
   BatchOperation(PendingOperation::COOKIE_UPDATEACCESS, cc);
 }
 
-void SQLitePersistentCookieStore::Backend::DeleteCookie(
-    const CanonicalCookie& cc) {
-  BatchOperation(PendingOperation::COOKIE_DELETE, cc);
-}
+// void SQLitePersistentCookieStore::Backend::DeleteCookie(
+//     const CanonicalCookie& cc) {
+//   BatchOperation(PendingOperation::COOKIE_DELETE, cc);
+// }
 
 void SQLitePersistentCookieStore::Backend::BatchOperation(
     PendingOperation::OperationType op,
@@ -1682,9 +1682,9 @@ void SQLitePersistentCookieStore::UpdateCookieAccessTime(
   backend_->UpdateCookieAccessTime(cc);
 }
 
-void SQLitePersistentCookieStore::DeleteCookie(const CanonicalCookie& cc) {
-  backend_->DeleteCookie(cc);
-}
+// void SQLitePersistentCookieStore::DeleteCookie(const CanonicalCookie& cc) {
+//   backend_->DeleteCookie(cc);
+// }
 
 // void SQLitePersistentCookieStore::SetForceKeepSessionState() {
   // This store never discards session-only cookies, so this call has no effect.
