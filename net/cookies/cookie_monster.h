@@ -745,7 +745,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // wanted.  Thus this value is not initialized.
   // base::Time earliest_access_time_;
 
-  std::vector<std::string> cookieable_schemes_;
+  // std::vector<std::string> cookieable_schemes_;
 
   // base::Time last_statistic_record_time_;
 
