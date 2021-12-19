@@ -64,8 +64,8 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
   // CookieMonster::PersistentCookieStore:
   // void Load(LoadedCallback loaded_callback,
   //           const NetLogWithSource& net_log) override;
-  void LoadCookiesForKey(const std::string& key,
-                         LoadedCallback callback) override;
+  // void LoadCookiesForKey(const std::string& key,
+  //                        LoadedCallback callback) override;
   // void AddCookie(const CanonicalCookie& cc) override;
   // void UpdateCookieAccessTime(const CanonicalCookie& cc) override;
   // void DeleteCookie(const CanonicalCookie& cc) override;

@@ -46,8 +46,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
   // net::CookieMonster::PersistentCookieStore:
   // void Load(LoadedCallback loaded_callback,
   //           const net::NetLogWithSource& net_log) override;
-  void LoadCookiesForKey(const std::string& key,
-                         LoadedCallback callback) override;
+  // void LoadCookiesForKey(const std::string& key,
+  //                        LoadedCallback callback) override;
   // void AddCookie(const net::CanonicalCookie& cc) override;
   // void UpdateCookieAccessTime(const net::CanonicalCookie& cc) override;
   // void DeleteCookie(const net::CanonicalCookie& cc) override;
