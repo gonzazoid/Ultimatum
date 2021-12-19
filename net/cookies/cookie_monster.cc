@@ -168,7 +168,7 @@ namespace {
 //   return base::ranges::any_of(s, &HttpUtil::IsControlChar);
 // }
 
-typedef std::vector<CanonicalCookie*> CanonicalCookieVector;
+// typedef std::vector<CanonicalCookie*> CanonicalCookieVector;
 
 // Default minimum delay after updating a cookie's LastAccessDate before we
 // will update it again.
@@ -176,12 +176,12 @@ const int kDefaultAccessUpdateThresholdSeconds = 60;
 
 // Comparator to sort cookies from highest creation date to lowest
 // creation date.
-struct OrderByCreationTimeDesc {
-  bool operator()(const CookieMonster::CookieMap::iterator& a,
-                  const CookieMonster::CookieMap::iterator& b) const {
-    return a->second->CreationDate() > b->second->CreationDate();
-  }
-};
+// struct OrderByCreationTimeDesc {
+//   bool operator()(const CookieMonster::CookieMap::iterator& a,
+//                   const CookieMonster::CookieMap::iterator& b) const {
+//     return a->second->CreationDate() > b->second->CreationDate();
+//   }
+// };
 
 // bool LRACookieSorter(const CookieMonster::CookieMap::iterator& it1,
 //                      const CookieMonster::CookieMap::iterator& it2) {
@@ -238,10 +238,10 @@ struct OrderByCreationTimeDesc {
 // Mapping between DeletionCause and CookieChangeCause; the
 // mapping also provides a boolean that specifies whether or not an
 // OnCookieChange notification ought to be generated.
-typedef struct ChangeCausePair_struct {
-  CookieChangeCause cause;
-  bool notify;
-} ChangeCausePair;
+// typedef struct ChangeCausePair_struct {
+//   CookieChangeCause cause;
+//   bool notify;
+// } ChangeCausePair;
 // const ChangeCausePair kChangeCauseMapping[] = {
     // DELETE_COOKIE_EXPLICIT
 //     {CookieChangeCause::EXPLICIT, true},
