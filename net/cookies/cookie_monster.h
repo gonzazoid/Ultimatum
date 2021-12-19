@@ -255,7 +255,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // For CookieSentToSamePort enum.
   FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
                            CookiePortReadDiffersFromSetHistogram);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, IsCookieSentToSamePortThatSetIt);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, IsCookieSentToSamePortThatSetIt);
 
   // Internal reasons for deletion, used to populate informative histograms
   // and to provide a public cause for onCookieChange notifications.
@@ -675,10 +675,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //
   // This is in CookieMonster because only CookieMonster uses it. It's otherwise
   // a standalone utility function.
-  static CookieSentToSamePort IsCookieSentToSamePortThatSetIt(
-      const GURL& destination,
-      int source_port,
-      CookieSourceScheme source_scheme);
+  // static CookieSentToSamePort IsCookieSentToSamePortThatSetIt(
+  //     const GURL& destination,
+  //     int source_port,
+  //     CookieSourceScheme source_scheme);
 
   // Set of keys (eTLD+1's) for which non-expired cookies have
   // been evicted for hitting the per-domain max. The size of this set is

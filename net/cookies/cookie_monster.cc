@@ -2321,44 +2321,44 @@ void CookieMonster::DoCookieCallbackForHostOrDomain(
   std::move(callback).Run();
 }
 
-CookieMonster::CookieSentToSamePort
-CookieMonster::IsCookieSentToSamePortThatSetIt(
-    const GURL& destination,
-    int source_port,
-    CookieSourceScheme source_scheme) {
-  if (source_port == url::PORT_UNSPECIFIED)
-    return CookieSentToSamePort::kSourcePortUnspecified;
+// CookieMonster::CookieSentToSamePort
+// CookieMonster::IsCookieSentToSamePortThatSetIt(
+//     const GURL& destination,
+//     int source_port,
+//     CookieSourceScheme source_scheme) {
+//   if (source_port == url::PORT_UNSPECIFIED)
+//     return CookieSentToSamePort::kSourcePortUnspecified;
 
-  if (source_port == url::PORT_INVALID)
-    return CookieSentToSamePort::kInvalid;
+//   if (source_port == url::PORT_INVALID)
+//     return CookieSentToSamePort::kInvalid;
 
-  int destination_port = destination.EffectiveIntPort();
-  if (source_port == destination_port)
-    return CookieSentToSamePort::kYes;
+//   int destination_port = destination.EffectiveIntPort();
+//   if (source_port == destination_port)
+//     return CookieSentToSamePort::kYes;
 
-  const std::string& destination_scheme = destination.scheme();
-  bool destination_port_is_default =
-      url::DefaultPortForScheme(destination_scheme.c_str(),
-                                destination_scheme.length()) ==
-      destination_port;
+//   const std::string& destination_scheme = destination.scheme();
+//   bool destination_port_is_default =
+//       url::DefaultPortForScheme(destination_scheme.c_str(),
+//                                 destination_scheme.length()) ==
+//       destination_port;
 
-  // Since the source port has to be specified if we got to this point, that
-  // means this is a newer cookie that therefore has its scheme set as well.
-  DCHECK(source_scheme != CookieSourceScheme::kUnset);
-  std::string source_scheme_string =
-      source_scheme == CookieSourceScheme::kSecure
-          ? url::kHttpsScheme
-          : url::kHttpScheme;  // wss/ws have the same default port values as
-                               // https/http, so it's ok that we use these.
+//   // Since the source port has to be specified if we got to this point, that
+//   // means this is a newer cookie that therefore has its scheme set as well.
+//   DCHECK(source_scheme != CookieSourceScheme::kUnset);
+//   std::string source_scheme_string =
+//       source_scheme == CookieSourceScheme::kSecure
+//           ? url::kHttpsScheme
+//           : url::kHttpScheme;  // wss/ws have the same default port values as
+//                                // https/http, so it's ok that we use these.
 
-  bool source_port_is_default =
-      url::DefaultPortForScheme(source_scheme_string.c_str(),
-                                source_scheme_string.length()) == source_port;
+//   bool source_port_is_default =
+//       url::DefaultPortForScheme(source_scheme_string.c_str(),
+//                                 source_scheme_string.length()) == source_port;
 
-  if (destination_port_is_default && source_port_is_default)
-    return CookieSentToSamePort::kNoButDefault;
+//   if (destination_port_is_default && source_port_is_default)
+//     return CookieSentToSamePort::kNoButDefault;
 
-  return CookieSentToSamePort::kNo;
-}
+//   return CookieSentToSamePort::kNo;
+// }
 
 }  // namespace net
