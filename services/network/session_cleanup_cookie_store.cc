@@ -79,13 +79,13 @@ void SessionCleanupCookieStore::DeleteSessionCookies(
   persistent_store_->DeleteAllInList(session_only_cookies);
 }
 
-void SessionCleanupCookieStore::Load(LoadedCallback loaded_callback,
-                                     const net::NetLogWithSource& net_log) {
-  net_log_ = net_log;
-  persistent_store_->Load(base::BindOnce(&SessionCleanupCookieStore::OnLoad,
-                                         this, std::move(loaded_callback)),
-                          net_log);
-}
+// void SessionCleanupCookieStore::Load(LoadedCallback loaded_callback,
+//                                      const net::NetLogWithSource& net_log) {
+//   net_log_ = net_log;
+//   persistent_store_->Load(base::BindOnce(&SessionCleanupCookieStore::OnLoad,
+//                                          this, std::move(loaded_callback)),
+//                           net_log);
+// }
 
 void SessionCleanupCookieStore::LoadCookiesForKey(
     const std::string& key,
