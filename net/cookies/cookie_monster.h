@@ -518,7 +518,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Returns true if the cookie should be (or is already) synced to the store.
   // Used for cookies during insertion and deletion into the in-memory store.
-  bool ShouldUpdatePersistentStore(CanonicalCookie* cc);
+  // bool ShouldUpdatePersistentStore(CanonicalCookie* cc);
 
   // void LogCookieTypeToUMA(CanonicalCookie* cc,
   //                         const CookieAccessResult& access_result);
@@ -749,7 +749,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // base::Time last_statistic_record_time_;
 
-  bool persist_session_cookies_;
+  // bool persist_session_cookies_;
 
   base::ThreadChecker thread_checker_;
 
