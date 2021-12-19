@@ -896,9 +896,9 @@ void CookieMonster::MarkCookieStoreAsInitialized() {
 //   keys_loaded_.insert(key);
 // }
 
-void CookieMonster::StoreLoadedCookies(
-    std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::StoreLoadedCookies(
+//     std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Even if a key is expired, insert it so it can be garbage collected,
   // removed, and sync'd.
@@ -965,7 +965,7 @@ void CookieMonster::StoreLoadedCookies(
 //   // cookies loaded in previous runs will be validated again, but this is OK
 //   // since they are expected to be much fewer than total DB.
 //   EnsureCookiesMapIsValid();
-}
+// }
 
 // void CookieMonster::InvokeQueue() {
 //   DCHECK(thread_checker_.CalledOnValidThread());

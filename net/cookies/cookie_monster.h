@@ -429,8 +429,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //                  std::vector<std::unique_ptr<CanonicalCookie>> cookies);
 
   // Stores the loaded cookies.
-  void StoreLoadedCookies(
-      std::vector<std::unique_ptr<CanonicalCookie>> cookies);
+  // void StoreLoadedCookies(
+  //     std::vector<std::unique_ptr<CanonicalCookie>> cookies);
 
   // Invokes deferred calls.
   // void InvokeQueue();
