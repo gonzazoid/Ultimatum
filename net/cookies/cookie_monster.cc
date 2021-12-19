@@ -1777,11 +1777,11 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
 
 // Domain expiry behavior is unchanged by key/expiry scheme (the
 // meaning of the key is different, but that's not visible to this routine).
-size_t CookieMonster::GarbageCollect(const Time& current,
-                                     const std::string& key) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::GarbageCollect(const Time& current,
+//                                      const std::string& key) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  size_t num_deleted = 0;
+  // size_t num_deleted = 0;
   // Time safe_date(Time::Now() - base::Days(kSafeFromGlobalPurgeDays));
 
   // Collect garbage for this key, minding cookie priorities.
@@ -1940,21 +1940,21 @@ size_t CookieMonster::GarbageCollect(const Time& current,
     // }
   // }
 
-  return num_deleted;
-}
+  // return num_deleted;
+// }
 
-size_t CookieMonster::GarbageCollectPartitionedCookies(
-    const base::Time& current,
-    const CookiePartitionKey& cookie_partition_key,
-    const std::string& key) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::GarbageCollectPartitionedCookies(
+//     const base::Time& current,
+//     const CookiePartitionKey& cookie_partition_key,
+//     const std::string& key) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  size_t num_deleted = 0;
+  // size_t num_deleted = 0;
   // PartitionedCookieMap::iterator cookie_partition_it =
   //     partitioned_cookies_.find(cookie_partition_key);
 
   // if (cookie_partition_it == partitioned_cookies_.end())
-    return num_deleted;
+  //   return num_deleted;
 
   // if (cookie_partition_it->second->count(key) > kPerPartitionDomainMaxCookies) {
     // TODO(crbug.com/1225444): Log garbage collection for partitioned cookies.
@@ -1987,7 +1987,7 @@ size_t CookieMonster::GarbageCollectPartitionedCookies(
   // TODO(crbug.com/1225444): Enforce global limit on partitioned cookies.
 
   // return num_deleted;
-}
+// }
 
 size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
                                               CookiePriority priority,
@@ -2041,12 +2041,12 @@ size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
   // return removed;
 }
 
-size_t CookieMonster::GarbageCollectExpired(const Time& current,
-                                            const CookieMapItPair& itpair,
-                                            CookieItVector* cookie_its) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::GarbageCollectExpired(const Time& current,
+//                                             const CookieMapItPair& itpair,
+//                                             CookieItVector* cookie_its) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  int num_deleted = 0;
+  // int num_deleted = 0;
   // for (CookieMap::iterator it = itpair.first, end = itpair.second; it != end;) {
   //   auto curit = it;
   //   ++it;
@@ -2059,17 +2059,17 @@ size_t CookieMonster::GarbageCollectExpired(const Time& current,
   //   }
   // }
 
-  return num_deleted;
-}
+  // return num_deleted;
+// }
 
-size_t CookieMonster::GarbageCollectExpiredPartitionedCookies(
-    const Time& current,
-    const PartitionedCookieMap::iterator& cookie_partition_it,
-    const CookieMapItPair& itpair,
-    CookieItVector* cookie_its) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::GarbageCollectExpiredPartitionedCookies(
+//     const Time& current,
+//     const PartitionedCookieMap::iterator& cookie_partition_it,
+//     const CookieMapItPair& itpair,
+//     CookieItVector* cookie_its) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  int num_deleted = 0;
+//   int num_deleted = 0;
   // for (CookieMap::iterator it = itpair.first, end = itpair.second; it != end;) {
   //   auto curit = it;
   //   ++it;
@@ -2083,8 +2083,8 @@ size_t CookieMonster::GarbageCollectExpiredPartitionedCookies(
   //   }
   // }
 
-  return num_deleted;
-}
+//   return num_deleted;
+// }
 
 // void CookieMonster::GarbageCollectAllExpiredPartitionedCookies(
 //     const Time& current) {
@@ -2116,14 +2116,14 @@ size_t CookieMonster::GarbageCollectExpiredPartitionedCookies(
 //   return it_end - it_begin;
 // }
 
-size_t CookieMonster::GarbageCollectLeastRecentlyAccessed(
-    const base::Time& current,
-    const base::Time& safe_date,
-    size_t purge_goal,
-    CookieItVector cookie_its,
-    base::Time* earliest_time) {
-  DCHECK_LE(purge_goal, cookie_its.size());
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::GarbageCollectLeastRecentlyAccessed(
+//     const base::Time& current,
+//     const base::Time& safe_date,
+//     size_t purge_goal,
+//     CookieItVector cookie_its,
+//     base::Time* earliest_time) {
+//   DCHECK_LE(purge_goal, cookie_its.size());
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Sorts up to *and including* |cookie_its[purge_goal]| (if it exists), so
   // |earliest_time| will be properly assigned even if
@@ -2141,8 +2141,8 @@ size_t CookieMonster::GarbageCollectLeastRecentlyAccessed(
   // if (global_purge_it != cookie_its.end())
   //   *earliest_time = (*global_purge_it)->second->LastAccessDate();
   // return num_deleted;
-  return 0;
-}
+  // return 0;
+// }
 
 // A wrapper around registry_controlled_domains::GetDomainAndRegistry
 // to make clear we're creating a key for our local map or for the persistent
