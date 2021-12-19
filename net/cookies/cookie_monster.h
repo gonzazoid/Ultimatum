@@ -748,7 +748,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   std::vector<std::string> cookieable_schemes_;
 
-  base::Time last_statistic_record_time_;
+  // base::Time last_statistic_record_time_;
 
   bool persist_session_cookies_;
 
