@@ -283,7 +283,7 @@ class SQLitePersistentCookieStore::Backend
   // void AddCookie(const CanonicalCookie& cc);
 
   // Batch a cookie access time update.
-  void UpdateCookieAccessTime(const CanonicalCookie& cc);
+  // void UpdateCookieAccessTime(const CanonicalCookie& cc);
 
   // Batch a cookie deletion.
   // void DeleteCookie(const CanonicalCookie& cc);
@@ -1337,10 +1337,10 @@ SQLitePersistentCookieStore::Backend::DoMigrateDatabaseSchema() {
 //   BatchOperation(PendingOperation::COOKIE_ADD, cc);
 // }
 
-void SQLitePersistentCookieStore::Backend::UpdateCookieAccessTime(
-    const CanonicalCookie& cc) {
-  BatchOperation(PendingOperation::COOKIE_UPDATEACCESS, cc);
-}
+// void SQLitePersistentCookieStore::Backend::UpdateCookieAccessTime(
+//     const CanonicalCookie& cc) {
+//   BatchOperation(PendingOperation::COOKIE_UPDATEACCESS, cc);
+// }
 
 // void SQLitePersistentCookieStore::Backend::DeleteCookie(
 //     const CanonicalCookie& cc) {
@@ -1678,10 +1678,10 @@ void SQLitePersistentCookieStore::LoadCookiesForKey(
 //   backend_->AddCookie(cc);
 // }
 
-void SQLitePersistentCookieStore::UpdateCookieAccessTime(
-    const CanonicalCookie& cc) {
-  backend_->UpdateCookieAccessTime(cc);
-}
+// void SQLitePersistentCookieStore::UpdateCookieAccessTime(
+//     const CanonicalCookie& cc) {
+//   backend_->UpdateCookieAccessTime(cc);
+// }
 
 // void SQLitePersistentCookieStore::DeleteCookie(const CanonicalCookie& cc) {
 //   backend_->DeleteCookie(cc);

@@ -103,7 +103,7 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
 
   // void AddCookie(const CanonicalCookie& cookie) override;
 
-  void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
+  // void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
 
   // void DeleteCookie(const CanonicalCookie& cookie) override;
 
@@ -156,7 +156,7 @@ class MockSimplePersistentCookieStore
 
   // void AddCookie(const CanonicalCookie& cookie) override;
 
-  void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
+  // void UpdateCookieAccessTime(const CanonicalCookie& cookie) override;
 
   // void DeleteCookie(const CanonicalCookie& cookie) override;
 

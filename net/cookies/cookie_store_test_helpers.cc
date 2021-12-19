@@ -228,7 +228,7 @@ void FlushablePersistentStore::LoadCookiesForKey(
 
 // void FlushablePersistentStore::AddCookie(const CanonicalCookie&) {}
 
-void FlushablePersistentStore::UpdateCookieAccessTime(const CanonicalCookie&) {}
+// void FlushablePersistentStore::UpdateCookieAccessTime(const CanonicalCookie&) {}
 
 // void FlushablePersistentStore::DeleteCookie(const CanonicalCookie&) {}
 
