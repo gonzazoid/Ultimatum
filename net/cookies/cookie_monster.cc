@@ -349,10 +349,10 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
       finished_fetching_all_cookies_(false),
       seen_global_task_(false),
       // net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
-      store_(std::move(store)),
+      store_(std::move(store)) // ,
       // last_access_threshold_(last_access_threshold),
       // last_statistic_record_time_(base::Time::Now()),
-      persist_session_cookies_(false) {
+      /* persist_session_cookies_(false) */ {
   cookieable_schemes_.insert(
       cookieable_schemes_.begin(), kDefaultCookieableSchemes,
       kDefaultCookieableSchemes + kDefaultCookieableSchemesCount);
@@ -528,7 +528,7 @@ void CookieMonster::SetPersistSessionCookies(bool persist_session_cookies) {
   // net_log_.AddEntryWithBoolParams(
   //     NetLogEventType::COOKIE_STORE_SESSION_PERSISTENCE, NetLogEventPhase::NONE,
   //     "persistence", persist_session_cookies);
-  persist_session_cookies_ = persist_session_cookies;
+  // persist_session_cookies_ = persist_session_cookies;
 }
 
 const char* const CookieMonster::kDefaultCookieableSchemes[] = {"http", "https",
@@ -1409,9 +1409,9 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
   return inserted;
 }
 
-bool CookieMonster::ShouldUpdatePersistentStore(CanonicalCookie* cc) {
-  return (cc->IsPersistent() || persist_session_cookies_) && store_.get();
-}
+// bool CookieMonster::ShouldUpdatePersistentStore(CanonicalCookie* cc) {
+//   return (cc->IsPersistent() || persist_session_cookies_) && store_.get();
+// }
 
 // void CookieMonster::LogCookieTypeToUMA(
 //     CanonicalCookie* cc,
