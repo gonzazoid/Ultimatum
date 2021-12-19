@@ -852,13 +852,13 @@ void CookieMonster::FetchAllCookies() {
   // store_->Load(base::BindOnce(&CookieMonster::OnLoaded,
   //                             weak_ptr_factory_.GetWeakPtr(), TimeTicks::Now()),
   //              net_log_);
-  OnLoaded(TimeTicks::Now(), {});
+  // OnLoaded(TimeTicks::Now(), {});
 }
 
-void CookieMonster::OnLoaded(
-    TimeTicks beginning_time,
-    std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::OnLoaded(
+//     TimeTicks beginning_time,
+//     std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
   // StoreLoadedCookies(std::move(cookies));
   // base::UmaHistogramCustomTimes("Cookie.TimeBlockedOnLoad",
   //                               base::TimeTicks::Now() - beginning_time,
@@ -866,7 +866,7 @@ void CookieMonster::OnLoaded(
 
   // Invoke the task queue of cookie request.
   // InvokeQueue();
-}
+// }
 
 void CookieMonster::OnKeyLoaded(
     const std::string& key,

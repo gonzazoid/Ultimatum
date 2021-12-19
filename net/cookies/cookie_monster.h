@@ -417,8 +417,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // calls. |beginning_time| should be the moment PersistentCookieStore::Load
   // was invoked and is used for reporting histogram_time_blocked_on_load_.
   // See PersistentCookieStore::Load for details on the contents of cookies.
-  void OnLoaded(base::TimeTicks beginning_time,
-                std::vector<std::unique_ptr<CanonicalCookie>> cookies);
+  // void OnLoaded(base::TimeTicks beginning_time,
+  //               std::vector<std::unique_ptr<CanonicalCookie>> cookies);
 
   // Stores cookies loaded from the backing store and invokes the deferred
   // task(s) pending loading of cookies associated with the domain key
