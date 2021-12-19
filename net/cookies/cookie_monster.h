@@ -437,7 +437,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Checks that |cookies_| matches our invariants, and tries to repair any
   // inconsistencies. (In other words, it does not have duplicate cookies).
-  void EnsureCookiesMapIsValid();
+  // void EnsureCookiesMapIsValid();
 
   // Checks for any duplicate cookies for CookieMap key |key| which lie between
   // |begin| and |end|. If any are found, all but the most recent are deleted.

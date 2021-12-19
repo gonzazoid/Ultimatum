@@ -996,42 +996,42 @@ void CookieMonster::StoreLoadedCookies(
 //   keys_loaded_.clear();
 // }
 
-void CookieMonster::EnsureCookiesMapIsValid() {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::EnsureCookiesMapIsValid() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  // Iterate through all the of the cookies, grouped by host.
-  auto prev_range_end = cookies_.begin();
-  while (prev_range_end != cookies_.end()) {
-    auto cur_range_begin = prev_range_end;
-    const std::string key = cur_range_begin->first;  // Keep a copy.
-    auto cur_range_end = cookies_.upper_bound(key);
-    prev_range_end = cur_range_end;
+//   // Iterate through all the of the cookies, grouped by host.
+//   auto prev_range_end = cookies_.begin();
+//   while (prev_range_end != cookies_.end()) {
+//     auto cur_range_begin = prev_range_end;
+//     const std::string key = cur_range_begin->first;  // Keep a copy.
+//     auto cur_range_end = cookies_.upper_bound(key);
+//     prev_range_end = cur_range_end;
+// 
+//     // Ensure no equivalent cookies for this host.
+//     TrimDuplicateCookiesForKey(key, cur_range_begin, cur_range_end,
+//                                absl::nullopt);
+//   }
 
-    // Ensure no equivalent cookies for this host.
-    TrimDuplicateCookiesForKey(key, cur_range_begin, cur_range_end,
-                               absl::nullopt);
-  }
+//   for (auto cookie_partition_it = partitioned_cookies_.begin();
+//        cookie_partition_it != partitioned_cookies_.end();) {
+//     auto cur_cookie_partition_it = cookie_partition_it;
+//     ++cookie_partition_it;
 
-  for (auto cookie_partition_it = partitioned_cookies_.begin();
-       cookie_partition_it != partitioned_cookies_.end();) {
-    auto cur_cookie_partition_it = cookie_partition_it;
-    ++cookie_partition_it;
+//     // Iterate through the cookies in this partition, grouped by host.
+//     CookieMap* cookie_partition = cur_cookie_partition_it->second.get();
+//     auto prev_range_end = cookie_partition->begin();
+//     while (prev_range_end != cookie_partition->end()) {
+//       auto cur_range_begin = prev_range_end;
+//       const std::string key = cur_range_begin->first;  // Keep a copy.
+//       auto cur_range_end = cookie_partition->upper_bound(key);
+//       prev_range_end = cur_range_end;
 
-    // Iterate through the cookies in this partition, grouped by host.
-    CookieMap* cookie_partition = cur_cookie_partition_it->second.get();
-    auto prev_range_end = cookie_partition->begin();
-    while (prev_range_end != cookie_partition->end()) {
-      auto cur_range_begin = prev_range_end;
-      const std::string key = cur_range_begin->first;  // Keep a copy.
-      auto cur_range_end = cookie_partition->upper_bound(key);
-      prev_range_end = cur_range_end;
-
-      // Ensure no equivalent cookies for this host and cookie partition key.
-      TrimDuplicateCookiesForKey(key, cur_range_begin, cur_range_end,
-                                 absl::make_optional(cur_cookie_partition_it));
-    }
-  }
-}
+//       // Ensure no equivalent cookies for this host and cookie partition key.
+//       TrimDuplicateCookiesForKey(key, cur_range_begin, cur_range_end,
+//                                  absl::make_optional(cur_cookie_partition_it));
+//     }
+//   }
+// }
 
 // Our strategy to find duplicates is:
 // (1) Build a map from cookie unique key to
