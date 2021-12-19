@@ -341,13 +341,13 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
 CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
                              base::TimeDelta last_access_threshold,
                              NetLog* net_log)
-    : num_keys_(0u),
-      num_partitioned_cookies_(0u),
+    // : num_keys_(0u),
+      // num_partitioned_cookies_(0u),
       // change_dispatcher_(this),
       // initialized_(false),
       // started_fetching_all_cookies_(false),
       // finished_fetching_all_cookies_(false),
-      seen_global_task_(false) // ,
+      // seen_global_task_(false) // ,
       // net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
       // store_(std::move(store)) // ,
       // last_access_threshold_(last_access_threshold),
@@ -1250,20 +1250,20 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
 //   }
 // }
 
-void CookieMonster::MaybeDeleteEquivalentCookieAndUpdateStatus(
-    const std::string& key,
-    const CanonicalCookie& cookie_being_set,
-    bool allowed_to_set_secure_cookie,
-    bool skip_httponly,
-    bool already_expired,
-    base::Time* creation_date_to_inherit,
-    CookieInclusionStatus* status,
-    absl::optional<PartitionedCookieMap::iterator> cookie_partition_it) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  DCHECK(!status->HasExclusionReason(
-      CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE));
-  DCHECK(!status->HasExclusionReason(
-      CookieInclusionStatus::EXCLUDE_OVERWRITE_HTTP_ONLY));
+// void CookieMonster::MaybeDeleteEquivalentCookieAndUpdateStatus(
+//     const std::string& key,
+//     const CanonicalCookie& cookie_being_set,
+//     bool allowed_to_set_secure_cookie,
+//     bool skip_httponly,
+//     bool already_expired,
+//     base::Time* creation_date_to_inherit,
+//     CookieInclusionStatus* status,
+//     absl::optional<PartitionedCookieMap::iterator> cookie_partition_it) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   DCHECK(!status->HasExclusionReason(
+//       CookieInclusionStatus::EXCLUDE_OVERWRITE_SECURE));
+//   DCHECK(!status->HasExclusionReason(
+//       CookieInclusionStatus::EXCLUDE_OVERWRITE_HTTP_ONLY));
 
 //   CookieMap* cookie_map = &cookies_;
 //   if (cookie_partition_it) {
@@ -1363,15 +1363,15 @@ void CookieMonster::MaybeDeleteEquivalentCookieAndUpdateStatus(
 //           });
 //     }
 //   }
-}
+// }
 
-CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
-    const std::string& key,
-    std::unique_ptr<CanonicalCookie> cc,
-    bool sync_to_store,
-    const CookieAccessResult& access_result,
-    bool dispatch_change) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
+//     const std::string& key,
+//     std::unique_ptr<CanonicalCookie> cc,
+//     bool sync_to_store,
+//     const CookieAccessResult& access_result,
+//     bool dispatch_change) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
   // CanonicalCookie* cc_ptr = cc.get();
 
   // net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
@@ -1381,11 +1381,11 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
   //                   });
   // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
   //   store_->AddCookie(*cc_ptr);
-  auto inserted = cookies_.insert(CookieMap::value_type(key, std::move(cc)));
+//   auto inserted = cookies_.insert(CookieMap::value_type(key, std::move(cc)));
 
   // LogCookieTypeToUMA(cc_ptr, access_result);
 
-  DCHECK(access_result.status.IsInclude());
+//   DCHECK(access_result.status.IsInclude());
   // if (dispatch_change) {
   //   change_dispatcher_.DispatchChange(
   //       CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
@@ -1394,20 +1394,20 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
 
   // If this is the first cookie in |cookies_| with this key, increment the
   // |num_keys_| counter.
-  bool different_prev =
-      inserted == cookies_.begin() || std::prev(inserted)->first != key;
+//   bool different_prev =
+//       inserted == cookies_.begin() || std::prev(inserted)->first != key;
   // According to std::multiqueue documentation:
   // "If the container has elements with equivalent key, inserts at the upper
   // bound of that range. (since C++11)"
   // This means that "inserted" iterator either points to the last element in
   // the map, or the element succeeding it has to have different key.
-  DCHECK(std::next(inserted) == cookies_.end() ||
-         std::next(inserted)->first != key);
-  if (different_prev)
-    ++num_keys_;
+//   DCHECK(std::next(inserted) == cookies_.end() ||
+//          std::next(inserted)->first != key);
+//   if (different_prev)
+//     ++num_keys_;
 
-  return inserted;
-}
+//   return inserted;
+// }
 
 // bool CookieMonster::ShouldUpdatePersistentStore(CanonicalCookie* cc) {
 //   return (cc->IsPersistent() || persist_session_cookies_) && store_.get();

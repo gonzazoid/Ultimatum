@@ -496,26 +496,26 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // for duplicates.
   //
   // NOTE: There should never be more than a single matching equivalent cookie.
-  void MaybeDeleteEquivalentCookieAndUpdateStatus(
-      const std::string& key,
-      const CanonicalCookie& cookie_being_set,
-      bool allowed_to_set_secure_cookie,
-      bool skip_httponly,
-      bool already_expired,
-      base::Time* creation_date_to_inherit,
-      CookieInclusionStatus* status,
-      absl::optional<PartitionedCookieMap::iterator> cookie_partition_it);
+  // void MaybeDeleteEquivalentCookieAndUpdateStatus(
+  //     const std::string& key,
+  //     const CanonicalCookie& cookie_being_set,
+  //     bool allowed_to_set_secure_cookie,
+  //     bool skip_httponly,
+  //     bool already_expired,
+  //     base::Time* creation_date_to_inherit,
+  //     CookieInclusionStatus* status,
+  //     absl::optional<PartitionedCookieMap::iterator> cookie_partition_it);
 
   // Inserts `cc` into cookies_. Returns an iterator that points to the inserted
   // cookie in `cookies_`. Guarantee: all iterators to `cookies_` remain valid.
   // Dispatches the change to `change_dispatcher_` iff `dispatch_change` is
   // true.
-  CookieMap::iterator InternalInsertCookie(
-      const std::string& key,
-      std::unique_ptr<CanonicalCookie> cc,
-      bool sync_to_store,
-      const CookieAccessResult& access_result,
-      bool dispatch_change = true);
+  // CookieMap::iterator InternalInsertCookie(
+  //     const std::string& key,
+  //     std::unique_ptr<CanonicalCookie> cc,
+  //     bool sync_to_store,
+  //     const CookieAccessResult& access_result,
+  //     bool dispatch_change = true);
 
   // Returns true if the cookie should be (or is already) synced to the store.
   // Used for cookies during insertion and deletion into the in-memory store.
@@ -687,7 +687,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // The number of distinct keys (eTLD+1's) currently present in the |cookies_|
   // multimap. This is histogrammed periodically.
-  size_t num_keys_;
+  // size_t num_keys_;
 
   CookieMap cookies_;
 
@@ -695,7 +695,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Number of distinct partitioned cookies globally. This is used to enforce a
   // global maximum on the number of partitioned cookies.
-  size_t num_partitioned_cookies_;
+  // size_t num_partitioned_cookies_;
 
   // CookieMonsterChangeDispatcher change_dispatcher_;
 
@@ -725,7 +725,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // view of the cookie store. This is more to ensure fancy cookie export/import
   // code has a consistent view of the CookieStore, rather than out of concern
   // for typical use.
-  bool seen_global_task_;
+  // bool seen_global_task_;
 
   // NetLogWithSource net_log_;
 
