@@ -150,8 +150,8 @@ class FlushablePersistentStore : public CookieMonster::PersistentCookieStore {
   // CookieMonster::PersistentCookieStore implementation:
   // void Load(LoadedCallback loaded_callback,
   //           const NetLogWithSource& net_log) override;
-  void LoadCookiesForKey(const std::string& key,
-                         LoadedCallback loaded_callback) override;
+  // void LoadCookiesForKey(const std::string& key,
+  //                        LoadedCallback loaded_callback) override;
   // void AddCookie(const CanonicalCookie&) override;
   // void UpdateCookieAccessTime(const CanonicalCookie&) override;
   // void DeleteCookie(const CanonicalCookie&) override;

@@ -87,13 +87,13 @@ void SessionCleanupCookieStore::DeleteSessionCookies(
 //                           net_log);
 // }
 
-void SessionCleanupCookieStore::LoadCookiesForKey(
-    const std::string& key,
-    LoadedCallback loaded_callback) {
-  persistent_store_->LoadCookiesForKey(
-      key, base::BindOnce(&SessionCleanupCookieStore::OnLoad, this,
-                          std::move(loaded_callback)));
-}
+// void SessionCleanupCookieStore::LoadCookiesForKey(
+//     const std::string& key,
+//     LoadedCallback loaded_callback) {
+//   persistent_store_->LoadCookiesForKey(
+//       key, base::BindOnce(&SessionCleanupCookieStore::OnLoad, this,
+//                           std::move(loaded_callback)));
+// }
 
 // void SessionCleanupCookieStore::AddCookie(const net::CanonicalCookie& cc) {
 //   net::SQLitePersistentCookieStore::CookieOrigin origin(cc.Domain(),

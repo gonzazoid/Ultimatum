@@ -218,11 +218,11 @@ FlushablePersistentStore::FlushablePersistentStore() : flush_count_(0) {}
 //       base::BindOnce(std::move(loaded_callback), std::move(out_cookies)));
 // }
 
-void FlushablePersistentStore::LoadCookiesForKey(
-    const std::string& key,
-    LoadedCallback loaded_callback) {
+// void FlushablePersistentStore::LoadCookiesForKey(
+//     const std::string& key,
+//     LoadedCallback loaded_callback) {
   // Load(std::move(loaded_callback), NetLogWithSource());
-}
+// }
 
 // void FlushablePersistentStore::AddCookie(const CanonicalCookie&) {}
 

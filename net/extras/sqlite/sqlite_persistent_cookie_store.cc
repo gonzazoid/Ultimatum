@@ -48,14 +48,14 @@ using base::Time;
 
 namespace {
 
-base::Value CookieKeyedLoadNetLogParams(const std::string& key,
-                                        net::NetLogCaptureMode capture_mode) {
-  if (!net::NetLogCaptureIncludesSensitive(capture_mode))
-    return base::Value();
-  base::DictionaryValue dict;
-  dict.SetString("key", key);
-  return std::move(dict);
-}
+// base::Value CookieKeyedLoadNetLogParams(const std::string& key,
+//                                         net::NetLogCaptureMode capture_mode) {
+//   if (!net::NetLogCaptureIncludesSensitive(capture_mode))
+//     return base::Value();
+//   base::DictionaryValue dict;
+//   dict.SetString("key", key);
+//   return std::move(dict);
+// }
 
 // Used to populate a histogram for problems when loading cookies.
 //
@@ -267,8 +267,8 @@ class SQLitePersistentCookieStore::Backend
   // void Load(LoadedCallback loaded_callback);
 
   // Loads cookies for the domain key (eTLD+1).
-  void LoadCookiesForKey(const std::string& domain,
-                         LoadedCallback loaded_callback);
+  // void LoadCookiesForKey(const std::string& domain,
+  //                        LoadedCallback loaded_callback);
 
   // Steps through all results of |statement|, makes a cookie from each, and
   // adds the cookie to |cookies|. Returns true if everything loaded
@@ -696,22 +696,22 @@ bool CreateV16Schema(sql::Database* db) {
 //                                 std::move(loaded_callback), base::Time::Now()));
 // }
 
-void SQLitePersistentCookieStore::Backend::LoadCookiesForKey(
-    const std::string& key,
-    LoadedCallback loaded_callback) {
-  {
-    base::AutoLock locked(metrics_lock_);
-    if (num_priority_waiting_ == 0)
-      current_priority_wait_start_ = base::Time::Now();
-    num_priority_waiting_++;
-    total_priority_requests_++;
-  }
+// void SQLitePersistentCookieStore::Backend::LoadCookiesForKey(
+//     const std::string& key,
+//     LoadedCallback loaded_callback) {
+//   {
+//     base::AutoLock locked(metrics_lock_);
+//     if (num_priority_waiting_ == 0)
+//       current_priority_wait_start_ = base::Time::Now();
+//     num_priority_waiting_++;
+//     total_priority_requests_++;
+//   }
 
-  PostBackgroundTask(
-      FROM_HERE,
-      base::BindOnce(&Backend::LoadKeyAndNotifyInBackground, this, key,
-                     std::move(loaded_callback), base::Time::Now()));
-}
+//   PostBackgroundTask(
+//       FROM_HERE,
+//       base::BindOnce(&Backend::LoadKeyAndNotifyInBackground, this, key,
+//                      std::move(loaded_callback), base::Time::Now()));
+// }
 
 void SQLitePersistentCookieStore::Backend::LoadAndNotifyInBackground(
     LoadedCallback loaded_callback,
@@ -1655,23 +1655,24 @@ void SQLitePersistentCookieStore::DeleteAllInList(
 //                                 this, std::move(loaded_callback)));
 // }
 
-void SQLitePersistentCookieStore::LoadCookiesForKey(
-    const std::string& key,
-    LoadedCallback loaded_callback) {
-  DCHECK(!loaded_callback.is_null());
-  net_log_.AddEvent(NetLogEventType::COOKIE_PERSISTENT_STORE_KEY_LOAD_STARTED,
-                    [&](NetLogCaptureMode capture_mode) {
-                      return CookieKeyedLoadNetLogParams(key, capture_mode);
-                    });
+// void SQLitePersistentCookieStore::LoadCookiesForKey(
+//     const std::string& key,
+//     LoadedCallback loaded_callback) {
+//   DCHECK(!loaded_callback.is_null());
+//   net_log_.AddEvent(NetLogEventType::COOKIE_PERSISTENT_STORE_KEY_LOAD_STARTED,
+//                     [&](NetLogCaptureMode capture_mode) {
+//                       return CookieKeyedLoadNetLogParams(key, capture_mode);
+//                     });
   // Note that |backend_| keeps |this| alive by keeping a reference count.
   // If this class is ever converted over to a WeakPtr<> pattern (as TODO it
   // should be) this will need to be replaced by a more complex pattern that
   // guarantees |loaded_callback| being called even if the class has been
   // destroyed. |backend_| needs to outlive |this| to commit changes to disk.
-  backend_->LoadCookiesForKey(
-      key, base::BindOnce(&SQLitePersistentCookieStore::CompleteKeyedLoad, this,
-                          key, std::move(loaded_callback)));
-}
+  // backend_->LoadCookiesForKey(
+  //     key, base::BindOnce(&SQLitePersistentCookieStore::CompleteKeyedLoad, this,
+  //                         key, std::move(loaded_callback)));
+
+// }
 
 // void SQLitePersistentCookieStore::AddCookie(const CanonicalCookie& cc) {
 //   backend_->AddCookie(cc);

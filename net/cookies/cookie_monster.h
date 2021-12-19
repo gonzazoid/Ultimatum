@@ -787,8 +787,8 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
   // returned to CookieMonster.
   //
   // |loaded_callback| may not be NULL.
-  virtual void LoadCookiesForKey(const std::string& key,
-                                 LoadedCallback loaded_callback) = 0;
+  // virtual void LoadCookiesForKey(const std::string& key,
+  //                                LoadedCallback loaded_callback) = 0;
 
   // virtual void AddCookie(const CanonicalCookie& cc) = 0;
   // virtual void UpdateCookieAccessTime(const CanonicalCookie& cc) = 0;

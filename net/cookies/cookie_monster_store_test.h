@@ -99,8 +99,8 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
   // void Load(LoadedCallback loaded_callback,
   //           const NetLogWithSource& net_log) override;
 
-  void LoadCookiesForKey(const std::string& key,
-                         LoadedCallback loaded_callback) override;
+  // void LoadCookiesForKey(const std::string& key,
+  //                        LoadedCallback loaded_callback) override;
 
   // void AddCookie(const CanonicalCookie& cookie) override;
 
@@ -127,7 +127,7 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
   std::vector<std::unique_ptr<CanonicalCookie>> load_result_;
   // Indicates if the store has been fully loaded to avoid returning duplicate
   // cookies.
-  bool loaded_;
+  // bool loaded_;
 };
 
 // Helper to build a single CanonicalCookie.
@@ -152,8 +152,8 @@ class MockSimplePersistentCookieStore
   // void Load(LoadedCallback loaded_callback,
   //           const NetLogWithSource& net_log) override;
 
-  void LoadCookiesForKey(const std::string& key,
-                         LoadedCallback loaded_callback) override;
+  // void LoadCookiesForKey(const std::string& key,
+  //                        LoadedCallback loaded_callback) override;
 
   // void AddCookie(const CanonicalCookie& cookie) override;
 
@@ -178,7 +178,7 @@ class MockSimplePersistentCookieStore
 
   // Indicates if the store has been fully loaded to avoid return duplicate
   // cookies in subsequent load requests
-  bool loaded_;
+  // bool loaded_;
 };
 
 // Helper function for creating a CookieMonster backed by a
