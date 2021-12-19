@@ -1666,21 +1666,21 @@ CookieMonster::InternalInsertPartitionedCookie(
 //   MaybeRunCookieCallback(std::move(callback), CookieAccessResult());
 // }
 
-void CookieMonster::InternalUpdateCookieAccessTime(CanonicalCookie* cc,
-                                                   const Time& current) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::InternalUpdateCookieAccessTime(CanonicalCookie* cc,
+//                                                    const Time& current) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Based off the Mozilla code.  When a cookie has been accessed recently,
   // don't bother updating its access time again.  This reduces the number of
   // updates we do during pageload, which in turn reduces the chance our storage
   // backend will hit its batch thresholds and be forced to update.
   // if ((current - cc->LastAccessDate()) < last_access_threshold_)
-    return;
+//     return;
 
   // cc->SetLastAccessDate(current);
   // if (ShouldUpdatePersistentStore(cc))
   //   store_->UpdateCookieAccessTime(*cc);
-}
+// }
 
 // InternalDeleteCookies must not invalidate iterators other than the one being
 // deleted.

@@ -538,8 +538,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // restoring saved cookies; some statistics are not gathered in this case.
   // void SetAllCookies(CookieList list, SetCookiesCallback callback);
 
-  void InternalUpdateCookieAccessTime(CanonicalCookie* cc,
-                                      const base::Time& current_time);
+  // void InternalUpdateCookieAccessTime(CanonicalCookie* cc,
+  //                                     const base::Time& current_time);
 
   // |deletion_cause| argument is used for collecting statistics and choosing
   // the correct CookieChangeCause for OnCookieChange notifications. Guarantee:
