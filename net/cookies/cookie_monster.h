@@ -400,7 +400,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // The first access to the cookie store initializes it. This method should be
   // called before any access to the cookie store.
-  void MarkCookieStoreAsInitialized();
+  // void MarkCookieStoreAsInitialized();
 
   // Fetches all cookies if the backing store exists and they're not already
   // being fetched.
@@ -525,12 +525,12 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Inserts `cc` into partitioned_cookies_. Should only be used when
   // cc->IsPartitioned() is true.
-  PartitionedCookieMapIterators InternalInsertPartitionedCookie(
-      std::string key,
-      std::unique_ptr<CanonicalCookie> cc,
-      bool sync_to_store,
-      const CookieAccessResult& access_result,
-      bool dispatch_change = true);
+  // PartitionedCookieMapIterators InternalInsertPartitionedCookie(
+  //     std::string key,
+  //     std::unique_ptr<CanonicalCookie> cc,
+  //     bool sync_to_store,
+  //     const CookieAccessResult& access_result,
+  //     bool dispatch_change = true);
 
   // Sets all cookies from |list| after deleting any equivalent cookie.
   // For data gathering purposes, this routine is treated as if it is
@@ -616,7 +616,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Helper function to garbage collect all expired cookies in
   // PartitionedCookieMap.
-  void GarbageCollectAllExpiredPartitionedCookies(const base::Time& current);
+  // void GarbageCollectAllExpiredPartitionedCookies(const base::Time& current);
 
   // Helper for GarbageCollect(). Deletes all cookies in the range specified by
   // [|it_begin|, |it_end|). Returns the number of cookies deleted.
@@ -690,7 +690,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   CookieMap cookies_;
 
-  PartitionedCookieMap partitioned_cookies_;
+  // PartitionedCookieMap partitioned_cookies_;
 
   // Number of distinct partitioned cookies globally. This is used to enforce a
   // global maximum on the number of partitioned cookies.
@@ -699,7 +699,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // CookieMonsterChangeDispatcher change_dispatcher_;
 
   // Indicates whether the cookie store has been initialized.
-  bool initialized_;
+  // bool initialized_;
 
   // Indicates whether the cookie store has started fetching all cookies.
   // bool started_fetching_all_cookies_;
