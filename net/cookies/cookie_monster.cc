@@ -344,7 +344,7 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
     : num_keys_(0u),
       num_partitioned_cookies_(0u),
       // change_dispatcher_(this),
-      initialized_(false),
+      // initialized_(false),
       // started_fetching_all_cookies_(false),
       // finished_fetching_all_cookies_(false),
       seen_global_task_(false) // ,
@@ -828,10 +828,10 @@ CookieMonster::~CookieMonster() {
 //                               : base::OnceClosure()));
 // }
 
-void CookieMonster::MarkCookieStoreAsInitialized() {
-  DCHECK(thread_checker_.CalledOnValidThread());
-  initialized_ = true;
-}
+// void CookieMonster::MarkCookieStoreAsInitialized() {
+//   DCHECK(thread_checker_.CalledOnValidThread());
+//   initialized_ = true;
+// }
 
 // void CookieMonster::FetchAllCookiesIfNecessary() {
 //   DCHECK(thread_checker_.CalledOnValidThread());
@@ -1153,19 +1153,19 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
   return cookies;
 }
 
-std::vector<CanonicalCookie*>
-CookieMonster::FindPartitionedCookiesForRegistryControlledHost(
-    const CookiePartitionKey& cookie_partition_key,
-    const GURL& url) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// std::vector<CanonicalCookie*>
+// CookieMonster::FindPartitionedCookiesForRegistryControlledHost(
+//     const CookiePartitionKey& cookie_partition_key,
+//     const GURL& url) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  PartitionedCookieMap::iterator it =
-      partitioned_cookies_.find(cookie_partition_key);
-  if (it == partitioned_cookies_.end())
-    return std::vector<CanonicalCookie*>();
+//   PartitionedCookieMap::iterator it =
+//       partitioned_cookies_.find(cookie_partition_key);
+//   if (it == partitioned_cookies_.end())
+//     return std::vector<CanonicalCookie*>();
 
-  return FindCookiesForRegistryControlledHost(url, it->second.get());
-}
+//   return FindCookiesForRegistryControlledHost(url, it->second.get());
+// }
 
 // void CookieMonster::FilterCookiesWithOptions(
 //     const GURL url,
@@ -1426,15 +1426,15 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
 //                              (1 << COOKIE_TYPE_LAST_ENTRY));
 // }
 
-CookieMonster::PartitionedCookieMapIterators
-CookieMonster::InternalInsertPartitionedCookie(
-    std::string key,
-    std::unique_ptr<CanonicalCookie> cc,
-    bool sync_to_store,
-    const CookieAccessResult& access_result,
-    bool dispatch_change) {
-  DCHECK(cc->IsPartitioned());
-  DCHECK(thread_checker_.CalledOnValidThread());
+// CookieMonster::PartitionedCookieMapIterators
+// CookieMonster::InternalInsertPartitionedCookie(
+//     std::string key,
+//     std::unique_ptr<CanonicalCookie> cc,
+//     bool sync_to_store,
+//     const CookieAccessResult& access_result,
+//     bool dispatch_change) {
+//   DCHECK(cc->IsPartitioned());
+//   DCHECK(thread_checker_.CalledOnValidThread());
   // CanonicalCookie* cc_ptr = cc.get();
 
   // net_log_.AddEvent(NetLogEventType::COOKIE_STORE_COOKIE_ADDED,
@@ -1445,32 +1445,32 @@ CookieMonster::InternalInsertPartitionedCookie(
   // if (ShouldUpdatePersistentStore(cc_ptr) && sync_to_store)
   //   store_->AddCookie(*cc_ptr);
 
-  CookiePartitionKey partition_key(cc->PartitionKey().value());
-  PartitionedCookieMap::iterator partition_it =
-      partitioned_cookies_.find(partition_key);
-  if (partition_it == partitioned_cookies_.end()) {
-    partition_it =
-        partitioned_cookies_
-            .insert(PartitionedCookieMap::value_type(
-                std::move(partition_key), std::make_unique<CookieMap>()))
-            .first;
-  }
+  // CookiePartitionKey partition_key(cc->PartitionKey().value());
+  // PartitionedCookieMap::iterator partition_it =
+  //     partitioned_cookies_.find(partition_key);
+  // if (partition_it == partitioned_cookies_.end()) {
+  //   partition_it =
+  //       partitioned_cookies_
+  //           .insert(PartitionedCookieMap::value_type(
+  //               std::move(partition_key), std::make_unique<CookieMap>()))
+  //           .first;
+  // }
 
-  CookieMap::iterator cookie_it = partition_it->second->insert(
-      CookieMap::value_type(std::move(key), std::move(cc)));
-  ++num_partitioned_cookies_;
+  // CookieMap::iterator cookie_it = partition_it->second->insert(
+  //     CookieMap::value_type(std::move(key), std::move(cc)));
+  // ++num_partitioned_cookies_;
 
   // LogCookieTypeToUMA(cc_ptr, access_result);
 
-  DCHECK(access_result.status.IsInclude());
+  // DCHECK(access_result.status.IsInclude());
   // if (dispatch_change) {
   //   change_dispatcher_.DispatchChange(
   //       CookieChangeInfo(*cc_ptr, access_result, CookieChangeCause::INSERTED),
   //       true);
   // }
 
-  return std::make_pair(partition_it, cookie_it);
-}
+  // return std::make_pair(partition_it, cookie_it);
+// }
 
 // void CookieMonster::SetCanonicalCookie(std::unique_ptr<CanonicalCookie> cc,
 //                                        const GURL& source_url,
@@ -2091,22 +2091,22 @@ size_t CookieMonster::GarbageCollectExpiredPartitionedCookies(
   return num_deleted;
 }
 
-void CookieMonster::GarbageCollectAllExpiredPartitionedCookies(
-    const Time& current) {
-  for (auto it = partitioned_cookies_.begin();
-       it != partitioned_cookies_.end();) {
+// void CookieMonster::GarbageCollectAllExpiredPartitionedCookies(
+//     const Time& current) {
+//   for (auto it = partitioned_cookies_.begin();
+//        it != partitioned_cookies_.end();) {
     // GarbageCollectExpiredPartitionedCookies calls
     // InternalDeletePartitionedCookie which may invalidate
     // |cur_cookie_partition_it|.
-    auto cur_cookie_partition_it = it;
-    ++it;
-    GarbageCollectExpiredPartitionedCookies(
-        current, cur_cookie_partition_it,
-        CookieMapItPair(cur_cookie_partition_it->second->begin(),
-                        cur_cookie_partition_it->second->end()),
-        nullptr /*cookie_its*/);
-  }
-}
+//     auto cur_cookie_partition_it = it;
+//     ++it;
+//     GarbageCollectExpiredPartitionedCookies(
+//         current, cur_cookie_partition_it,
+//         CookieMapItPair(cur_cookie_partition_it->second->begin(),
+//                         cur_cookie_partition_it->second->end()),
+//         nullptr /*cookie_its*/);
+//   }
+// }
 
 // size_t CookieMonster::GarbageCollectDeleteRange(
 //     const Time& current,
