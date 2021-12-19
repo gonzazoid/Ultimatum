@@ -521,8 +521,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Used for cookies during insertion and deletion into the in-memory store.
   bool ShouldUpdatePersistentStore(CanonicalCookie* cc);
 
-  void LogCookieTypeToUMA(CanonicalCookie* cc,
-                          const CookieAccessResult& access_result);
+  // void LogCookieTypeToUMA(CanonicalCookie* cc,
+  //                         const CookieAccessResult& access_result);
 
   // Inserts `cc` into partitioned_cookies_. Should only be used when
   // cc->IsPartitioned() is true.
