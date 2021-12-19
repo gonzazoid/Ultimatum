@@ -343,19 +343,19 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // more interesting, cases.
   //
   // Do not reorder or renumber. Used for metrics.
-  enum class CookieSentToSamePort {
-    kSourcePortUnspecified = 0,  // Cookie's source port is unspecified, we
+  // enum class CookieSentToSamePort {
+  //   kSourcePortUnspecified = 0,  // Cookie's source port is unspecified, we
                                  // can't know if this is the same port or not.
-    kInvalid = 1,  // The source port was corrupted to be PORT_INVALID, we
+  //   kInvalid = 1,  // The source port was corrupted to be PORT_INVALID, we
                    // can't know if this is the same port or not.
-    kNo = 2,       // Source port and destination port are different.
-    kNoButDefault =
-        3,     // Source and destination ports are different but they're
+  //   kNo = 2,       // Source port and destination port are different.
+  //   kNoButDefault =
+  //       3,     // Source and destination ports are different but they're
                // the defaults for their scheme. This can mean that an http
                // cookie was sent to a https origin or vice-versa.
-    kYes = 4,  // They're the same.
-    kMaxValue = kYes
-  };
+  //   kYes = 4,  // They're the same.
+  //   kMaxValue = kYes
+  // };
 
   // Record statistics every kRecordStatisticsIntervalSeconds of uptime.
   // static const int kRecordStatisticsIntervalSeconds = 10 * 60;
