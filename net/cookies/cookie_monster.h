@@ -733,7 +733,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Minimum delay after updating a cookie's LastAccessDate before we will
   // update it again.
-  const base::TimeDelta last_access_threshold_;
+  // const base::TimeDelta last_access_threshold_;
 
   // Approximate date of access time of least recently accessed cookie
   // in |cookies_|.  Note that this is not guaranteed to be accurate, only a)

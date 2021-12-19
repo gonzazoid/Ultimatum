@@ -350,7 +350,7 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
       seen_global_task_(false),
       // net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
       store_(std::move(store)),
-      last_access_threshold_(last_access_threshold),
+      // last_access_threshold_(last_access_threshold),
       // last_statistic_record_time_(base::Time::Now()),
       persist_session_cookies_(false) {
   cookieable_schemes_.insert(
@@ -1674,10 +1674,10 @@ void CookieMonster::InternalUpdateCookieAccessTime(CanonicalCookie* cc,
   // don't bother updating its access time again.  This reduces the number of
   // updates we do during pageload, which in turn reduces the chance our storage
   // backend will hit its batch thresholds and be forced to update.
-  if ((current - cc->LastAccessDate()) < last_access_threshold_)
+  // if ((current - cc->LastAccessDate()) < last_access_threshold_)
     return;
 
-  cc->SetLastAccessDate(current);
+  // cc->SetLastAccessDate(current);
   // if (ShouldUpdatePersistentStore(cc))
   //   store_->UpdateCookieAccessTime(*cc);
 }
