@@ -353,9 +353,9 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
       // last_access_threshold_(last_access_threshold),
       // last_statistic_record_time_(base::Time::Now()),
       /* persist_session_cookies_(false) */ {
-  cookieable_schemes_.insert(
-      cookieable_schemes_.begin(), kDefaultCookieableSchemes,
-      kDefaultCookieableSchemes + kDefaultCookieableSchemesCount);
+  // cookieable_schemes_.insert(
+  //     cookieable_schemes_.begin(), kDefaultCookieableSchemes,
+  //     kDefaultCookieableSchemes + kDefaultCookieableSchemesCount);
   // net_log_.BeginEvent(NetLogEventType::COOKIE_STORE_ALIVE, [&] {
   //   return NetLogCookieMonsterConstructorParams(store != nullptr);
   // });
@@ -2188,17 +2188,18 @@ bool CookieMonster::HasCookieableScheme(const GURL& url) {
   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Make sure the request is on a cookie-able url scheme.
-  bool is_cookieable = base::ranges::any_of(
-      cookieable_schemes_, [&url](const std::string& cookieable_scheme) {
-        return url.SchemeIs(cookieable_scheme.c_str());
-      });
+  // bool is_cookieable = base::ranges::any_of(
+  //     cookieable_schemes_, [&url](const std::string& cookieable_scheme) {
+  //       return url.SchemeIs(cookieable_scheme.c_str());
+  //     });
 
-  if (!is_cookieable) {
+  // if (!is_cookieable) {
     // The scheme didn't match any in our allowed list.
-    DVLOG(net::cookie_util::kVlogPerCookieMonster)
-        << "WARNING: Unsupported cookie scheme: " << url.scheme();
-  }
-  return is_cookieable;
+    // DVLOG(net::cookie_util::kVlogPerCookieMonster)
+    //     << "WARNING: Unsupported cookie scheme: " << url.scheme();
+  // }
+  // return is_cookieable;
+  return false;
 }
 
 CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
