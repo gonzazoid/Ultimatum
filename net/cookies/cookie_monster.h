@@ -718,7 +718,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Queues tasks that are blocked until all cookies are loaded from the backend
   // store.
-  base::circular_deque<base::OnceClosure> tasks_pending_;
+  // base::circular_deque<base::OnceClosure> tasks_pending_;
 
   // Once a global cookie task has been seen, all per-key tasks must be put in
   // |tasks_pending_| instead of |tasks_pending_for_key_| to ensure a reasonable

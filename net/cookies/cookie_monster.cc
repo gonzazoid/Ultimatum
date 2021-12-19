@@ -977,20 +977,20 @@ void CookieMonster::InvokeQueue() {
   // Needed to prevent any recursively queued tasks from going back into the
   // per-key queues.
   seen_global_task_ = true;
-  for (auto& tasks_for_key : tasks_pending_for_key_) {
-    tasks_pending_.insert(tasks_pending_.begin(),
-                          std::make_move_iterator(tasks_for_key.second.begin()),
-                          std::make_move_iterator(tasks_for_key.second.end()));
-  }
-  tasks_pending_for_key_.clear();
+  // for (auto& tasks_for_key : tasks_pending_for_key_) {
+  //   tasks_pending_.insert(tasks_pending_.begin(),
+  //                         std::make_move_iterator(tasks_for_key.second.begin()),
+  //                         std::make_move_iterator(tasks_for_key.second.end()));
+  // }
+  // tasks_pending_for_key_.clear();
 
-  while (!tasks_pending_.empty()) {
-    base::OnceClosure request_task = std::move(tasks_pending_.front());
-    tasks_pending_.pop_front();
-    std::move(request_task).Run();
-  }
+  // while (!tasks_pending_.empty()) {
+  //   base::OnceClosure request_task = std::move(tasks_pending_.front());
+  //   tasks_pending_.pop_front();
+  //   std::move(request_task).Run();
+  // }
 
-  DCHECK(tasks_pending_for_key_.empty());
+  // DCHECK(tasks_pending_for_key_.empty());
 
   finished_fetching_all_cookies_ = true;
   keys_loaded_.clear();
