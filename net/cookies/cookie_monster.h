@@ -744,7 +744,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // might find cookies to purge. Note: The default Time() constructor will
   // create a value that compares earlier than any other time value, which is
   // wanted.  Thus this value is not initialized.
-  base::Time earliest_access_time_;
+  // base::Time earliest_access_time_;
 
   std::vector<std::string> cookieable_schemes_;
 
