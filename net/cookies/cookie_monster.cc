@@ -1166,88 +1166,88 @@ CookieMonster::FindPartitionedCookiesForRegistryControlledHost(
   return FindCookiesForRegistryControlledHost(url, it->second.get());
 }
 
-void CookieMonster::FilterCookiesWithOptions(
-    const GURL url,
-    const CookieOptions options,
-    std::vector<CanonicalCookie*>* cookie_ptrs,
-    CookieAccessResultList* included_cookies,
-    CookieAccessResultList* excluded_cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::FilterCookiesWithOptions(
+//     const GURL url,
+//     const CookieOptions options,
+//     std::vector<CanonicalCookie*>* cookie_ptrs,
+//     CookieAccessResultList* included_cookies,
+//     CookieAccessResultList* excluded_cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  // Probe to save statistics relatively frequently.  We do it here rather
-  // than in the set path as many websites won't set cookies, and we
-  // want to collect statistics whenever the browser's being used.
-  Time current_time = Time::Now();
-  RecordPeriodicStats(current_time);
+//   // Probe to save statistics relatively frequently.  We do it here rather
+//   // than in the set path as many websites won't set cookies, and we
+//   // want to collect statistics whenever the browser's being used.
+//   Time current_time = Time::Now();
+//   RecordPeriodicStats(current_time);
 
-  // bool delegate_treats_url_as_trustworthy =
-  //     cookie_access_delegate() &&
-  //     cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(url);
-  bool delegate_treats_url_as_trustworthy = false;
-  for (CanonicalCookie* cookie_ptr : *cookie_ptrs) {
-    // Filter out cookies that should not be included for a request to the
-    // given |url|. HTTP only cookies are filtered depending on the passed
-    // cookie |options|.
-    CookieAccessResult access_result = cookie_ptr->IncludeForRequestURL(
-        url, options,
-        CookieAccessParams{
-            GetAccessSemanticsForCookie(*cookie_ptr),
-            delegate_treats_url_as_trustworthy,
-            cookie_util::GetSamePartyStatus(*cookie_ptr, options)});
+//   // bool delegate_treats_url_as_trustworthy =
+//   //     cookie_access_delegate() &&
+//   //     cookie_access_delegate()->ShouldTreatUrlAsTrustworthy(url);
+//   bool delegate_treats_url_as_trustworthy = false;
+//   for (CanonicalCookie* cookie_ptr : *cookie_ptrs) {
+//     // Filter out cookies that should not be included for a request to the
+//     // given |url|. HTTP only cookies are filtered depending on the passed
+//     // cookie |options|.
+//     CookieAccessResult access_result = cookie_ptr->IncludeForRequestURL(
+//         url, options,
+//         CookieAccessParams{
+//             GetAccessSemanticsForCookie(*cookie_ptr),
+//             delegate_treats_url_as_trustworthy,
+//             cookie_util::GetSamePartyStatus(*cookie_ptr, options)});
 
-    if (!access_result.status.IsInclude()) {
-      UMA_HISTOGRAM_BOOLEAN(
-          "Cookie.SameParty.ReadExclusionDecidedBySameParty",
-          access_result.status.HasOnlyExclusionReason(
-              CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT));
+//     if (!access_result.status.IsInclude()) {
+//       UMA_HISTOGRAM_BOOLEAN(
+//           "Cookie.SameParty.ReadExclusionDecidedBySameParty",
+//           access_result.status.HasOnlyExclusionReason(
+//               CookieInclusionStatus::EXCLUDE_SAMEPARTY_CROSS_PARTY_CONTEXT));
 
-      if (options.return_excluded_cookies())
-        excluded_cookies->push_back({*cookie_ptr, access_result});
-      continue;
-    }
+//       if (options.return_excluded_cookies())
+//         excluded_cookies->push_back({*cookie_ptr, access_result});
+//       continue;
+//     }
 
-    if (options.update_access_time())
-      InternalUpdateCookieAccessTime(cookie_ptr, current_time);
+//     if (options.update_access_time())
+//       InternalUpdateCookieAccessTime(cookie_ptr, current_time);
 
-    int destination_port = url.EffectiveIntPort();
+//     int destination_port = url.EffectiveIntPort();
 
-    if (IsLocalhost(url)) {
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.Read.Localhost",
-          ReducePortRangeForCookieHistogram(destination_port));
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.ReadDiffersFromSet.Localhost",
-          IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
-                                          cookie_ptr->SourceScheme()));
-    } else {
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.Read.RemoteHost",
-          ReducePortRangeForCookieHistogram(destination_port));
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.ReadDiffersFromSet.RemoteHost",
-          IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
-                                          cookie_ptr->SourceScheme()));
-    }
+//     if (IsLocalhost(url)) {
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.Read.Localhost",
+//           ReducePortRangeForCookieHistogram(destination_port));
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.ReadDiffersFromSet.Localhost",
+//           IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
+//                                           cookie_ptr->SourceScheme()));
+//     } else {
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.Read.RemoteHost",
+//           ReducePortRangeForCookieHistogram(destination_port));
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.ReadDiffersFromSet.RemoteHost",
+//           IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
+//                                           cookie_ptr->SourceScheme()));
+//     }
 
-    if (cookie_ptr->IsDomainCookie()) {
-      UMA_HISTOGRAM_ENUMERATION(
-          "Cookie.Port.ReadDiffersFromSet.DomainSet",
-          IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
-                                          cookie_ptr->SourceScheme()));
-    }
+//     if (cookie_ptr->IsDomainCookie()) {
+//       UMA_HISTOGRAM_ENUMERATION(
+//           "Cookie.Port.ReadDiffersFromSet.DomainSet",
+//           IsCookieSentToSamePortThatSetIt(url, cookie_ptr->SourcePort(),
+//                                           cookie_ptr->SourceScheme()));
+//     }
 
-    if (cookie_ptr->IsSameParty()) {
-      UMA_HISTOGRAM_BOOLEAN("Cookie.SamePartyReadIncluded.IsHTTP",
-                            !options.exclude_httponly());
-      UMA_HISTOGRAM_EXACT_LINEAR(
-          "Cookie.SamePartyReadIncluded.PartyContextSize",
-          options.full_party_context_size(),
-          1 + IsolationInfo::kPartyContextMaxSize);
-    }
+//     if (cookie_ptr->IsSameParty()) {
+//       UMA_HISTOGRAM_BOOLEAN("Cookie.SamePartyReadIncluded.IsHTTP",
+//                             !options.exclude_httponly());
+//       UMA_HISTOGRAM_EXACT_LINEAR(
+//           "Cookie.SamePartyReadIncluded.PartyContextSize",
+//           options.full_party_context_size(),
+//           1 + IsolationInfo::kPartyContextMaxSize);
+//     }
 
-    included_cookies->push_back({*cookie_ptr, access_result});
-  }
-}
+//     included_cookies->push_back({*cookie_ptr, access_result});
+//   }
+// }
 
 void CookieMonster::MaybeDeleteEquivalentCookieAndUpdateStatus(
     const std::string& key,
