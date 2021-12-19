@@ -209,8 +209,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // void SetPersistSessionCookies(bool persist_session_cookies);
 
   // The default list of schemes the cookie monster can handle.
-  static const char* const kDefaultCookieableSchemes[];
-  static const int kDefaultCookieableSchemesCount;
+  // static const char* const kDefaultCookieableSchemes[];
+  // static const int kDefaultCookieableSchemesCount;
 
   // Find a key based on the given domain, which will be used to find all
   // cookies potentially relevant to it. This is used for lookup in cookies_ as
@@ -224,7 +224,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Triggers immediate recording of stats that are typically reported
   // periodically.
-  bool DoRecordPeriodicStatsForTesting() { return DoRecordPeriodicStats(); }
+  // bool DoRecordPeriodicStatsForTesting() { return DoRecordPeriodicStats(); }
 
  private:
   // For garbage collection constants.
@@ -451,7 +451,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   //     CookieMap::iterator end,
   //     absl::optional<PartitionedCookieMap::iterator> cookie_partition_it);
 
-  void SetDefaultCookieableSchemes();
+  // void SetDefaultCookieableSchemes();
 
   std::vector<CanonicalCookie*> FindCookiesForRegistryControlledHost(
       const GURL& url,
@@ -638,7 +638,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
                                              CookieItVector cookie_its,
                                              base::Time* earliest_time);
 
-  bool HasCookieableScheme(const GURL& url);
+  // bool HasCookieableScheme(const GURL& url);
 
   // Get the cookie's access semantics (LEGACY or NONLEGACY), by checking for a
   // value from the cookie access delegate, if it is non-null. Otherwise returns
@@ -654,21 +654,21 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // Records the aforementioned stats if we have already finished loading all
   // cookies. Returns whether stats were recorded.
-  bool DoRecordPeriodicStats();
+  // bool DoRecordPeriodicStats();
 
   // Defers the callback until the full coookie database has been loaded. If
   // it's already been loaded, runs the callback synchronously.
-  void DoCookieCallback(base::OnceClosure callback);
+  // void DoCookieCallback(base::OnceClosure callback);
 
   // Defers the callback until the cookies relevant to given URL have been
   // loaded. If they've already been loaded, runs the callback synchronously.
-  void DoCookieCallbackForURL(base::OnceClosure callback, const GURL& url);
+  // void DoCookieCallbackForURL(base::OnceClosure callback, const GURL& url);
 
   // Defers the callback until the cookies relevant to given host or domain
   // have been loaded. If they've already been loaded, runs the callback
   // synchronously.
-  void DoCookieCallbackForHostOrDomain(base::OnceClosure callback,
-                                       base::StringPiece host_or_domain);
+  // void DoCookieCallbackForHostOrDomain(base::OnceClosure callback,
+  //                                      base::StringPiece host_or_domain);
 
   // Checks to see if a cookie is being sent to the same port it was set by. For
   // metrics.
@@ -703,9 +703,9 @@ class NET_EXPORT CookieMonster : public CookieStore {
   bool initialized_;
 
   // Indicates whether the cookie store has started fetching all cookies.
-  bool started_fetching_all_cookies_;
+  // bool started_fetching_all_cookies_;
   // Indicates whether the cookie store has finished fetching all cookies.
-  bool finished_fetching_all_cookies_;
+  // bool finished_fetching_all_cookies_;
 
   // List of domain keys that have been loaded from the DB.
   std::set<std::string> keys_loaded_;

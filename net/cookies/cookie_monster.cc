@@ -345,8 +345,8 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
       num_partitioned_cookies_(0u),
       // change_dispatcher_(this),
       initialized_(false),
-      started_fetching_all_cookies_(false),
-      finished_fetching_all_cookies_(false),
+      // started_fetching_all_cookies_(false),
+      // finished_fetching_all_cookies_(false),
       seen_global_task_(false) // ,
       // net_log_(NetLogWithSource::Make(net_log, NetLogSourceType::COOKIE_STORE)),
       // store_(std::move(store)) // ,
@@ -531,10 +531,10 @@ CookieMonster::CookieMonster(scoped_refptr<PersistentCookieStore> store,
   // persist_session_cookies_ = persist_session_cookies;
 // }
 
-const char* const CookieMonster::kDefaultCookieableSchemes[] = {"http", "https",
-                                                                "ws", "wss"};
-const int CookieMonster::kDefaultCookieableSchemesCount =
-    base::size(kDefaultCookieableSchemes);
+// const char* const CookieMonster::kDefaultCookieableSchemes[] = {"http", "https",
+//                                                                 "ws", "wss"};
+// const int CookieMonster::kDefaultCookieableSchemesCount =
+//     base::size(kDefaultCookieableSchemes);
 
 // CookieChangeDispatcher& CookieMonster::GetChangeDispatcher() {
 //   return change_dispatcher_;
@@ -2184,8 +2184,8 @@ size_t CookieMonster::GarbageCollectLeastRecentlyAccessed(
 //   return cookie_util::CookieDomainAsHost(effective_domain);
 // }
 
-bool CookieMonster::HasCookieableScheme(const GURL& url) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// bool CookieMonster::HasCookieableScheme(const GURL& url) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // Make sure the request is on a cookie-able url scheme.
   // bool is_cookieable = base::ranges::any_of(
@@ -2199,8 +2199,8 @@ bool CookieMonster::HasCookieableScheme(const GURL& url) {
     //     << "WARNING: Unsupported cookie scheme: " << url.scheme();
   // }
   // return is_cookieable;
-  return false;
-}
+  // return false;
+// }
 
 CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
     const CanonicalCookie& cookie) const {
@@ -2234,12 +2234,12 @@ CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
 // }
 
 // TODO(crbug.com/1225444): Record periodic stats for Partitioned cookies.
-bool CookieMonster::DoRecordPeriodicStats() {
+// bool CookieMonster::DoRecordPeriodicStats() {
   // These values are all bogus if we have only partially loaded the cookies.
-  if (started_fetching_all_cookies_ && !finished_fetching_all_cookies_)
-    return false;
+  // if (started_fetching_all_cookies_ && !finished_fetching_all_cookies_)
+  //   return false;
 
-  base::UmaHistogramCounts100000("Cookie.Count2", cookies_.size());
+  // base::UmaHistogramCounts100000("Cookie.Count2", cookies_.size());
 
   // if (cookie_access_delegate()) {
   //   for (const auto& set : cookie_access_delegate()->RetrieveFirstPartySets()) {
@@ -2256,38 +2256,38 @@ bool CookieMonster::DoRecordPeriodicStats() {
   // }
 
   // Can be up to kMaxDomainPurgedKeys.
-  UMA_HISTOGRAM_COUNTS_100("Cookie.NumDomainPurgedKeys",
-                           domain_purged_keys_.size());
+  // UMA_HISTOGRAM_COUNTS_100("Cookie.NumDomainPurgedKeys",
+  //                          domain_purged_keys_.size());
   // Can be up to kMaxCookies.
-  UMA_HISTOGRAM_COUNTS_10000("Cookie.NumKeys", num_keys_);
+  // UMA_HISTOGRAM_COUNTS_10000("Cookie.NumKeys", num_keys_);
 
-  return true;
-}
+  // return true;
+// }
 
-void CookieMonster::DoCookieCallback(base::OnceClosure callback) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::DoCookieCallback(base::OnceClosure callback) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  MarkCookieStoreAsInitialized();
+  // MarkCookieStoreAsInitialized();
   // FetchAllCookiesIfNecessary();
-  seen_global_task_ = true;
+  // seen_global_task_ = true;
 
   // if (!finished_fetching_all_cookies_ && store_.get()) {
   //   tasks_pending_.push_back(std::move(callback));
   //   return;
   // }
 
-  std::move(callback).Run();
-}
+  // std::move(callback).Run();
+// }
 
-void CookieMonster::DoCookieCallbackForURL(base::OnceClosure callback,
-                                           const GURL& url) {
-  DoCookieCallbackForHostOrDomain(std::move(callback), url.host_piece());
-}
+// void CookieMonster::DoCookieCallbackForURL(base::OnceClosure callback,
+//                                            const GURL& url) {
+//   DoCookieCallbackForHostOrDomain(std::move(callback), url.host_piece());
+// }
 
-void CookieMonster::DoCookieCallbackForHostOrDomain(
-    base::OnceClosure callback,
-    base::StringPiece host_or_domain) {
-  MarkCookieStoreAsInitialized();
+// void CookieMonster::DoCookieCallbackForHostOrDomain(
+//     base::OnceClosure callback,
+//     base::StringPiece host_or_domain) {
+//   MarkCookieStoreAsInitialized();
   // FetchAllCookiesIfNecessary();
 
   // If cookies for the requested domain key (eTLD+1) have been loaded from DB
@@ -2320,8 +2320,8 @@ void CookieMonster::DoCookieCallbackForHostOrDomain(
     // }
   // }
 
-  std::move(callback).Run();
-}
+  // std::move(callback).Run();
+// }
 
 // CookieMonster::CookieSentToSamePort
 // CookieMonster::IsCookieSentToSamePortThatSetIt(
