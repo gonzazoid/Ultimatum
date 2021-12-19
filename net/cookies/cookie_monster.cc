@@ -1382,7 +1382,7 @@ CookieMonster::CookieMap::iterator CookieMonster::InternalInsertCookie(
     store_->AddCookie(*cc_ptr);
   auto inserted = cookies_.insert(CookieMap::value_type(key, std::move(cc)));
 
-  LogCookieTypeToUMA(cc_ptr, access_result);
+  // LogCookieTypeToUMA(cc_ptr, access_result);
 
   DCHECK(access_result.status.IsInclude());
   // if (dispatch_change) {
@@ -1412,18 +1412,18 @@ bool CookieMonster::ShouldUpdatePersistentStore(CanonicalCookie* cc) {
   return (cc->IsPersistent() || persist_session_cookies_) && store_.get();
 }
 
-void CookieMonster::LogCookieTypeToUMA(
-    CanonicalCookie* cc,
-    const CookieAccessResult& access_result) {
-  int32_t type_sample =
-      !cc->IsEffectivelySameSiteNone(access_result.access_semantics)
-          ? 1 << COOKIE_TYPE_SAME_SITE
-          : 0;
-  type_sample |= cc->IsHttpOnly() ? 1 << COOKIE_TYPE_HTTPONLY : 0;
-  type_sample |= cc->IsSecure() ? 1 << COOKIE_TYPE_SECURE : 0;
-  UMA_HISTOGRAM_EXACT_LINEAR("Cookie.Type", type_sample,
-                             (1 << COOKIE_TYPE_LAST_ENTRY));
-}
+// void CookieMonster::LogCookieTypeToUMA(
+//     CanonicalCookie* cc,
+//     const CookieAccessResult& access_result) {
+//   int32_t type_sample =
+//       !cc->IsEffectivelySameSiteNone(access_result.access_semantics)
+//           ? 1 << COOKIE_TYPE_SAME_SITE
+//           : 0;
+//   type_sample |= cc->IsHttpOnly() ? 1 << COOKIE_TYPE_HTTPONLY : 0;
+//   type_sample |= cc->IsSecure() ? 1 << COOKIE_TYPE_SECURE : 0;
+//   UMA_HISTOGRAM_EXACT_LINEAR("Cookie.Type", type_sample,
+//                              (1 << COOKIE_TYPE_LAST_ENTRY));
+// }
 
 CookieMonster::PartitionedCookieMapIterators
 CookieMonster::InternalInsertPartitionedCookie(
@@ -1459,7 +1459,7 @@ CookieMonster::InternalInsertPartitionedCookie(
       CookieMap::value_type(std::move(key), std::move(cc)));
   ++num_partitioned_cookies_;
 
-  LogCookieTypeToUMA(cc_ptr, access_result);
+  // LogCookieTypeToUMA(cc_ptr, access_result);
 
   DCHECK(access_result.status.IsInclude());
   // if (dispatch_change) {
