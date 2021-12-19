@@ -868,33 +868,33 @@ void CookieMonster::FetchAllCookies() {
   // InvokeQueue();
 // }
 
-void CookieMonster::OnKeyLoaded(
-    const std::string& key,
-    std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// void CookieMonster::OnKeyLoaded(
+//     const std::string& key,
+//     std::vector<std::unique_ptr<CanonicalCookie>> cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
-  StoreLoadedCookies(std::move(cookies));
+//   StoreLoadedCookies(std::move(cookies));
 
-  auto tasks_pending_for_key = tasks_pending_for_key_.find(key);
+//   auto tasks_pending_for_key = tasks_pending_for_key_.find(key);
 
   // TODO(mmenke): Can this be turned into a DCHECK?
-  if (tasks_pending_for_key == tasks_pending_for_key_.end())
-    return;
+//   if (tasks_pending_for_key == tasks_pending_for_key_.end())
+//     return;
 
   // Run all tasks for the key. Note that running a task can result in multiple
   // tasks being added to the back of the deque.
-  while (!tasks_pending_for_key->second.empty()) {
-    base::OnceClosure task = std::move(tasks_pending_for_key->second.front());
-    tasks_pending_for_key->second.pop_front();
-    std::move(task).Run();
-  }
+//   while (!tasks_pending_for_key->second.empty()) {
+//     base::OnceClosure task = std::move(tasks_pending_for_key->second.front());
+//     tasks_pending_for_key->second.pop_front();
+//     std::move(task).Run();
+//   }
 
-  tasks_pending_for_key_.erase(tasks_pending_for_key);
+//   tasks_pending_for_key_.erase(tasks_pending_for_key);
 
   // This has to be done last, in case running a task queues a new task for the
   // key, to ensure tasks are run in the correct order.
-  keys_loaded_.insert(key);
-}
+//   keys_loaded_.insert(key);
+// }
 
 void CookieMonster::StoreLoadedCookies(
     std::vector<std::unique_ptr<CanonicalCookie>> cookies) {

@@ -425,8 +425,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // (GetKey, roughly eTLD+1). Called when all cookies for the domain key have
   // been loaded from DB. See PersistentCookieStore::Load for details on the
   // contents of cookies.
-  void OnKeyLoaded(const std::string& key,
-                   std::vector<std::unique_ptr<CanonicalCookie>> cookies);
+  // void OnKeyLoaded(const std::string& key,
+  //                  std::vector<std::unique_ptr<CanonicalCookie>> cookies);
 
   // Stores the loaded cookies.
   void StoreLoadedCookies(
