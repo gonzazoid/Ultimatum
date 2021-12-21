@@ -90,7 +90,7 @@ interface NetworkServiceTest {
   CrashOnResolveHost(string host);
 
   // Causes the next CookieManager::GetCookieList call to crash.
-  CrashOnGetCookieList();
+  // CrashOnGetCookieList();
 
   // Gets the latest memory pressure level reported by the
   // MemoryPressureListener.

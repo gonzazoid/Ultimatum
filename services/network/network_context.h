@@ -102,7 +102,7 @@ class DomainReliabilityMonitor;
 
 namespace network {
 class CertVerifierWithTrustAnchors;
-class CookieManager;
+// class CookieManager;
 class ExpectCTReporter;
 class HostResolver;
 class MdnsResponderManager;

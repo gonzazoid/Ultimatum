@@ -2,29 +2,29 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "services/network/cookie_manager.h"
+// #include "services/network/cookie_manager.h"
 
-#include <utility>
+// #include <utility>
 
-#include "base/bind.h"
-#include "base/callback_helpers.h"
-#include "base/process/process.h"
-#include "build/build_config.h"
-#include "components/content_settings/core/common/content_settings_pattern.h"
-#include "net/base/registry_controlled_domains/registry_controlled_domain.h"
-#include "net/cookies/canonical_cookie.h"
-#include "net/cookies/cookie_constants.h"
-#include "net/cookies/cookie_monster.h"
-#include "net/cookies/cookie_options.h"
-#include "net/cookies/cookie_store.h"
-#include "net/cookies/cookie_util.h"
-#include "net/url_request/url_request_context.h"
-#include "services/network/cookie_access_delegate_impl.h"
-#include "services/network/session_cleanup_cookie_store.h"
-#include "url/gurl.h"
+// #include "base/bind.h"
+// #include "base/callback_helpers.h"
+// #include "base/process/process.h"
+// #include "build/build_config.h"
+// #include "components/content_settings/core/common/content_settings_pattern.h"
+// #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
+// #include "net/cookies/canonical_cookie.h"
+// #include "net/cookies/cookie_constants.h"
+// #include "net/cookies/cookie_monster.h"
+// #include "net/cookies/cookie_options.h"
+// #include "net/cookies/cookie_store.h"
+// #include "net/cookies/cookie_util.h"
+// #include "net/url_request/url_request_context.h"
+// #include "services/network/cookie_access_delegate_impl.h"
+// #include "services/network/session_cleanup_cookie_store.h"
+// #include "url/gurl.h"
 
-using CookieDeletionInfo = net::CookieDeletionInfo;
-using CookieDeleteSessionControl = net::CookieDeletionInfo::SessionControl;
+// using CookieDeletionInfo = net::CookieDeletionInfo;
+// using CookieDeleteSessionControl = net::CookieDeletionInfo::SessionControl;
 
 namespace network {
 
@@ -43,13 +43,13 @@ namespace {
 //   listener->OnCookieChange(change);
 // }
 
-CookieManager::CookieManager(
-    net::URLRequestContext* url_request_context,
-    const FirstPartySets* first_party_sets,
-    scoped_refptr<SessionCleanupCookieStore> session_cleanup_cookie_store,
-    mojom::CookieManagerParamsPtr params)
+// CookieManager::CookieManager(
+//     net::URLRequestContext* url_request_context,
+//     const FirstPartySets* first_party_sets,
+//     scoped_refptr<SessionCleanupCookieStore> session_cleanup_cookie_store,
+//     mojom::CookieManagerParamsPtr params)
     /* : cookie_store_(url_request_context->cookie_store()), */
-    /*  session_cleanup_cookie_store_(std::move(session_cleanup_cookie_store)) */ {
+//     /*  session_cleanup_cookie_store_(std::move(session_cleanup_cookie_store)) */ {
   // mojom::CookieAccessDelegateType cookie_access_delegate_type =
   //     mojom::CookieAccessDelegateType::USE_CONTENT_SETTINGS;
   // if (params) {
@@ -62,9 +62,9 @@ CookieManager::CookieManager(
   // cookie_store_->SetCookieAccessDelegate(
   //     std::make_unique<CookieAccessDelegateImpl>(
   //         cookie_access_delegate_type, first_party_sets, &cookie_settings_));
-}
+// }
 
-CookieManager::~CookieManager() {
+// CookieManager::~CookieManager() {
   // if (session_cleanup_cookie_store_) {
   //   session_cleanup_cookie_store_->DeleteSessionCookies(
   //       cookie_settings_.CreateDeleteCookieOnExitPredicate());
@@ -73,7 +73,7 @@ CookieManager::~CookieManager() {
   // holds a pointer to this CookieManager's CookieSettings, which is about to
   // be destroyed.
   // cookie_store_->SetCookieAccessDelegate(nullptr);
-}
+// }
 
 // void CookieManager::AddReceiver(
 //     mojo::PendingReceiver<mojom::CookieManager> receiver) {

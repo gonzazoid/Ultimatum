@@ -5,48 +5,48 @@
 #ifndef SERVICES_NETWORK_COOKIE_MANAGER_H_
 #define SERVICES_NETWORK_COOKIE_MANAGER_H_
 
-#include <memory>
-#include <string>
-#include <vector>
+// #include <memory>
+// #include <string>
+// #include <vector>
 
-#include "base/component_export.h"
-#include "components/content_settings/core/common/content_settings.h"
-#include "mojo/public/cpp/bindings/receiver_set.h"
-#include "mojo/public/cpp/bindings/remote.h"
-#include "net/cookies/cookie_change_dispatcher.h"
-#include "net/cookies/cookie_deletion_info.h"
-#include "services/network/cookie_settings.h"
-#include "services/network/public/mojom/cookie_manager.mojom.h"
+// #include "base/component_export.h"
+// #include "components/content_settings/core/common/content_settings.h"
+// #include "mojo/public/cpp/bindings/receiver_set.h"
+// #include "mojo/public/cpp/bindings/remote.h"
+// #include "net/cookies/cookie_change_dispatcher.h"
+// #include "net/cookies/cookie_deletion_info.h"
+// #include "services/network/cookie_settings.h"
+// #include "services/network/public/mojom/cookie_manager.mojom.h"
 
 namespace net {
-class CookieStore;
-class URLRequestContext;
+// class CookieStore;
+// class URLRequestContext;
 }  // namespace net
 
-class GURL;
+// class GURL;
 
 namespace network {
-class FirstPartySets;
-class SessionCleanupCookieStore;
+// class FirstPartySets;
+// class SessionCleanupCookieStore;
 
 // Wrap a cookie store in an implementation of the mojo cookie interface.
-class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
-    : public mojom::CookieManager {
- public:
+// class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
+//     : public mojom::CookieManager {
+//  public:
   // Construct a CookieService that can serve mojo requests for the underlying
   // cookie store.  |url_request_context->cookie_store()| must outlive this
   // object. `*first_party_sets` must outlive
   // `url_request_context->cookie_store()`.
-  CookieManager(
-      net::URLRequestContext* url_request_context,
-      const FirstPartySets* first_party_sets,
-      scoped_refptr<SessionCleanupCookieStore> session_cleanup_cookie_store,
-      mojom::CookieManagerParamsPtr params);
+//   CookieManager(
+//       net::URLRequestContext* url_request_context,
+//       const FirstPartySets* first_party_sets,
+//       scoped_refptr<SessionCleanupCookieStore> session_cleanup_cookie_store,
+//       mojom::CookieManagerParamsPtr params);
 
-  CookieManager(const CookieManager&) = delete;
-  CookieManager& operator=(const CookieManager&) = delete;
+//   CookieManager(const CookieManager&) = delete;
+//   CookieManager& operator=(const CookieManager&) = delete;
 
-  ~CookieManager() override;
+//   ~CookieManager() override;
 
   // const CookieSettings& cookie_settings() const { return cookie_settings_; }
 
@@ -112,7 +112,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   // Causes the next call to GetCookieList to crash the process.
   // static void CrashOnGetCookieList();
 
- private:
+//  private:
   // State associated with a CookieChangeListener.
   // struct ListenerRegistration {
   //   ListenerRegistration();
@@ -142,7 +142,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   // Note: RestrictedCookieManager and CookieAccessDelegate store pointers to
   // |cookie_settings_|.
   // CookieSettings cookie_settings_;
-};
+// };
 
 // COMPONENT_EXPORT(NETWORK_SERVICE)
 // net::CookieDeletionInfo DeletionFilterToInfo(
