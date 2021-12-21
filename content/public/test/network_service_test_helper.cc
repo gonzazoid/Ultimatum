@@ -219,9 +219,9 @@ class NetworkServiceTestHelper::NetworkServiceTestImpl
         base::BindRepeating(CrashResolveHost, host));
   }
 
-  void CrashOnGetCookieList() override {
-    network::CookieManager::CrashOnGetCookieList();
-  }
+  // void CrashOnGetCookieList() override {
+    // network::CookieManager::CrashOnGetCookieList();
+  // }
 
   void GetLatestMemoryPressureLevel(
       GetLatestMemoryPressureLevelCallback callback) override {
