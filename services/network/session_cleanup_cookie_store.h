@@ -32,8 +32,8 @@ namespace network {
 class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
     : public net::CookieMonster::PersistentCookieStore {
  public:
-  using CookiesPerOriginMap =
-      std::map<net::SQLitePersistentCookieStore::CookieOrigin, size_t>;
+  // using CookiesPerOriginMap =
+  //     std::map<net::SQLitePersistentCookieStore::CookieOrigin, size_t>;
 
   // Wraps the passed-in |cookie_store|.
   explicit SessionCleanupCookieStore(
@@ -78,7 +78,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
   // will be kept.
   // bool force_keep_session_state_ = false;
 
-  net::NetLogWithSource net_log_;
+  // net::NetLogWithSource net_log_;
 };
 
 }  // namespace network
