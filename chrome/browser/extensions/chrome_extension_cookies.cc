@@ -162,10 +162,10 @@ net::CookieStore* ChromeExtensionCookies::IOData::GetOrCreateCookieStore() {
   }
   return cookie_store_.get();
 }
-
+// XXX remove
 void ChromeExtensionCookies::IOData::UpdateNetworkCookieSettings() {
-  network::CookieManager::ConfigureCookieSettings(*mojo_cookie_settings_,
-                                                  &network_cookie_settings_);
+  // network::CookieManager::ConfigureCookieSettings(*mojo_cookie_settings_,
+  //                                                 &network_cookie_settings_);
 }
 
 void ChromeExtensionCookies::OnContentSettingChanged(
