@@ -57,7 +57,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
 
   // Should be called at the end of a session. Deletes all cookies that
   // |delete_cookie_predicate| returns true for.
-  void DeleteSessionCookies(DeleteCookiePredicate delete_cookie_predicate);
+  // void DeleteSessionCookies(DeleteCookiePredicate delete_cookie_predicate);
 
  protected:
   ~SessionCleanupCookieStore() override;
@@ -65,18 +65,18 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) SessionCleanupCookieStore
  private:
   // Called after cookies are loaded from the database.  Calls |loaded_callback|
   // when done.
-  void OnLoad(LoadedCallback loaded_callback,
-              std::vector<std::unique_ptr<net::CanonicalCookie>> cookies);
+  // void OnLoad(LoadedCallback loaded_callback,
+  //             std::vector<std::unique_ptr<net::CanonicalCookie>> cookies);
 
   // Map of (domain keys(eTLD+1), is secure cookie) to number of cookies in the
   // database.
-  CookiesPerOriginMap cookies_per_origin_;
+  // CookiesPerOriginMap cookies_per_origin_;
 
   scoped_refptr<net::SQLitePersistentCookieStore> persistent_store_;
 
   // When set to true, DeleteSessionCookies will be a no-op, and all cookies
   // will be kept.
-  bool force_keep_session_state_ = false;
+  // bool force_keep_session_state_ = false;
 
   net::NetLogWithSource net_log_;
 };
