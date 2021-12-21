@@ -44,9 +44,9 @@ SessionCleanupCookieStore::SessionCleanupCookieStore(
     : persistent_store_(cookie_store) {}
 
 SessionCleanupCookieStore::~SessionCleanupCookieStore() {
-  net_log_.AddEventWithStringParams(
-      net::NetLogEventType::COOKIE_PERSISTENT_STORE_CLOSED, "type",
-      "SessionCleanupCookieStore");
+  // net_log_.AddEventWithStringParams(
+  //     net::NetLogEventType::COOKIE_PERSISTENT_STORE_CLOSED, "type",
+  //     "SessionCleanupCookieStore");
 }
 
 // void SessionCleanupCookieStore::DeleteSessionCookies(
