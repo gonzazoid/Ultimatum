@@ -190,65 +190,65 @@ bool NetworkServiceNetworkDelegate::OnAnnotateAndMoveUserBlockedCookies(
     net::CookieAccessResultList& maybe_included_cookies,
     net::CookieAccessResultList& excluded_cookies,
     bool allowed_from_caller) {
-  if (!allowed_from_caller) {
-    ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
-                      maybe_included_cookies, excluded_cookies);
+  // if (!allowed_from_caller) {
+  //   ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
+  //                     maybe_included_cookies, excluded_cookies);
     return false;
-  }
+  // }
 
-  if (!network_context_->cookie_manager()
-           ->cookie_settings()
-           .AnnotateAndMoveUserBlockedCookies(
-               request.url(), request.site_for_cookies(),
-               request.isolation_info().top_frame_origin().has_value()
-                   ? &request.isolation_info().top_frame_origin().value()
-                   : nullptr,
-               maybe_included_cookies, excluded_cookies)) {
+  // if (!network_context_->cookie_manager()
+  //          ->cookie_settings()
+  //          .AnnotateAndMoveUserBlockedCookies(
+  //              request.url(), request.site_for_cookies(),
+  //              request.isolation_info().top_frame_origin().has_value()
+  //                  ? &request.isolation_info().top_frame_origin().value()
+  //                  : nullptr,
+  //              maybe_included_cookies, excluded_cookies)) {
     // CookieSettings has already moved and annotated the cookies.
-    return false;
-  }
+  //   return false;
+  // }
 
-  bool allowed = true;
-  URLLoader* url_loader = URLLoader::ForRequest(request);
-  if (url_loader) {
-    allowed =
-        url_loader->AllowCookies(request.url(), request.site_for_cookies());
+  // bool allowed = true;
+  // URLLoader* url_loader = URLLoader::ForRequest(request);
+  // if (url_loader) {
+  //   allowed =
+  //       url_loader->AllowCookies(request.url(), request.site_for_cookies());
 #if !defined(OS_IOS)
-  } else {
-    WebSocket* web_socket = WebSocket::ForRequest(request);
-    if (web_socket) {
-      allowed = web_socket->AllowCookies(request.url());
-    }
+  // } else {
+  //   WebSocket* web_socket = WebSocket::ForRequest(request);
+  //   if (web_socket) {
+  //     allowed = web_socket->AllowCookies(request.url());
+  //   }
 #endif  // !defined(OS_IOS)
-  }
-  if (!allowed)
-    ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
-                      maybe_included_cookies, excluded_cookies);
+  // }
+  // if (!allowed)
+  //   ExcludeAllCookies(net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES,
+  //                     maybe_included_cookies, excluded_cookies);
 
-  return allowed;
+  // return allowed;
 }
-
+// XXX remove
 bool NetworkServiceNetworkDelegate::OnCanSetCookie(
     const net::URLRequest& request,
     const net::CanonicalCookie& cookie,
     net::CookieOptions* options,
     bool allowed_from_caller) {
-  bool allowed =
-      allowed_from_caller &&
-      network_context_->cookie_manager()->cookie_settings().IsCookieAccessible(
-          cookie, request.url(), request.site_for_cookies(),
-          request.isolation_info().top_frame_origin());
-  if (!allowed)
+  // bool allowed =
+  //     allowed_from_caller &&
+  //     network_context_->cookie_manager()->cookie_settings().IsCookieAccessible(
+  //         cookie, request.url(), request.site_for_cookies(),
+  //         request.isolation_info().top_frame_origin());
+  // if (!allowed)
     return false;
-  URLLoader* url_loader = URLLoader::ForRequest(request);
-  if (url_loader)
-    return url_loader->AllowCookies(request.url(), request.site_for_cookies());
+  // URLLoader* url_loader = URLLoader::ForRequest(request);
+  // if (url_loader)
+  //   return url_loader->AllowCookies(request.url(), request.site_for_cookies());
 #if !defined(OS_IOS)
-  WebSocket* web_socket = WebSocket::ForRequest(request);
-  if (web_socket)
-    return web_socket->AllowCookies(request.url());
+  // WebSocket* web_socket = WebSocket::ForRequest(request);
+  // if (web_socket)
+  //   return web_socket->AllowCookies(request.url());
 #endif  // !defined(OS_IOS)
-  return true;
+  // return true;
 }
 
 bool NetworkServiceNetworkDelegate::OnForcePrivacyMode(
@@ -256,10 +256,11 @@ bool NetworkServiceNetworkDelegate::OnForcePrivacyMode(
     const net::SiteForCookies& site_for_cookies,
     const absl::optional<url::Origin>& top_frame_origin,
     net::SamePartyContext::Type same_party_context_type) const {
-  return network_context_->cookie_manager()
-      ->cookie_settings()
-      .IsPrivacyModeEnabled(url, site_for_cookies, top_frame_origin,
-                            same_party_context_type);
+  // return network_context_->cookie_manager()
+  //     ->cookie_settings()
+  //     .IsPrivacyModeEnabled(url, site_for_cookies, top_frame_origin,
+  //                           same_party_context_type);
+  return false;
 }
 
 bool NetworkServiceNetworkDelegate::
@@ -288,9 +289,10 @@ bool NetworkServiceNetworkDelegate::
 
 bool NetworkServiceNetworkDelegate::OnCanQueueReportingReport(
     const url::Origin& origin) const {
-  return network_context_->cookie_manager()
-      ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  // return network_context_->cookie_manager()
+  //     ->cookie_settings()
+  //     .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  return false;
 }
 
 void NetworkServiceNetworkDelegate::OnCanSendReportingReports(
@@ -320,17 +322,19 @@ void NetworkServiceNetworkDelegate::OnCanSendReportingReports(
 bool NetworkServiceNetworkDelegate::OnCanSetReportingClient(
     const url::Origin& origin,
     const GURL& endpoint) const {
-  return network_context_->cookie_manager()
-      ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  // return network_context_->cookie_manager()
+  //     ->cookie_settings()
+  //     .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  return false;
 }
-
+// XXX remove
 bool NetworkServiceNetworkDelegate::OnCanUseReportingClient(
     const url::Origin& origin,
     const GURL& endpoint) const {
-  return network_context_->cookie_manager()
-      ->cookie_settings()
-      .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  // return network_context_->cookie_manager()
+  //     ->cookie_settings()
+  //     .IsFullCookieAccessAllowed(origin.GetURL(), origin.GetURL());
+  return false;
 }
 
 int NetworkServiceNetworkDelegate::HandleClearSiteDataHeader(
