@@ -26,16 +26,16 @@ namespace network {
 
 namespace {
 
-base::Value CookieStoreOriginFiltered(const std::string& origin,
-                                      bool is_https,
-                                      net::NetLogCaptureMode capture_mode) {
-  if (!net::NetLogCaptureIncludesSensitive(capture_mode))
-    return base::Value();
-  base::DictionaryValue dict;
-  dict.SetString("origin", origin);
-  dict.SetBoolean("is_https", is_https);
-  return std::move(dict);
-}
+// base::Value CookieStoreOriginFiltered(const std::string& origin,
+//                                       bool is_https,
+//                                       net::NetLogCaptureMode capture_mode) {
+//   if (!net::NetLogCaptureIncludesSensitive(capture_mode))
+//     return base::Value();
+//   base::DictionaryValue dict;
+//   dict.SetString("origin", origin);
+//   dict.SetBoolean("is_https", is_https);
+//   return std::move(dict);
+// }
 
 }  // namespace
 
@@ -49,35 +49,35 @@ SessionCleanupCookieStore::~SessionCleanupCookieStore() {
       "SessionCleanupCookieStore");
 }
 
-void SessionCleanupCookieStore::DeleteSessionCookies(
-    DeleteCookiePredicate delete_cookie_predicate) {
-  using CookieOrigin = net::SQLitePersistentCookieStore::CookieOrigin;
-  if (force_keep_session_state_ || !delete_cookie_predicate)
-    return;
+// void SessionCleanupCookieStore::DeleteSessionCookies(
+//     DeleteCookiePredicate delete_cookie_predicate) {
+//   using CookieOrigin = net::SQLitePersistentCookieStore::CookieOrigin;
+//   if (force_keep_session_state_ || !delete_cookie_predicate)
+//     return;
 
-  std::list<CookieOrigin> session_only_cookies;
-  for (const auto& entry : cookies_per_origin_) {
-    if (entry.second == 0) {
-      continue;
-    }
-    const CookieOrigin& cookie = entry.first;
-    const GURL url(
-        net::cookie_util::CookieOriginToURL(cookie.first, cookie.second));
-    if (!url.is_valid() ||
-        !delete_cookie_predicate.Run(cookie.first, cookie.second)) {
-      continue;
-    }
-    net_log_.AddEvent(
-        net::NetLogEventType::COOKIE_PERSISTENT_STORE_ORIGIN_FILTERED,
-        [&](net::NetLogCaptureMode capture_mode) {
-          return CookieStoreOriginFiltered(cookie.first, cookie.second,
-                                           capture_mode);
-        });
-    session_only_cookies.push_back(cookie);
-  }
+//   std::list<CookieOrigin> session_only_cookies;
+//   for (const auto& entry : cookies_per_origin_) {
+//     if (entry.second == 0) {
+//       continue;
+//     }
+//     const CookieOrigin& cookie = entry.first;
+//     const GURL url(
+//         net::cookie_util::CookieOriginToURL(cookie.first, cookie.second));
+//     if (!url.is_valid() ||
+//         !delete_cookie_predicate.Run(cookie.first, cookie.second)) {
+//       continue;
+//     }
+//     net_log_.AddEvent(
+//         net::NetLogEventType::COOKIE_PERSISTENT_STORE_ORIGIN_FILTERED,
+//         [&](net::NetLogCaptureMode capture_mode) {
+//           return CookieStoreOriginFiltered(cookie.first, cookie.second,
+//                                            capture_mode);
+//         });
+//     session_only_cookies.push_back(cookie);
+//   }
 
-  persistent_store_->DeleteAllInList(session_only_cookies);
-}
+//   persistent_store_->DeleteAllInList(session_only_cookies);
+// }
 
 // void SessionCleanupCookieStore::Load(LoadedCallback loaded_callback,
 //                                      const net::NetLogWithSource& net_log) {
@@ -128,16 +128,16 @@ void SessionCleanupCookieStore::DeleteSessionCookies(
 //   persistent_store_->Flush(std::move(callback));
 // }
 
-void SessionCleanupCookieStore::OnLoad(
-    LoadedCallback loaded_callback,
-    std::vector<std::unique_ptr<net::CanonicalCookie>> cookies) {
-  for (const auto& cookie : cookies) {
-    net::SQLitePersistentCookieStore::CookieOrigin origin(cookie->Domain(),
-                                                          cookie->IsSecure());
-    ++cookies_per_origin_[origin];
-  }
+// void SessionCleanupCookieStore::OnLoad(
+//     LoadedCallback loaded_callback,
+//     std::vector<std::unique_ptr<net::CanonicalCookie>> cookies) {
+//   for (const auto& cookie : cookies) {
+//     net::SQLitePersistentCookieStore::CookieOrigin origin(cookie->Domain(),
+//                                                           cookie->IsSecure());
+//     ++cookies_per_origin_[origin];
+//   }
 
-  std::move(loaded_callback).Run(std::move(cookies));
-}
+//   std::move(loaded_callback).Run(std::move(cookies));
+// }
 
 }  // namespace network

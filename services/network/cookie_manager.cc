@@ -65,10 +65,10 @@ CookieManager::CookieManager(
 }
 
 CookieManager::~CookieManager() {
-  if (session_cleanup_cookie_store_) {
-    session_cleanup_cookie_store_->DeleteSessionCookies(
-        cookie_settings_.CreateDeleteCookieOnExitPredicate());
-  }
+  // if (session_cleanup_cookie_store_) {
+  //   session_cleanup_cookie_store_->DeleteSessionCookies(
+  //       cookie_settings_.CreateDeleteCookieOnExitPredicate());
+  // }
   // Make sure we destroy the CookieStore's CookieAccessDelegate, because it
   // holds a pointer to this CookieManager's CookieSettings, which is about to
   // be destroyed.
