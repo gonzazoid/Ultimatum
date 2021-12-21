@@ -119,10 +119,10 @@ void SessionCleanupCookieStore::DeleteSessionCookies(
 //   force_keep_session_state_ = true;
 // }
 
-void SessionCleanupCookieStore::SetBeforeCommitCallback(
-    base::RepeatingClosure callback) {
-  persistent_store_->SetBeforeCommitCallback(std::move(callback));
-}
+// void SessionCleanupCookieStore::SetBeforeCommitCallback(
+//     base::RepeatingClosure callback) {
+//   persistent_store_->SetBeforeCommitCallback(std::move(callback));
+// }
 
 void SessionCleanupCookieStore::Flush(base::OnceClosure callback) {
   persistent_store_->Flush(std::move(callback));

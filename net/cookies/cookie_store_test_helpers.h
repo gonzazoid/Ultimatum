@@ -157,7 +157,7 @@ class FlushablePersistentStore : public CookieMonster::PersistentCookieStore {
   // void UpdateCookieAccessTime(const CanonicalCookie&) override;
   // void DeleteCookie(const CanonicalCookie&) override;
   // void SetForceKeepSessionState() override;
-  void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
+  // void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
   void Flush(base::OnceClosure callback) override;
 
   int flush_count();

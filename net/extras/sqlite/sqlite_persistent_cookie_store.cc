@@ -1692,10 +1692,10 @@ void SQLitePersistentCookieStore::DeleteAllInList(
   // This store never discards session-only cookies, so this call has no effect.
 // }
 
-void SQLitePersistentCookieStore::SetBeforeCommitCallback(
-    base::RepeatingClosure callback) {
-  backend_->SetBeforeCommitCallback(std::move(callback));
-}
+// void SQLitePersistentCookieStore::SetBeforeCommitCallback(
+//     base::RepeatingClosure callback) {
+//   backend_->SetBeforeCommitCallback(std::move(callback));
+// }
 
 void SQLitePersistentCookieStore::Flush(base::OnceClosure callback) {
   backend_->Flush(std::move(callback));
