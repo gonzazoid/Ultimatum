@@ -38,7 +38,7 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
  public:
   // Contains the origin and a bool indicating whether or not the
   // origin is secure.
-  typedef std::pair<std::string, bool> CookieOrigin;
+  // typedef std::pair<std::string, bool> CookieOrigin;
 
   // Port number to use for cookies whose source port is unknown at the time of
   // database migration to V13. The value -1 comes from url::PORT_UNSPECIFIED.
@@ -59,7 +59,7 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
       delete;
 
   // Deletes the cookies whose origins match those given in |cookies|.
-  void DeleteAllInList(const std::list<CookieOrigin>& cookies);
+  // void DeleteAllInList(const std::list<CookieOrigin>& cookies);
 
   // CookieMonster::PersistentCookieStore:
   // void Load(LoadedCallback loaded_callback,

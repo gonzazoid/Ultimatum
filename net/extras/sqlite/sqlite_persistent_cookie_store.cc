@@ -291,7 +291,7 @@ class SQLitePersistentCookieStore::Backend
   size_t GetQueueLengthForTesting();
 
   // Post background delete of all cookies that match |cookies|.
-  void DeleteAllInList(const std::list<CookieOrigin>& cookies);
+  // void DeleteAllInList(const std::list<CookieOrigin>& cookies);
 
  private:
   // You should call Close() before destructing this object.
@@ -383,7 +383,7 @@ class SQLitePersistentCookieStore::Backend
 
   void DeleteSessionCookiesOnStartup();
 
-  void BackgroundDeleteAllInList(const std::list<CookieOrigin>& cookies);
+  // void BackgroundDeleteAllInList(const std::list<CookieOrigin>& cookies);
 
   // Shared code between the different load strategies to be used after all
   // cookies have been loaded.
@@ -1552,20 +1552,20 @@ size_t SQLitePersistentCookieStore::Backend::GetQueueLengthForTesting() {
   return total;
 }
 
-void SQLitePersistentCookieStore::Backend::DeleteAllInList(
-    const std::list<CookieOrigin>& cookies) {
-  if (cookies.empty())
-    return;
+// void SQLitePersistentCookieStore::Backend::DeleteAllInList(
+//     const std::list<CookieOrigin>& cookies) {
+//   if (cookies.empty())
+//     return;
 
-  if (background_task_runner()->RunsTasksInCurrentSequence()) {
-    BackgroundDeleteAllInList(cookies);
-  } else {
+//   if (background_task_runner()->RunsTasksInCurrentSequence()) {
+//     BackgroundDeleteAllInList(cookies);
+//   } else {
     // Perform deletion on background task runner.
-    PostBackgroundTask(
-        FROM_HERE,
-        base::BindOnce(&Backend::BackgroundDeleteAllInList, this, cookies));
-  }
-}
+//     PostBackgroundTask(
+//         FROM_HERE,
+//         base::BindOnce(&Backend::BackgroundDeleteAllInList, this, cookies));
+//   }
+// }
 
 void SQLitePersistentCookieStore::Backend::DeleteSessionCookiesOnStartup() {
   DCHECK(background_task_runner()->RunsTasksInCurrentSequence());
@@ -1575,46 +1575,46 @@ void SQLitePersistentCookieStore::Backend::DeleteSessionCookiesOnStartup() {
 
 // TODO(crbug.com/1225444) Investigate including top_frame_site_key in the WHERE
 // clause.
-void SQLitePersistentCookieStore::Backend::BackgroundDeleteAllInList(
-    const std::list<CookieOrigin>& cookies) {
-  DCHECK(background_task_runner()->RunsTasksInCurrentSequence());
+// void SQLitePersistentCookieStore::Backend::BackgroundDeleteAllInList(
+//     const std::list<CookieOrigin>& cookies) {
+//   DCHECK(background_task_runner()->RunsTasksInCurrentSequence());
 
-  if (!db())
-    return;
+//   if (!db())
+//     return;
 
   // Force a commit of any pending writes before issuing deletes.
   // TODO(rohitrao): Remove the need for this Commit() by instead pruning the
   // list of pending operations. https://crbug.com/486742.
-  Commit();
+//   Commit();
 
-  sql::Statement delete_statement(db()->GetCachedStatement(
-      SQL_FROM_HERE, "DELETE FROM cookies WHERE host_key=? AND is_secure=?"));
-  if (!delete_statement.is_valid()) {
-    LOG(WARNING) << "Unable to delete cookies on shutdown.";
-    return;
-  }
+//   sql::Statement delete_statement(db()->GetCachedStatement(
+//       SQL_FROM_HERE, "DELETE FROM cookies WHERE host_key=? AND is_secure=?"));
+//   if (!delete_statement.is_valid()) {
+//     LOG(WARNING) << "Unable to delete cookies on shutdown.";
+//     return;
+//   }
 
-  sql::Transaction transaction(db());
-  if (!transaction.Begin()) {
-    LOG(WARNING) << "Unable to delete cookies on shutdown.";
-    return;
-  }
+//   sql::Transaction transaction(db());
+//   if (!transaction.Begin()) {
+//     LOG(WARNING) << "Unable to delete cookies on shutdown.";
+//     return;
+//   }
 
-  for (const auto& cookie : cookies) {
-    const GURL url(cookie_util::CookieOriginToURL(cookie.first, cookie.second));
-    if (!url.is_valid())
-      continue;
+//   for (const auto& cookie : cookies) {
+//     const GURL url(cookie_util::CookieOriginToURL(cookie.first, cookie.second));
+//     if (!url.is_valid())
+//       continue;
 
-    delete_statement.Reset(true);
-    delete_statement.BindString(0, cookie.first);
-    delete_statement.BindInt(1, cookie.second);
-    if (!delete_statement.Run())
-      NOTREACHED() << "Could not delete a cookie from the DB.";
-  }
+//     delete_statement.Reset(true);
+//     delete_statement.BindString(0, cookie.first);
+//     delete_statement.BindInt(1, cookie.second);
+//     if (!delete_statement.Run())
+//       NOTREACHED() << "Could not delete a cookie from the DB.";
+//   }
 
-  if (!transaction.Commit())
-    LOG(WARNING) << "Unable to delete cookies on shutdown.";
-}
+//   if (!transaction.Commit())
+//     LOG(WARNING) << "Unable to delete cookies on shutdown.";
+// }
 
 void SQLitePersistentCookieStore::Backend::FinishedLoadingCookies(
     LoadedCallback loaded_callback,
@@ -1637,10 +1637,10 @@ SQLitePersistentCookieStore::SQLitePersistentCookieStore(
                            crypto_delegate)) {
 }
 
-void SQLitePersistentCookieStore::DeleteAllInList(
-    const std::list<CookieOrigin>& cookies) {
-  backend_->DeleteAllInList(cookies);
-}
+// void SQLitePersistentCookieStore::DeleteAllInList(
+//     const std::list<CookieOrigin>& cookies) {
+//   backend_->DeleteAllInList(cookies);
+// }
 
 // void SQLitePersistentCookieStore::Load(LoadedCallback loaded_callback,
 //                                        const NetLogWithSource& net_log) {
