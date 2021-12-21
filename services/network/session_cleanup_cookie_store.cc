@@ -124,9 +124,9 @@ void SessionCleanupCookieStore::DeleteSessionCookies(
 //   persistent_store_->SetBeforeCommitCallback(std::move(callback));
 // }
 
-void SessionCleanupCookieStore::Flush(base::OnceClosure callback) {
-  persistent_store_->Flush(std::move(callback));
-}
+// void SessionCleanupCookieStore::Flush(base::OnceClosure callback) {
+//   persistent_store_->Flush(std::move(callback));
+// }
 
 void SessionCleanupCookieStore::OnLoad(
     LoadedCallback loaded_callback,

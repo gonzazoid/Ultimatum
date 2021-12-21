@@ -1696,9 +1696,9 @@ void SQLitePersistentCookieStore::DeleteAllInList(
 //   backend_->SetBeforeCommitCallback(std::move(callback));
 // }
 
-void SQLitePersistentCookieStore::Flush(base::OnceClosure callback) {
-  backend_->Flush(std::move(callback));
-}
+// void SQLitePersistentCookieStore::Flush(base::OnceClosure callback) {
+//   backend_->Flush(std::move(callback));
+// }
 
 size_t SQLitePersistentCookieStore::GetQueueLengthForTesting() {
   return backend_->GetQueueLengthForTesting();

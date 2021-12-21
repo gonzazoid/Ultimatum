@@ -157,15 +157,15 @@ class FlushablePersistentStore : public CookieMonster::PersistentCookieStore {
   // void DeleteCookie(const CanonicalCookie&) override;
   // void SetForceKeepSessionState() override;
   // void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
-  void Flush(base::OnceClosure callback) override;
+  // void Flush(base::OnceClosure callback) override;
 
   int flush_count();
 
  private:
   ~FlushablePersistentStore() override;
 
-  int flush_count_;
-  base::Lock flush_count_lock_;  // Protects |flush_count_|.
+  // int flush_count_;
+  // base::Lock flush_count_lock_;  // Protects |flush_count_|.
 };
 
 // Counts the number of times Callback() has been run.

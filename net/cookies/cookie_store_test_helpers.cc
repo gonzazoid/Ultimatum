@@ -208,7 +208,7 @@ std::string CookieURLHelper::Format(const std::string& format_string) const {
 //
 // FlushablePersistentStore
 //
-FlushablePersistentStore::FlushablePersistentStore() : flush_count_(0) {}
+// FlushablePersistentStore::FlushablePersistentStore() : flush_count_(0) {}
 
 // void FlushablePersistentStore::Load(LoadedCallback loaded_callback,
 //                                     const NetLogWithSource& /* net_log */) {
@@ -235,16 +235,16 @@ FlushablePersistentStore::FlushablePersistentStore() : flush_count_(0) {}
 // void FlushablePersistentStore::SetBeforeCommitCallback(
 //     base::RepeatingClosure callback) {}
 
-void FlushablePersistentStore::Flush(base::OnceClosure callback) {
-  base::AutoLock lock(flush_count_lock_);
-  ++flush_count_;
-  std::move(callback).Run();
-}
+// void FlushablePersistentStore::Flush(base::OnceClosure callback) {
+//   base::AutoLock lock(flush_count_lock_);
+//   ++flush_count_;
+//   std::move(callback).Run();
+// }
 
-int FlushablePersistentStore::flush_count() {
-  base::AutoLock lock(flush_count_lock_);
-  return flush_count_;
-}
+// int FlushablePersistentStore::flush_count() {
+//   base::AutoLock lock(flush_count_lock_);
+//   return flush_count_;
+// }
 
 FlushablePersistentStore::~FlushablePersistentStore() = default;
 

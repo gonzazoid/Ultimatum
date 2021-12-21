@@ -93,11 +93,11 @@ void MockPersistentCookieStore::SetLoadExpectation(
 // void MockPersistentCookieStore::SetBeforeCommitCallback(
 //     base::RepeatingClosure callback) {}
 
-void MockPersistentCookieStore::Flush(base::OnceClosure callback) {
-  if (!callback.is_null())
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
-}
+// void MockPersistentCookieStore::Flush(base::OnceClosure callback) {
+//   if (!callback.is_null())
+//     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
+//                                                   std::move(callback));
+// }
 
 MockPersistentCookieStore::~MockPersistentCookieStore() = default;
 
@@ -192,11 +192,11 @@ MockSimplePersistentCookieStore::MockSimplePersistentCookieStore()
 // void MockSimplePersistentCookieStore::SetBeforeCommitCallback(
 //     base::RepeatingClosure callback) {}
 
-void MockSimplePersistentCookieStore::Flush(base::OnceClosure callback) {
-  if (!callback.is_null())
-    base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
-                                                  std::move(callback));
-}
+// void MockSimplePersistentCookieStore::Flush(base::OnceClosure callback) {
+//   if (!callback.is_null())
+//     base::ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
+//                                                   std::move(callback));
+// }
 
 std::unique_ptr<CookieMonster> CreateMonsterFromStoreForGC(
     int num_secure_cookies,

@@ -112,7 +112,7 @@ class MockPersistentCookieStore : public CookieMonster::PersistentCookieStore {
 
   // void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
 
-  void Flush(base::OnceClosure callback) override;
+  // void Flush(base::OnceClosure callback) override;
 
  protected:
   ~MockPersistentCookieStore() override;
@@ -165,7 +165,7 @@ class MockSimplePersistentCookieStore
 
   // void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
 
-  void Flush(base::OnceClosure callback) override;
+  // void Flush(base::OnceClosure callback) override;
 
  protected:
   ~MockSimplePersistentCookieStore() override;
