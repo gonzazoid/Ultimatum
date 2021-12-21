@@ -174,7 +174,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
 
   ResourceScheduler* resource_scheduler() { return resource_scheduler_.get(); }
 
-  CookieManager* cookie_manager() { return cookie_manager_.get(); }
+  // CookieManager* cookie_manager() { return cookie_manager_.get(); }
 
   const base::flat_set<std::string>* cors_exempt_header_list() const {
     return &cors_exempt_header_list_;
@@ -674,7 +674,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
 
   mojo::Receiver<mojom::NetworkContext> receiver_;
 
-  std::unique_ptr<CookieManager> cookie_manager_;
+  // std::unique_ptr<CookieManager> cookie_manager_;
 
   std::unique_ptr<SocketFactory> socket_factory_;
 

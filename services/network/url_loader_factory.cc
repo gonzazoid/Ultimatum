@@ -196,7 +196,7 @@ void URLLoaderFactory::CreateLoaderAndStartWithSyncClient(
     mojo::Remote<mojom::URLLoaderClient>(std::move(client))->OnComplete(status);
     return;
   }
-
+// XXX simplify
   std::unique_ptr<TrustTokenRequestHelperFactory> trust_token_factory;
   if (url_request.trust_token_params) {
     trust_token_factory = std::make_unique<TrustTokenRequestHelperFactory>(
@@ -211,11 +211,12 @@ void URLLoaderFactory::CreateLoaderAndStartWithSyncClient(
         // NetworkContext::CookieManager outlives the URLLoaders associated with
         // the NetworkContext.
         base::BindRepeating(
-            [](const CookieManager* manager) {
-              return !manager->cookie_settings()
-                          .are_third_party_cookies_blocked();
-            },
-            base::Unretained(context_->cookie_manager())));
+            [](/* const CookieManager* manager */) {
+              // return !manager->cookie_settings()
+              //             .are_third_party_cookies_blocked();
+	      return false;
+            } // ,
+            /* base::Unretained(context_->cookie_manager()) */));
   }
 
   mojo::PendingRemote<mojom::CookieAccessObserver> cookie_observer;
