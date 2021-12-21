@@ -70,7 +70,7 @@ class COMPONENT_EXPORT(NET_EXTRAS) SQLitePersistentCookieStore
   // void UpdateCookieAccessTime(const CanonicalCookie& cc) override;
   // void DeleteCookie(const CanonicalCookie& cc) override;
   // void SetForceKeepSessionState() override;
-  void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
+  // void SetBeforeCommitCallback(base::RepeatingClosure callback) override;
   void Flush(base::OnceClosure callback) override;
 
   // Returns how many operations are currently queued. For test use only;

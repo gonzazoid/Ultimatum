@@ -90,8 +90,8 @@ void MockPersistentCookieStore::SetLoadExpectation(
 
 // void MockPersistentCookieStore::SetForceKeepSessionState() {}
 
-void MockPersistentCookieStore::SetBeforeCommitCallback(
-    base::RepeatingClosure callback) {}
+// void MockPersistentCookieStore::SetBeforeCommitCallback(
+//     base::RepeatingClosure callback) {}
 
 void MockPersistentCookieStore::Flush(base::OnceClosure callback) {
   if (!callback.is_null())
@@ -189,8 +189,8 @@ MockSimplePersistentCookieStore::MockSimplePersistentCookieStore()
 
 // void MockSimplePersistentCookieStore::SetForceKeepSessionState() {}
 
-void MockSimplePersistentCookieStore::SetBeforeCommitCallback(
-    base::RepeatingClosure callback) {}
+// void MockSimplePersistentCookieStore::SetBeforeCommitCallback(
+//     base::RepeatingClosure callback) {}
 
 void MockSimplePersistentCookieStore::Flush(base::OnceClosure callback) {
   if (!callback.is_null())

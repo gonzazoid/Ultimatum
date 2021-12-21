@@ -588,11 +588,11 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // |cookies| must be sorted from least-recent to most-recent.
   //
   // Returns the number of cookies deleted.
-  size_t PurgeLeastRecentMatches(CookieItVector* cookies,
-                                 CookiePriority priority,
-                                 size_t to_protect,
-                                 size_t purge_goal,
-                                 bool protect_secure_cookies);
+  // size_t PurgeLeastRecentMatches(CookieItVector* cookies,
+  //                                CookiePriority priority,
+  //                                size_t to_protect,
+  //                                size_t purge_goal,
+  //                                bool protect_secure_cookies);
 
   // Helper for GarbageCollect(); can be called directly as well.  Deletes all
   // expired cookies in |itpair|.  If |cookie_its| is non-NULL, all the
@@ -650,7 +650,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // This function should be called repeatedly, and will record
   // statistics if a sufficient time period has passed.
-  void RecordPeriodicStats(const base::Time& current_time);
+  // void RecordPeriodicStats(const base::Time& current_time);
 
   // Records the aforementioned stats if we have already finished loading all
   // cookies. Returns whether stats were recorded.
@@ -683,7 +683,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Set of keys (eTLD+1's) for which non-expired cookies have
   // been evicted for hitting the per-domain max. The size of this set is
   // histogrammed periodically. The size is limited to |kMaxDomainPurgedKeys|.
-  std::set<std::string> domain_purged_keys_;
+  // std::set<std::string> domain_purged_keys_;
 
   // The number of distinct keys (eTLD+1's) currently present in the |cookies_|
   // multimap. This is histogrammed periodically.
@@ -800,7 +800,7 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
   // Sets a callback that will be run before the store flushes.  If |callback|
   // performs any async operations, the store will not wait for those to finish
   // before flushing.
-  virtual void SetBeforeCommitCallback(base::RepeatingClosure callback) = 0;
+  // virtual void SetBeforeCommitCallback(base::RepeatingClosure callback) = 0;
 
   // Flushes the store and posts |callback| when complete. |callback| may be
   // NULL.

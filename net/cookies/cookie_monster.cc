@@ -1994,12 +1994,12 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
   // return num_deleted;
 // }
 
-size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
-                                              CookiePriority priority,
-                                              size_t to_protect,
-                                              size_t purge_goal,
-                                              bool protect_secure_cookies) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
+//                                               CookiePriority priority,
+//                                               size_t to_protect,
+//                                               size_t purge_goal,
+//                                               bool protect_secure_cookies) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // 1. Count number of the cookies at |priority|
   // size_t cookies_count_possibly_to_be_deleted = CountCookiesForPossibleDeletion(
@@ -2009,7 +2009,7 @@ size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
   // equal |to_protect|, skip round in order to preserve the quota. This
   // involves secure and non-secure cookies at |priority|.
   // if (cookies_count_possibly_to_be_deleted <= to_protect)
-    return 0u;
+//     return 0u;
 
   // 3. Calculate number of secure cookies at |priority|
   // and number of cookies at |priority| that can possibly be deleted.
@@ -2044,7 +2044,7 @@ size_t CookieMonster::PurgeLeastRecentMatches(CookieItVector* cookies,
   //   }
   // }
   // return removed;
-}
+// }
 
 // size_t CookieMonster::GarbageCollectExpired(const Time& current,
 //                                             const CookieMapItPair& itpair,

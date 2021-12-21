@@ -232,8 +232,8 @@ FlushablePersistentStore::FlushablePersistentStore() : flush_count_(0) {}
 
 // void FlushablePersistentStore::SetForceKeepSessionState() {}
 
-void FlushablePersistentStore::SetBeforeCommitCallback(
-    base::RepeatingClosure callback) {}
+// void FlushablePersistentStore::SetBeforeCommitCallback(
+//     base::RepeatingClosure callback) {}
 
 void FlushablePersistentStore::Flush(base::OnceClosure callback) {
   base::AutoLock lock(flush_count_lock_);
