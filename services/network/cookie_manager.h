@@ -144,9 +144,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CookieManager
   // CookieSettings cookie_settings_;
 };
 
-COMPONENT_EXPORT(NETWORK_SERVICE)
-net::CookieDeletionInfo DeletionFilterToInfo(
-    mojom::CookieDeletionFilterPtr filter);
+// COMPONENT_EXPORT(NETWORK_SERVICE)
+// net::CookieDeletionInfo DeletionFilterToInfo(
+//     mojom::CookieDeletionFilterPtr filter);
 
 }  // namespace network
 

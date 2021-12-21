@@ -309,46 +309,46 @@ CookieManager::~CookieManager() {
 //   g_crash_on_get_cookie_list = true;
 // }
 
-CookieDeletionInfo DeletionFilterToInfo(mojom::CookieDeletionFilterPtr filter) {
-  CookieDeletionInfo delete_info;
+// CookieDeletionInfo DeletionFilterToInfo(mojom::CookieDeletionFilterPtr filter) {
+//   CookieDeletionInfo delete_info;
 
-  if (filter->created_after_time.has_value() &&
-      !filter->created_after_time.value().is_null()) {
-    delete_info.creation_range.SetStart(filter->created_after_time.value());
-  }
-  if (filter->created_before_time.has_value() &&
-      !filter->created_before_time.value().is_null()) {
-    delete_info.creation_range.SetEnd(filter->created_before_time.value());
-  }
-  delete_info.name = std::move(filter->cookie_name);
-  delete_info.url = std::move(filter->url);
-  delete_info.host = std::move(filter->host_name);
+//   if (filter->created_after_time.has_value() &&
+//       !filter->created_after_time.value().is_null()) {
+//     delete_info.creation_range.SetStart(filter->created_after_time.value());
+//   }
+//   if (filter->created_before_time.has_value() &&
+//       !filter->created_before_time.value().is_null()) {
+//     delete_info.creation_range.SetEnd(filter->created_before_time.value());
+//   }
+//   delete_info.name = std::move(filter->cookie_name);
+//   delete_info.url = std::move(filter->url);
+//   delete_info.host = std::move(filter->host_name);
 
-  switch (filter->session_control) {
-    case mojom::CookieDeletionSessionControl::IGNORE_CONTROL:
-      delete_info.session_control = CookieDeleteSessionControl::IGNORE_CONTROL;
-      break;
-    case mojom::CookieDeletionSessionControl::SESSION_COOKIES:
-      delete_info.session_control = CookieDeleteSessionControl::SESSION_COOKIES;
-      break;
-    case mojom::CookieDeletionSessionControl::PERSISTENT_COOKIES:
-      delete_info.session_control =
-          CookieDeleteSessionControl::PERSISTENT_COOKIES;
-      break;
-  }
+//   switch (filter->session_control) {
+//     case mojom::CookieDeletionSessionControl::IGNORE_CONTROL:
+//       delete_info.session_control = CookieDeleteSessionControl::IGNORE_CONTROL;
+//       break;
+//     case mojom::CookieDeletionSessionControl::SESSION_COOKIES:
+//       delete_info.session_control = CookieDeleteSessionControl::SESSION_COOKIES;
+//       break;
+//     case mojom::CookieDeletionSessionControl::PERSISTENT_COOKIES:
+//       delete_info.session_control =
+//           CookieDeleteSessionControl::PERSISTENT_COOKIES;
+//       break;
+//   }
 
-  if (filter->including_domains.has_value()) {
-    delete_info.domains_and_ips_to_delete.insert(
-        filter->including_domains.value().begin(),
-        filter->including_domains.value().end());
-  }
-  if (filter->excluding_domains.has_value()) {
-    delete_info.domains_and_ips_to_ignore.insert(
-        filter->excluding_domains.value().begin(),
-        filter->excluding_domains.value().end());
-  }
+//   if (filter->including_domains.has_value()) {
+//     delete_info.domains_and_ips_to_delete.insert(
+//         filter->including_domains.value().begin(),
+//         filter->including_domains.value().end());
+//   }
+//   if (filter->excluding_domains.has_value()) {
+//     delete_info.domains_and_ips_to_ignore.insert(
+//         filter->excluding_domains.value().begin(),
+//         filter->excluding_domains.value().end());
+//   }
 
-  return delete_info;
-}
+//   return delete_info;
+// }
 
 }  // namespace network
