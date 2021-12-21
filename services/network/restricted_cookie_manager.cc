@@ -491,7 +491,7 @@ void RestrictedCookieManager::SetCanonicalCookie(
   // DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   // if (!ValidateAccessToCookiesAt(url, site_for_cookies, top_frame_origin,
   //                                &cookie)) {
-    std::move(callback).Run(false);
+    std::move(callback).Run(true);
     return;
   // }
 
@@ -600,20 +600,21 @@ void RestrictedCookieManager::SetCanonicalCookieResult(
     net::CookieAccessResult access_result) {
   // TODO(https://crbug.com/977040): Only report pure INCLUDE once samesite
   // tightening up is rolled out.
-  DCHECK(!access_result.status.HasExclusionReason(
-      net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES));
+  // DCHECK(!access_result.status.HasExclusionReason(
+  //     net::CookieInclusionStatus::EXCLUDE_USER_PREFERENCES));
 
-  if (access_result.status.IsInclude() || access_result.status.ShouldWarn()) {
-    if (cookie_observer_) {
-      std::vector<mojom::CookieOrLineWithAccessResultPtr> notify;
-      notify.push_back(mojom::CookieOrLineWithAccessResult::New(
-          mojom::CookieOrLine::NewCookie(cookie), access_result));
-      cookie_observer_->OnCookiesAccessed(mojom::CookieAccessDetails::New(
-          mojom::CookieAccessDetails::Type::kChange, url, site_for_cookies,
-          std::move(notify), absl::nullopt));
-    }
-  }
-  std::move(user_callback).Run(access_result.status.IsInclude());
+  // if (access_result.status.IsInclude() || access_result.status.ShouldWarn()) {
+  //   if (cookie_observer_) {
+  //     std::vector<mojom::CookieOrLineWithAccessResultPtr> notify;
+  //     notify.push_back(mojom::CookieOrLineWithAccessResult::New(
+  //         mojom::CookieOrLine::NewCookie(cookie), access_result));
+  //     cookie_observer_->OnCookiesAccessed(mojom::CookieAccessDetails::New(
+  //         mojom::CookieAccessDetails::Type::kChange, url, site_for_cookies,
+  //         std::move(notify), absl::nullopt));
+  //   }
+  // }
+  // std::move(user_callback).Run(access_result.status.IsInclude());
+  std::move(user_callback).Run(true);
 }
 
 void RestrictedCookieManager::AddChangeListener(
