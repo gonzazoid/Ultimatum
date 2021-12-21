@@ -821,13 +821,14 @@ void SQLitePersistentCookieStore::Backend::Notify(
     bool load_success) {
   DCHECK(client_task_runner()->RunsTasksInCurrentSequence());
 
-  std::vector<std::unique_ptr<CanonicalCookie>> cookies;
-  {
-    base::AutoLock locked(lock_);
-    cookies.swap(cookies_);
-  }
+  // std::vector<std::unique_ptr<CanonicalCookie>> cookies;
+  // {
+  //   base::AutoLock locked(lock_);
+  //   cookies.swap(cookies_);
+  // }
 
-  std::move(loaded_callback).Run(std::move(cookies));
+  // std::move(loaded_callback).Run(std::move(cookies));
+  std::move(loaded_callback).Run({});
 }
 
 bool SQLitePersistentCookieStore::Backend::CreateDatabaseSchema() {
