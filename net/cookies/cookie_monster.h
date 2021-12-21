@@ -803,7 +803,7 @@ class NET_EXPORT CookieMonster::PersistentCookieStore
 
   // Flushes the store and posts |callback| when complete. |callback| may be
   // NULL.
-  virtual void Flush(base::OnceClosure callback) = 0;
+  // virtual void Flush(base::OnceClosure callback) = 0;
 
  protected:
   PersistentCookieStore() = default;
