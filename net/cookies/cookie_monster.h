@@ -96,10 +96,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // a multimap.  Also, multimap is standard, another reason to use it.
   // TODO(rdsmith): This benchmark should be re-done now that we're allowing
   // substantially more entries in the map.
-  using CookieMap =
-      std::multimap<std::string, std::unique_ptr<CanonicalCookie>>;
-  using CookieMapItPair = std::pair<CookieMap::iterator, CookieMap::iterator>;
-  using CookieItVector = std::vector<CookieMap::iterator>;
+  // using CookieMap =
+  //     std::multimap<std::string, std::unique_ptr<CanonicalCookie>>;
+  // using CookieMapItPair = std::pair<CookieMap::iterator, CookieMap::iterator>;
+  // using CookieItVector = std::vector<CookieMap::iterator>;
 
   // PartitionedCookieMap only stores cookies that were set with the Partitioned
   // attribute. The map is double-keyed on cookie's partition key and
@@ -108,10 +108,10 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // request's unpartitioned and partitioned cookies will both be more
   // efficient (since querying two smaller maps is more efficient that querying
   // one larger map twice).
-  using PartitionedCookieMap =
-      std::map<CookiePartitionKey, std::unique_ptr<CookieMap>>;
-  using PartitionedCookieMapIterators =
-      std::pair<PartitionedCookieMap::iterator, CookieMap::iterator>;
+  // using PartitionedCookieMap =
+  //     std::map<CookiePartitionKey, std::unique_ptr<CookieMap>>;
+  // using PartitionedCookieMapIterators =
+  //     std::pair<PartitionedCookieMap::iterator, CookieMap::iterator>;
 
   // Cookie garbage collection thresholds.  Based off of the Mozilla defaults.
   // When the number of cookies gets to k{Domain,}MaxCookies
@@ -228,33 +228,33 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
  private:
   // For garbage collection constants.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestHostGarbageCollection);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
-                           GarbageCollectWithSecureCookiesOnly);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestGCTimes);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestHostGarbageCollection);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
+  //                          GarbageCollectWithSecureCookiesOnly);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestGCTimes);
 
   // For validation of key values.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestDomainTree);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestImport);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestDomainTree);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestImport);
   // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, GetKey);
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestGetKey);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, TestGetKey);
 
   // For FindCookiesForKey.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, ShortLivedSessionCookies);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, ShortLivedSessionCookies);
 
   // For CookieSource histogram enum.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, CookieSourceHistogram);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, CookieSourceHistogram);
 
   // For kSafeFromGlobalPurgeDays in CookieStore.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, EvictSecureCookies);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, EvictSecureCookies);
 
   // For CookieDeleteEquivalent histogram enum.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
-                           CookieDeleteEquivalentHistogramTest);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
+  //                          CookieDeleteEquivalentHistogramTest);
 
   // For CookieSentToSamePort enum.
-  FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
-                           CookiePortReadDiffersFromSetHistogram);
+  // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest,
+  //                          CookiePortReadDiffersFromSetHistogram);
   // FRIEND_TEST_ALL_PREFIXES(CookieMonsterTest, IsCookieSentToSamePortThatSetIt);
 
   // Internal reasons for deletion, used to populate informative histograms
@@ -453,13 +453,13 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   // void SetDefaultCookieableSchemes();
 
-  std::vector<CanonicalCookie*> FindCookiesForRegistryControlledHost(
-      const GURL& url,
-      CookieMap* cookie_map = nullptr);
+  // std::vector<CanonicalCookie*> FindCookiesForRegistryControlledHost(
+  //     const GURL& url,
+  //     CookieMap* cookie_map = nullptr);
 
-  std::vector<CanonicalCookie*> FindPartitionedCookiesForRegistryControlledHost(
-      const CookiePartitionKey& cookie_partition_key,
-      const GURL& url);
+  // std::vector<CanonicalCookie*> FindPartitionedCookiesForRegistryControlledHost(
+  //     const CookiePartitionKey& cookie_partition_key,
+  //     const GURL& url);
 
   // void FilterCookiesWithOptions(const GURL url,
   //                               const CookieOptions options,
@@ -643,8 +643,8 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // Get the cookie's access semantics (LEGACY or NONLEGACY), by checking for a
   // value from the cookie access delegate, if it is non-null. Otherwise returns
   // UNKNOWN.
-  CookieAccessSemantics GetAccessSemanticsForCookie(
-      const CanonicalCookie& cookie) const;
+  // CookieAccessSemantics GetAccessSemanticsForCookie(
+  //     const CanonicalCookie& cookie) const;
 
   // Statistics support
 
@@ -689,7 +689,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // multimap. This is histogrammed periodically.
   // size_t num_keys_;
 
-  CookieMap cookies_;
+  // CookieMap cookies_;
 
   // PartitionedCookieMap partitioned_cookies_;
 
@@ -708,13 +708,13 @@ class NET_EXPORT CookieMonster : public CookieStore {
   // bool finished_fetching_all_cookies_;
 
   // List of domain keys that have been loaded from the DB.
-  std::set<std::string> keys_loaded_;
+  // std::set<std::string> keys_loaded_;
 
   // Map of domain keys to their associated task queues. These tasks are blocked
   // until all cookies for the associated domain key eTLD+1 are loaded from the
   // backend store.
-  std::map<std::string, base::circular_deque<base::OnceClosure>>
-      tasks_pending_for_key_;
+  // std::map<std::string, base::circular_deque<base::OnceClosure>>
+  //     tasks_pending_for_key_;
 
   // Queues tasks that are blocked until all cookies are loaded from the backend
   // store.
@@ -754,7 +754,7 @@ class NET_EXPORT CookieMonster : public CookieStore {
 
   base::ThreadChecker thread_checker_;
 
-  base::WeakPtrFactory<CookieMonster> weak_ptr_factory_{this};
+  // base::WeakPtrFactory<CookieMonster> weak_ptr_factory_{this};
 };
 
 typedef base::RefCountedThreadSafe<CookieMonster::PersistentCookieStore>

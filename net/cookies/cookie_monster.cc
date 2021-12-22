@@ -1123,10 +1123,10 @@ CookieMonster::~CookieMonster() {
 //   DCHECK_EQ(num_duplicates, num_duplicates_found);
 // }
 
-std::vector<CanonicalCookie*>
-CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
-                                                    CookieMap* cookie_map) {
-  DCHECK(thread_checker_.CalledOnValidThread());
+// std::vector<CanonicalCookie*>
+// CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
+//                                                     CookieMap* cookie_map) {
+//   DCHECK(thread_checker_.CalledOnValidThread());
 
   // if (!cookie_map)
   //   cookie_map = &cookies_;
@@ -1136,7 +1136,7 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
   // Retrieve all cookies for a given key
   // const std::string key(GetKey(url.host_piece()));
 
-  std::vector<CanonicalCookie*> cookies;
+//   std::vector<CanonicalCookie*> cookies;
   // for (CookieMapItPair its = cookie_map->equal_range(key);
   //      its.first != its.second;) {
   //   auto curit = its.first;
@@ -1150,8 +1150,8 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
     // }
   //   cookies.push_back(cc);
   // }
-  return cookies;
-}
+//   return cookies;
+// }
 
 // std::vector<CanonicalCookie*>
 // CookieMonster::FindPartitionedCookiesForRegistryControlledHost(
@@ -2202,12 +2202,12 @@ CookieMonster::FindCookiesForRegistryControlledHost(const GURL& url,
   // return false;
 // }
 
-CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
-    const CanonicalCookie& cookie) const {
+// CookieAccessSemantics CookieMonster::GetAccessSemanticsForCookie(
+//     const CanonicalCookie& cookie) const {
   // if (cookie_access_delegate())
   //   return cookie_access_delegate()->GetAccessSemantics(cookie);
-  return CookieAccessSemantics::UNKNOWN;
-}
+//   return CookieAccessSemantics::UNKNOWN;
+// }
 
 // Test to see if stats should be recorded, and record them if so.
 // The goal here is to get sampling for the average browser-hour of
