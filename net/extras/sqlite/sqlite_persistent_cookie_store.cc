@@ -274,10 +274,10 @@ class SQLitePersistentCookieStore::Backend
   // Steps through all results of |statement|, makes a cookie from each, and
   // adds the cookie to |cookies|. Returns true if everything loaded
   // successfully.
-  bool MakeCookiesFromSQLStatement(
-      std::vector<std::unique_ptr<CanonicalCookie>>& cookies,
-      sql::Statement& statement,
-      std::unordered_set<std::string>& top_frame_site_keys_to_delete);
+  // bool MakeCookiesFromSQLStatement(
+  //     std::vector<std::unique_ptr<CanonicalCookie>>& cookies,
+  //     sql::Statement& statement,
+  //     std::unordered_set<std::string>& top_frame_site_keys_to_delete);
 
   // Batch a cookie addition.
   // void AddCookie(const CanonicalCookie& cc);
@@ -989,12 +989,12 @@ void SQLitePersistentCookieStore::Backend::DeleteTopFrameSiteKeys(
   // }
 }
 
-bool SQLitePersistentCookieStore::Backend::MakeCookiesFromSQLStatement(
-    std::vector<std::unique_ptr<CanonicalCookie>>& cookies,
-    sql::Statement& statement,
-    std::unordered_set<std::string>& top_frame_site_keys_to_delete) {
-  DCHECK(background_task_runner()->RunsTasksInCurrentSequence());
-  bool ok = true;
+// bool SQLitePersistentCookieStore::Backend::MakeCookiesFromSQLStatement(
+//     std::vector<std::unique_ptr<CanonicalCookie>>& cookies,
+//     sql::Statement& statement,
+//     std::unordered_set<std::string>& top_frame_site_keys_to_delete) {
+//   DCHECK(background_task_runner()->RunsTasksInCurrentSequence());
+//   bool ok = true;
   // while (statement.Step()) {
   //   std::string value;
   //   std::string encrypted_value = statement.ColumnString(13);
@@ -1048,8 +1048,8 @@ bool SQLitePersistentCookieStore::Backend::MakeCookiesFromSQLStatement(
   //   }
   // }
 
-  return ok;
-}
+//   return ok;
+// }
 
 absl::optional<int>
 SQLitePersistentCookieStore::Backend::DoMigrateDatabaseSchema() {
