@@ -186,7 +186,7 @@ class NET_EXPORT CanonicalCookie {
   bool IsPersistent() const { return !expiry_date_.is_null(); }
   const base::Time& ExpiryDate() const { return expiry_date_; }
   bool IsSecure() const { return secure_; }
-  bool IsHttpOnly() const { return httponly_; }
+  // bool IsHttpOnly() const { return httponly_; }
   CookieSameSite SameSite() const { return same_site_; }
   CookiePriority Priority() const { return priority_; }
   bool IsSameParty() const { return same_party_; }
@@ -283,7 +283,7 @@ class NET_EXPORT CanonicalCookie {
     return creation_date_ == other.creation_date_ &&
            last_access_date_ == other.last_access_date_ &&
            expiry_date_ == other.expiry_date_ && secure_ == other.secure_ &&
-           httponly_ == other.httponly_ && same_site_ == other.same_site_ &&
+           true /* httponly_ == other.httponly_ */ && same_site_ == other.same_site_ &&
            priority_ == other.priority_ && same_party_ == other.same_party_ &&
            partition_key_ == other.partition_key_ && name_ == other.name_ &&
            value_ == other.value_ && domain_ == other.domain_ &&
@@ -509,7 +509,7 @@ class NET_EXPORT CanonicalCookie {
   base::Time expiry_date_;
   base::Time last_access_date_;
   bool secure_{false};
-  bool httponly_{false};
+  // bool httponly_{false};
   CookieSameSite same_site_{CookieSameSite::NO_RESTRICTION};
   CookiePriority priority_{COOKIE_PRIORITY_MEDIUM};
   bool same_party_{false};

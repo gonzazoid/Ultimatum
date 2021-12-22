@@ -371,7 +371,7 @@ CanonicalCookie::CanonicalCookie(
       expiry_date_(expiration),
       last_access_date_(last_access),
       secure_(secure),
-      httponly_(httponly),
+      // httponly_(httponly),
       same_site_(same_site),
       priority_(priority),
       same_party_(same_party),
@@ -548,7 +548,7 @@ std::unique_ptr<CanonicalCookie> CanonicalCookie::Create(
   std::unique_ptr<CanonicalCookie> cc = base::WrapUnique(new CanonicalCookie(
       parsed_cookie.Name(), parsed_cookie.Value(), cookie_domain, cookie_path,
       creation_time, cookie_expires, creation_time, parsed_cookie.IsSecure(),
-      parsed_cookie.IsHttpOnly(), samesite, parsed_cookie.Priority(),
+      true /* parsed_cookie.IsHttpOnly() */, samesite, parsed_cookie.Priority(),
       parsed_cookie.IsSameParty(), cookie_partition_key, source_scheme,
       source_port));
 
@@ -880,7 +880,7 @@ CookieAccessResult CanonicalCookie::IncludeForRequestURL(
     const CookieAccessParams& params) const {
   CookieInclusionStatus status;
   // Filter out HttpOnly cookies, per options.
-  if (options.exclude_httponly() && IsHttpOnly())
+  if (options.exclude_httponly() /* && IsHttpOnly() */)
     status.AddExclusionReason(CookieInclusionStatus::EXCLUDE_HTTP_ONLY);
   // Secure cookies should not be included in requests for URLs with an
   // insecure scheme, unless it is a localhost url, or the CookieAccessDelegate
@@ -1133,7 +1133,7 @@ CookieAccessResult CanonicalCookie::IsSetPermittedInContext(
   }
 
   access_result.access_semantics = params.access_semantics;
-  if (options.exclude_httponly() && IsHttpOnly()) {
+  if (options.exclude_httponly() /* && IsHttpOnly() */) {
     DVLOG(net::cookie_util::kVlogSetCookies)
         << "HttpOnly cookie not permitted in script context.";
     access_result.status.AddExclusionReason(

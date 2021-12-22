@@ -105,9 +105,9 @@ bool CookiesTreeModelUtil::GetCookieTreeNodeDictionary(
       dict->SetStringKey(kKeySendFor,
                          l10n_util::GetStringUTF16(
                              CookiesTreeModel::GetSendForMessageID(cookie)));
-      std::string accessible = cookie.IsHttpOnly() ?
-          l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_ACCESSIBLE_TO_SCRIPT_NO) :
-          l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_ACCESSIBLE_TO_SCRIPT_YES);
+      std::string accessible = // cookie.IsHttpOnly() ?
+          l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_ACCESSIBLE_TO_SCRIPT_NO); // :
+          // l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_ACCESSIBLE_TO_SCRIPT_YES);
       dict->SetStringKey(kKeyAccessibleToScript, accessible);
       dict->SetStringKey(kKeyCreated,
                          base::UTF16ToUTF8(base::TimeFormatFriendlyDateAndTime(

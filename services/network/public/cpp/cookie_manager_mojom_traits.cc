@@ -556,7 +556,7 @@ bool StructTraits<
   auto cc = net::CanonicalCookie::FromStorage(
       std::move(name), std::move(value), std::move(domain), std::move(path),
       std::move(creation_time), std::move(expiry_time),
-      std::move(last_access_time), cookie.secure(), cookie.httponly(),
+      std::move(last_access_time), cookie.secure(), true /* cookie.httponly() */,
       site_restrictions, priority, cookie.same_party(), partition_key,
       source_scheme, cookie.source_port());
   if (!cc)

@@ -176,7 +176,7 @@ std::unique_ptr<Network::Cookie> BuildCookie(
                           ? -1
                           : cookie.ExpiryDate().ToDoubleT())
           .SetSize(cookie.Name().length() + cookie.Value().length())
-          .SetHttpOnly(cookie.IsHttpOnly())
+          .SetHttpOnly(true /* cookie.IsHttpOnly() */)
           .SetSecure(cookie.IsSecure())
           .SetSession(!cookie.IsPersistent())
           .SetPriority(BuildCookiePriority(cookie.Priority()))

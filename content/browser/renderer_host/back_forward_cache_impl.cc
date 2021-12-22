@@ -495,7 +495,7 @@ void BackForwardCacheImpl::Entry::StartMonitoringCookieChange() {
 void BackForwardCacheImpl::Entry::OnCookieChange(
     const net::CookieChangeInfo& change) {
   DCHECK(cookie_modified_.has_value());
-  cookie_modified_->http_only_cookie_modified = change.cookie.IsHttpOnly();
+  cookie_modified_->http_only_cookie_modified = true; // change.cookie.IsHttpOnly();
   cookie_modified_->cookie_modified = true;
 }
 
