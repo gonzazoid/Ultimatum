@@ -30,7 +30,7 @@ base::Value NetLogCookieMonsterCookieAdded(const CanonicalCookie* cookie,
   dict.SetBoolKey("secure", cookie->IsSecure());
   dict.SetStringKey("priority", CookiePriorityToString(cookie->Priority()));
   dict.SetStringKey("same_site", CookieSameSiteToString(cookie->SameSite()));
-  dict.SetBoolKey("is_persistent", cookie->IsPersistent());
+  dict.SetBoolKey("is_persistent", false /* cookie->IsPersistent() */);
   dict.SetBoolKey("sync_requested", sync_requested);
   dict.SetBoolKey("same_party", cookie->IsSameParty());
   return dict;
@@ -48,7 +48,7 @@ base::Value NetLogCookieMonsterCookieDeleted(const CanonicalCookie* cookie,
   dict.SetStringKey("value", cookie->Value());
   dict.SetStringKey("domain", cookie->Domain());
   dict.SetStringKey("path", cookie->Path());
-  dict.SetBoolKey("is_persistent", cookie->IsPersistent());
+  dict.SetBoolKey("is_persistent", false /* cookie->IsPersistent() */);
   dict.SetStringKey("deletion_cause", CookieChangeCauseToString(cause));
   dict.SetBoolKey("sync_requested", sync_requested);
   return dict;

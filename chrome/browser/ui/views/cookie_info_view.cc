@@ -133,9 +133,9 @@ void CookieInfoView::SetCookie(const std::string& domain,
       {CookieProperty::kCreated,
        base::TimeFormatFriendlyDateAndTime(cookie.CreationDate())},
       {CookieProperty::kExpires,
-       cookie.IsPersistent()
-           ? base::TimeFormatFriendlyDateAndTime(cookie.ExpiryDate())
-           : l10n_util::GetStringUTF16(IDS_COOKIES_COOKIE_EXPIRES_SESSION)}};
+       // cookie.IsPersistent()
+       //     ? base::TimeFormatFriendlyDateAndTime(cookie.ExpiryDate())
+       /*    : */ l10n_util::GetStringUTF16(IDS_COOKIES_COOKIE_EXPIRES_SESSION)}};
 
   for (const auto& p : strings_map)
     property_textfields_[p.first]->SetText(p.second);

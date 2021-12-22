@@ -90,7 +90,7 @@ CookieDeletionInfo& CookieDeletionInfo::operator=(
 bool CookieDeletionInfo::Matches(const CanonicalCookie& cookie,
                                  const CookieAccessParams& params) const {
   if (session_control != SessionControl::IGNORE_CONTROL &&
-      (cookie.IsPersistent() !=
+      (false /* cookie.IsPersistent() */ !=
        (session_control == SessionControl::PERSISTENT_COOKIES))) {
     return false;
   }
