@@ -178,7 +178,7 @@ std::unique_ptr<Network::Cookie> BuildCookie(
           .SetSize(cookie.Name().length() + cookie.Value().length())
           .SetHttpOnly(true /* cookie.IsHttpOnly() */)
           .SetSecure(cookie.IsSecure())
-          .SetSession(!cookie.IsPersistent())
+          .SetSession(true /* !cookie.IsPersistent() */)
           .SetPriority(BuildCookiePriority(cookie.Priority()))
           .SetSameParty(cookie.IsSameParty())
           .SetSourceScheme(BuildCookieSourceScheme(cookie.SourceScheme()))

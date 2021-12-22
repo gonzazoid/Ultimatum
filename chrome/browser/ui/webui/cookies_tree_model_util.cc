@@ -114,10 +114,10 @@ bool CookiesTreeModelUtil::GetCookieTreeNodeDictionary(
                              cookie.CreationDate())));
       dict->SetStringKey(
           kKeyExpires,
-          cookie.IsPersistent()
-              ? base::UTF16ToUTF8(
-                    base::TimeFormatFriendlyDateAndTime(cookie.ExpiryDate()))
-              : l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_EXPIRES_SESSION));
+          // cookie.IsPersistent()
+          //     ? base::UTF16ToUTF8(
+          //           base::TimeFormatFriendlyDateAndTime(cookie.ExpiryDate()))
+          /*    : */ l10n_util::GetStringUTF8(IDS_COOKIES_COOKIE_EXPIRES_SESSION));
 
       break;
     }

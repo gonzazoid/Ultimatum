@@ -105,12 +105,12 @@ void AccessContextAuditService::RecordCookieAccess(
   for (const auto& cookie : accessed_cookies) {
     // Do not record accesses to already expired cookies. This service is
     // informed of deletion via OnCookieChange.
-    if (cookie.ExpiryDate() < now && cookie.IsPersistent())
-      continue;
+    // if (cookie.ExpiryDate() < now && cookie.IsPersistent())
+    //   continue;
 
     access_records.emplace_back(top_frame_origin, cookie.Name(),
                                 cookie.Domain(), cookie.Path(), now,
-                                cookie.IsPersistent());
+                                false /* cookie.IsPersistent() */);
   }
   database_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&AccessContextAuditDatabase::AddRecords,

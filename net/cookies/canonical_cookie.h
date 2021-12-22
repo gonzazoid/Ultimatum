@@ -183,7 +183,7 @@ class NET_EXPORT CanonicalCookie {
   const std::string& Path() const { return path_; }
   const base::Time& CreationDate() const { return creation_date_; }
   const base::Time& LastAccessDate() const { return last_access_date_; }
-  bool IsPersistent() const { return !expiry_date_.is_null(); }
+  // bool IsPersistent() const { return !expiry_date_.is_null(); }
   const base::Time& ExpiryDate() const { return expiry_date_; }
   bool IsSecure() const { return secure_; }
   // bool IsHttpOnly() const { return httponly_; }

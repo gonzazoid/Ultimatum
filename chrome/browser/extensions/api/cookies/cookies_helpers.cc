@@ -118,15 +118,15 @@ Cookie CreateCookie(const net::CanonicalCookie& canonical_cookie,
       break;
   }
 
-  cookie.session = !canonical_cookie.IsPersistent();
-  if (canonical_cookie.IsPersistent()) {
-    double expiration_date = canonical_cookie.ExpiryDate().ToDoubleT();
-    if (canonical_cookie.ExpiryDate().is_max() ||
-        !std::isfinite(expiration_date)) {
-      expiration_date = std::numeric_limits<double>::max();
-    }
-    cookie.expiration_date = std::make_unique<double>(expiration_date);
-  }
+  cookie.session = true; // !canonical_cookie.IsPersistent();
+  // if (canonical_cookie.IsPersistent()) {
+  //   double expiration_date = canonical_cookie.ExpiryDate().ToDoubleT();
+  //   if (canonical_cookie.ExpiryDate().is_max() ||
+  //       !std::isfinite(expiration_date)) {
+  //     expiration_date = std::numeric_limits<double>::max();
+  //   }
+  //   cookie.expiration_date = std::make_unique<double>(expiration_date);
+  // }
   cookie.store_id = store_id;
 
   return cookie;
@@ -225,7 +225,7 @@ bool MatchFilter::MatchesCookie(
   if (details_->secure.get() && *details_->secure != cookie.IsSecure())
     return false;
 
-  if (details_->session.get() && *details_->session != !cookie.IsPersistent())
+  if (details_->session.get() && *details_->session != true /* !cookie.IsPersistent() */)
     return false;
 
   return true;
