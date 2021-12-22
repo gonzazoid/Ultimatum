@@ -26,7 +26,7 @@ base::Value NetLogCookieMonsterCookieAdded(const CanonicalCookie* cookie,
   dict.SetStringKey("value", cookie->Value());
   dict.SetStringKey("domain", cookie->Domain());
   dict.SetStringKey("path", cookie->Path());
-  dict.SetBoolKey("httponly", cookie->IsHttpOnly());
+  dict.SetBoolKey("httponly", true /* cookie->IsHttpOnly() */);
   dict.SetBoolKey("secure", cookie->IsSecure());
   dict.SetStringKey("priority", CookiePriorityToString(cookie->Priority()));
   dict.SetStringKey("same_site", CookieSameSiteToString(cookie->SameSite()));

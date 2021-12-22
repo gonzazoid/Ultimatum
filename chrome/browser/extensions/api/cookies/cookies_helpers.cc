@@ -101,7 +101,7 @@ Cookie CreateCookie(const net::CanonicalCookie& canonical_cookie,
                     ? canonical_cookie.Path()
                     : std::string();
   cookie.secure = canonical_cookie.IsSecure();
-  cookie.http_only = canonical_cookie.IsHttpOnly();
+  cookie.http_only = true; // canonical_cookie.IsHttpOnly();
 
   switch (canonical_cookie.SameSite()) {
     case net::CookieSameSite::NO_RESTRICTION:

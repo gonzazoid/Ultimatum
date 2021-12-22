@@ -238,7 +238,7 @@ struct StructTraits<network::mojom::CanonicalCookieDataView,
     return c.LastAccessDate();
   }
   static bool secure(const net::CanonicalCookie& c) { return c.IsSecure(); }
-  static bool httponly(const net::CanonicalCookie& c) { return c.IsHttpOnly(); }
+  // static bool httponly(const net::CanonicalCookie& c) { return c.IsHttpOnly(); }
   static net::CookieSameSite site_restrictions(const net::CanonicalCookie& c) {
     return c.SameSite();
   }
