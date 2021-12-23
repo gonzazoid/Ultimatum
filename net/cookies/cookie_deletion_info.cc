@@ -14,26 +14,26 @@ namespace {
 
 // Return true if the eTLD+1 of the cookies domain matches any of the strings
 // in |match_domains|, false otherwise.
-bool DomainMatchesDomains(const net::CanonicalCookie& cookie,
-                          const std::set<std::string>& match_domains) {
-  if (match_domains.empty())
-    return false;
+// bool DomainMatchesDomains(const net::CanonicalCookie& cookie,
+//                           const std::set<std::string>& match_domains) {
+//   if (match_domains.empty())
+//     return false;
 
   // If domain is an IP address it returns an empty string.
-  std::string effective_domain(
-      net::registry_controlled_domains::GetDomainAndRegistry(
+//   std::string effective_domain(
+//       net::registry_controlled_domains::GetDomainAndRegistry(
           // GetDomainAndRegistry() is insensitive to leading dots, i.e.
           // to host/domain cookie distinctions.
-          cookie.Domain(),
-          net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES));
+//           cookie.Domain(),
+//           net::registry_controlled_domains::INCLUDE_PRIVATE_REGISTRIES));
   // If the cookie's domain is is not parsed as belonging to a registry
   // (e.g. for IP addresses or internal hostnames) an empty string will be
   // returned.  In this case, use the domain in the cookie.
-  if (effective_domain.empty())
-    effective_domain = cookie.DomainWithoutDot();
+//   if (effective_domain.empty())
+//     effective_domain = cookie.DomainWithoutDot();
 
-  return match_domains.count(effective_domain) != 0;
-}
+//   return match_domains.count(effective_domain) != 0;
+// }
 
 }  // anonymous namespace
 
@@ -89,49 +89,49 @@ CookieDeletionInfo& CookieDeletionInfo::operator=(
 
 bool CookieDeletionInfo::Matches(const CanonicalCookie& cookie,
                                  const CookieAccessParams& params) const {
-  if (session_control != SessionControl::IGNORE_CONTROL &&
-      (false /* cookie.IsPersistent() */ !=
-       (session_control == SessionControl::PERSISTENT_COOKIES))) {
+  // if (session_control != SessionControl::IGNORE_CONTROL &&
+  //     (false /* cookie.IsPersistent() */ !=
+  //      (session_control == SessionControl::PERSISTENT_COOKIES))) {
     return false;
-  }
+  // }
 
-  if (!creation_range.Contains(cookie.CreationDate()))
-    return false;
+  // if (!creation_range.Contains(cookie.CreationDate()))
+  //   return false;
 
-  if (host.has_value() &&
-      !(cookie.IsHostCookie() && cookie.IsDomainMatch(host.value()))) {
-    return false;
-  }
+  // if (host.has_value() &&
+  //     !(cookie.IsHostCookie() && cookie.IsDomainMatch(host.value()))) {
+  //   return false;
+  // }
 
-  if (name.has_value() && cookie.Name() != name)
-    return false;
+  // if (name.has_value() && cookie.Name() != name)
+  //   return false;
 
-  if (value_for_testing.has_value() &&
-      value_for_testing.value() != cookie.Value()) {
-    return false;
-  }
+  // if (value_for_testing.has_value() &&
+  //     value_for_testing.value() != cookie.Value()) {
+  //   return false;
+  // }
 
   // |CookieOptions::MakeAllInclusive()| options will make sure that all
   // cookies associated with the URL are deleted.
-  if (url.has_value() &&
-      !cookie
-           .IncludeForRequestURL(url.value(), CookieOptions::MakeAllInclusive(),
-                                 params)
-           .status.IsInclude()) {
-    return false;
-  }
+  // if (url.has_value() &&
+  //     !cookie
+  //          .IncludeForRequestURL(url.value(), CookieOptions::MakeAllInclusive(),
+  //                                params)
+  //          .status.IsInclude()) {
+  //   return false;
+  // }
 
-  if (!domains_and_ips_to_delete.empty() &&
-      !DomainMatchesDomains(cookie, domains_and_ips_to_delete)) {
-    return false;
-  }
+  // if (!domains_and_ips_to_delete.empty() &&
+  //     !DomainMatchesDomains(cookie, domains_and_ips_to_delete)) {
+  //   return false;
+  // }
 
-  if (!domains_and_ips_to_ignore.empty() &&
-      DomainMatchesDomains(cookie, domains_and_ips_to_ignore)) {
-    return false;
-  }
+  // if (!domains_and_ips_to_ignore.empty() &&
+  //     DomainMatchesDomains(cookie, domains_and_ips_to_ignore)) {
+  //   return false;
+  // }
 
-  return true;
+  // return true;
 }
 
 }  // namespace net
