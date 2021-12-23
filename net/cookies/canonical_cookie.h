@@ -204,9 +204,9 @@ class NET_EXPORT CanonicalCookie {
   // source port). This is not part of the cookie spec but is being used to
   // collect metrics for a potential change to the cookie spec.
   int SourcePort() const { return source_port_; }
-  bool IsDomainCookie() const {
-    return !domain_.empty() && domain_[0] == '.'; }
-  bool IsHostCookie() const { return !IsDomainCookie(); }
+  // bool IsDomainCookie() const {
+  //   return !domain_.empty() && domain_[0] == '.'; }
+  // bool IsHostCookie() const { return !IsDomainCookie(); }
 
   // Returns the cookie's domain, with the leading dot removed, if present.
   // This corresponds to the "cookie's domain" as described in RFC 6265bis.
