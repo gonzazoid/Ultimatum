@@ -758,7 +758,9 @@ struct AnnotatedVisit {
                  VisitID opener_visit_of_redirect_chain_start,
                  VisitSource visit);
   AnnotatedVisit(const AnnotatedVisit&);
+  AnnotatedVisit(AnnotatedVisit&&);
   AnnotatedVisit& operator=(const AnnotatedVisit&);
+  AnnotatedVisit& operator=(AnnotatedVisit&&);
   ~AnnotatedVisit();
 
   URLRow url_row;
@@ -805,6 +807,9 @@ struct ClusterVisit {
   ClusterVisit();
   ~ClusterVisit();
   ClusterVisit(const ClusterVisit&);
+  ClusterVisit(ClusterVisit&&);
+  ClusterVisit& operator=(const ClusterVisit&);
+  ClusterVisit& operator=(ClusterVisit&&);
 
   AnnotatedVisit annotated_visit;
 
@@ -816,6 +821,13 @@ struct ClusterVisit {
   // visit among all the duplicates will list the worse duplicate visit IDs in
   // its vector. The worse duplicates will have an empty vector here.
   std::vector<VisitID> duplicate_visit_ids;
+
+  // A list of visits that have been de-duplicated into this visit. After
+  // post-processing by the service, this will be populated with the visits
+  // marked within `duplicate_visit_ids`.
+  // TODO(tommycli): Move the un-flattening into the backend and eliminate
+  // `duplicate_visit_ids`.
+  std::vector<ClusterVisit> duplicate_visits;
 
   // The normalized URL for the visit (i.e. a SRP URL normalized based on the
   // user's default search provider).
@@ -838,7 +850,9 @@ struct Cluster {
           const std::vector<std::u16string>& keywords,
           bool should_show_on_prominent_ui_surfaces = true);
   Cluster(const Cluster&);
+  Cluster(Cluster&&);
   Cluster& operator=(const Cluster&);
+  Cluster& operator=(Cluster&&);
   ~Cluster();
 
   int64_t cluster_id = 0;

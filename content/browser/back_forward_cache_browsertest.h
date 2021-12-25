@@ -174,7 +174,6 @@ class BackForwardCacheBrowserTest : public ContentBrowserTest,
   bool check_eligibility_after_pagehide_ = false;
   std::string unload_support_ = "always";
 
-  const int kMaxBufferedBytesPerRequest = 7000;
   const int kMaxBufferedBytesPerProcess = 10000;
   const base::TimeDelta kGracePeriodToFinishLoading = base::Seconds(5);
 
@@ -292,6 +291,9 @@ class PageLifecycleStateManagerTestDelegate
   base::OnceClosure restore_from_back_forward_cache_sent_;
   base::OnceClosure disable_eviction_sent_;
 };
+
+// Gets the value of a key in local storage by evaluating JS.
+EvalJsResult GetLocalStorage(RenderFrameHostImpl* rfh, std::string key);
 
 }  // namespace content
 

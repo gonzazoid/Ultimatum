@@ -18,6 +18,7 @@
 #include "components/viz/host/host_frame_sink_client.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #include "content/browser/renderer_host/render_widget_host_view_base.h"
+#include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/public/common/page_visibility_state.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/test_renderer_host.h"
@@ -90,6 +91,9 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
       blink::mojom::ShareService::ShareCallback callback) override;
 #endif  // defined(OS_MAC)
 
+  // Notified in response to a CommitPending where there is no content for
+  // TakeFallbackContentFrom to use.
+  void ClearFallbackSurfaceForCommitPending() override;
   // Advances the fallback surface to the first surface after navigation. This
   // ensures that stale surfaces are not presented to the user for an indefinite
   // period of time.
@@ -136,6 +140,17 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
 
   void SetCompositor(ui::Compositor* compositor) { compositor_ = compositor; }
 
+  // Clears `clear_fallback_surface_for_commit_pending_called_` and
+  // `take_fallback_content_from_called_`.
+  void ClearFallbackSurfaceCalled();
+  bool clear_fallback_surface_for_commit_pending_called() const {
+    return clear_fallback_surface_for_commit_pending_called_;
+  }
+
+  bool take_fallback_content_from_called() const {
+    return take_fallback_content_from_called_;
+  }
+
  protected:
   // RenderWidgetHostViewBase:
   void UpdateBackgroundColor() override;
@@ -162,6 +177,9 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
   // EnsureSurfaceSynchronizedForWebTest().
   uint32_t latest_capture_sequence_number_ = 0u;
 
+  bool clear_fallback_surface_for_commit_pending_called_ = false;
+  bool take_fallback_content_from_called_ = false;
+
 #if defined(USE_AURA)
   std::unique_ptr<aura::Window> window_;
 #endif
@@ -169,6 +187,38 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
   absl::optional<DisplayFeature> display_feature_;
 
   raw_ptr<ui::Compositor> compositor_ = nullptr;
+};
+
+// TestRenderWidgetHostViewChildFrame -----------------------------------------
+
+// Test version of RenderWidgetHostViewChildFrame to use in unit tests.
+class TestRenderWidgetHostViewChildFrame
+    : public RenderWidgetHostViewChildFrame {
+ public:
+  explicit TestRenderWidgetHostViewChildFrame(RenderWidgetHost* rwh);
+  ~TestRenderWidgetHostViewChildFrame() override = default;
+
+  blink::WebInputEvent::Type last_gesture_seen() { return last_gesture_seen_; }
+
+  void Reset();
+  void SetCompositor(ui::Compositor* compositor);
+  ui::Compositor* GetCompositor() override;
+
+ private:
+  void SetBounds(const gfx::Rect& rect) override {}
+  void Hide() override {}
+  void SetInsets(const gfx::Insets& insets) override {}
+
+  void SendInitialPropertiesIfNeeded() override {}
+  void ShowWithVisibility(PageVisibilityState) override {}
+  void DidNavigate() override {}
+
+  void ProcessGestureEvent(const blink::WebGestureEvent& event,
+                           const ui::LatencyInfo&) override;
+
+  blink::WebInputEvent::Type last_gesture_seen_ =
+      blink::WebInputEvent::Type::kUndefined;
+  raw_ptr<ui::Compositor> compositor_;
 };
 
 // TestRenderViewHost ----------------------------------------------------------
@@ -206,9 +256,8 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
 // similar to (b) above, essentially it gets very tricky.  By using
 // the split interface we avoid complexity within content and maintain
 // reasonable utility for embedders.
-class TestRenderViewHost
-    : public RenderViewHostImpl,
-      public RenderViewHostTester {
+class TestRenderViewHost : public RenderViewHostImpl,
+                           public RenderViewHostTester {
  public:
   TestRenderViewHost(FrameTree* frame_tree,
                      SiteInstance* instance,

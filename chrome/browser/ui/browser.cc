@@ -38,6 +38,7 @@
 #include "chrome/browser/background/background_contents.h"
 #include "chrome/browser/background/background_contents_service.h"
 #include "chrome/browser/background/background_contents_service_factory.h"
+#include "chrome/browser/breadcrumbs/breadcrumbs_status.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/buildflags.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
@@ -69,13 +70,13 @@
 #include "chrome/browser/policy/developer_tools_policy_handler.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/printing/background_printing_manager.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_destroyer.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/profiles/profiles_state.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/repost_form_warning_controller.h"
 #include "chrome/browser/resource_coordinator/tab_load_tracker.h"
 #include "chrome/browser/resource_coordinator/tab_manager_web_contents_data.h"
@@ -161,7 +162,6 @@
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_utils.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
-#include "components/breadcrumbs/core/features.h"
 #include "components/captive_portal/core/buildflags.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
@@ -483,7 +483,7 @@ Browser::Browser(const CreateParams& params)
       user_title_(params.user_title),
       signin_view_controller_(this),
       breadcrumb_manager_browser_agent_(
-          base::FeatureList::IsEnabled(breadcrumbs::kLogBreadcrumbs)
+          BreadcrumbsStatus::IsEnabled()
               ? std::make_unique<BreadcrumbManagerBrowserAgent>(this)
               : nullptr)
 #if BUILDFLAG(ENABLE_EXTENSIONS)

@@ -10,12 +10,16 @@
 // This value is generated during Pedal concept data processing, and written
 // to all data files as well as the source code here to ensure synchrony.
 // The runtime loaded data must match this version exactly or it won't load.
-constexpr int OMNIBOX_PEDAL_CONCEPTS_DATA_VERSION = 16162095;
+constexpr int OMNIBOX_PEDAL_CONCEPTS_DATA_VERSION = 16163558;
 
 // Unique identifiers for Pedals, used to bind loaded data to implementations.
 // Also used in the Omnibox.SuggestionUsed.Pedal histogram. Do not remove or
 // reuse values. If any pedal types are removed from Chrome, the associated ID
 // will remain and be marked as obsolete.
+//
+// Automatically generate a corresponding Java enum:
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.omnibox.action
+// GENERATED_JAVA_CLASS_NAME_OVERRIDE: OmniboxPedalType
 enum class OmniboxPedalId {
   NONE = 0,
 

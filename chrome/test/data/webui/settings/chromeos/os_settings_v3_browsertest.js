@@ -56,6 +56,50 @@ TEST_F(
     'OSSettingsDevicePageV3Test', 'All',
     () => mocha.grep('/^((?!arrow_key_arrangement_disabled).)*$/').run());
 
+// TODO(crbug.com/1275568): move this to the generic test lists below after the
+// feature is launched.
+var OSSettingsPeoplePageAccountManagerV3Test =
+    class extends OSSettingsV3BrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://os-settings/test_loader.html?module=settings/chromeos/people_page_account_manager_test.m.js';
+  }
+
+  /** @override */
+  get featureList() {
+    return {
+      disabled: [
+        'chromeos::features::kArcAccountRestrictions',
+        'chromeos::features::kLacrosSupport'
+      ]
+    };
+  }
+};
+
+TEST_F('OSSettingsPeoplePageAccountManagerV3Test', 'All', () => mocha.run());
+
+var OSSettingsPeoplePageAccountManagerWithArcAccountRestrictionsEnabledV3Test =
+    class extends OSSettingsV3BrowserTest {
+  /** @override */
+  get browsePreload() {
+    return 'chrome://os-settings/test_loader.html?module=settings/chromeos/people_page_account_manager_test.m.js';
+  }
+
+  /** @override */
+  get featureList() {
+    return {
+      enabled: [
+        'chromeos::features::kArcAccountRestrictions',
+        'chromeos::features::kLacrosSupport'
+      ]
+    };
+  }
+};
+
+TEST_F(
+    'OSSettingsPeoplePageAccountManagerWithArcAccountRestrictionsEnabledV3Test',
+    'All', () => mocha.run());
+
 var OSSettingsDevicePageKeyboardArrangementDisabledV3Test =
     class extends OSSettingsV3BrowserTest {
   /** @override */
@@ -265,6 +309,7 @@ TEST_F('OSSettingsOsBluetoothDeviceDetailSubpageV3Test', 'AllJsTests', () => {
  ['LocalizedLink', 'localized_link_test.m.js'],
  ['LockScreenPage', 'lock_screen_tests.m.js'],
  ['ManageAccessibilityPage', 'manage_accessibility_page_tests.m.js'],
+ ['MultideviceCameraRollItem', 'multidevice_camera_roll_item_tests.m.js'],
  // TODO(crbug.com/1227116): Re-enable once flakiness is fixed.
  //  ['MultideviceFeatureItem', 'multidevice_feature_item_tests.m.js'],
  ['MultideviceFeatureToggle', 'multidevice_feature_toggle_tests.m.js'],
@@ -319,7 +364,6 @@ TEST_F('OSSettingsOsBluetoothDeviceDetailSubpageV3Test', 'AllJsTests', () => {
  ['NearbyShareReceiveDialog', 'nearby_share_receive_dialog_tests.m.js'],
  ['ParentalControlsPage', 'parental_controls_page_test.m.js'],
  ['PeoplePage', 'os_people_page_test.m.js'],
- ['PeoplePageAccountManager', 'people_page_account_manager_test.m.js'],
  ['PeoplePageChangePicture', 'people_page_change_picture_test.m.js'],
  [
    'PeoplePageQuickUnlock',

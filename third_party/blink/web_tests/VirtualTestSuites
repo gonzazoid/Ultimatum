@@ -462,7 +462,7 @@
   },
   {
     "prefix": "direct-sockets",
-    "bases": ["external/wpt/raw-sockets"],
+    "bases": ["external/wpt/direct-sockets"],
     "args": ["--enable-features=DirectSockets"]
   },
   {
@@ -959,6 +959,7 @@
               "accessibility/virtual-node-repair-document.html",
               "external/wpt/accessibility/crashtests/aria-hidden-with-select.html",
               "external/wpt/accessibility/crashtests/aria-owns-destroyed-by-content-replacement.html",
+              "external/wpt/accessibility/crashtests/aria-owns-reparent.html",
               "external/wpt/accessibility/crashtests/content-visibility-generated-content-removal.html",
               "external/wpt/accessibility/crashtests/included-descendant-dom-removal.html",
               "external/wpt/accessibility/crashtests/included-descendant-layout-removal.html",
@@ -976,11 +977,6 @@
     "prefix": "no-alloc-direct-call",
     "bases": ["fast/canvas", "external/wpt/html/canvas"],
     "args": ["--enable-fake-no-alloc-direct-call-for-testing"]
-  },
-  {
-    "prefix": "webid",
-    "bases": ["wpt_internal/webid"],
-    "args": ["--enable-features=WebID"]
   },
   {
     "prefix": "document-transition",
@@ -1012,16 +1008,6 @@
     "args": ["--enable-blink-features=VirtualKeyboard"]
   },
   {
-    "prefix": "async-load-data-url-fonts",
-    "bases": [
-      "fast/css/fontface-methods.html",
-      "fast/css/fontfaceset-download-error.html",
-      "fast/css/fontfaceset-multiple-families.html",
-      "fast/css/unused-data-url-fontface.html"
-    ],
-    "args": [ "--disable-features=SyncLoadDataUrlFonts" ]
-  },
-  {
     "prefix": "parakeet",
     "bases": ["external/wpt/parakeet"],
     "args": ["--enable-features=InterestGroupStorage,AdInterestGroupAPI,Parakeet"]
@@ -1032,7 +1018,7 @@
       "http/tests/inspector-protocol/target/auto-attach-auction-worklet.js"
     ],
     "args": [
-      "--enable-features=InterestGroupStorage,AdInterestGroupAPI,Fledge"
+      "--enable-features=InterestGroupStorage,AdInterestGroupAPI,Fledge,FencedFrames:implementation_type/shadow_dom"
     ]
   },
   {
@@ -1070,6 +1056,14 @@
       "http/tests/inspector-protocol/fenced-frame"
     ],
     "args": ["--enable-features=FencedFrames:implementation_type/mparch,Prerender2"]
+  },
+  {
+    "prefix": "fenced-frame-shadow-dom",
+    "bases": [
+      "fenced_frame",
+      "wpt_internal/fenced_frame"
+    ],
+    "args": ["--enable-features=FencedFrames:implementation_type/shadow_dom,Prerender2"]
   },
   {
     "prefix": "disable-custom-element-default-style",

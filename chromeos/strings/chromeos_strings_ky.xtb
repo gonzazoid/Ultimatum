@@ -117,6 +117,7 @@
 <translation id="2585245331261708204">Chrome OS жаңылыктары</translation>
 <translation id="2619761439309613843">Күн сайын жаңыртуу</translation>
 <translation id="2620436844016719705">Тутум</translation>
+<translation id="2695514675076754339">8 символдон турган кодду киргизип, кулпусун ачыңыз</translation>
 <translation id="2740531572673183784">Ok</translation>
 <translation id="2751739896257479635">EAP 2-фазадагы аныктыгын текшерүү</translation>
 <translation id="2783010256799387990">ТЕКШЕРҮҮДӨН ӨТТҮ</translation>
@@ -507,7 +508,6 @@
 <translation id="8129620843620772246"><ph name="TEMPERATURE_C" />° C</translation>
 <translation id="8132480444149501833">Трафикти эсептегичтерди сурануу</translation>
 <translation id="8138405288920084977">LTEAdvanced</translation>
-<translation id="816013303019725643">Кулпуну ачуу кодун киргизүү:</translation>
 <translation id="8206859287963243715">Уюктук</translation>
 <translation id="8208861521865154048">Бонустар</translation>
 <translation id="8217675307824400706">Туташыңыз</translation>

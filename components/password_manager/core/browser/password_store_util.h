@@ -7,14 +7,25 @@
 
 #include <vector>
 
+#include "components/password_manager/core/browser/password_store_backend.h"
 #include "components/password_manager/core/browser/password_store_change.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
 
 namespace password_manager {
 
 // Aggregates a vector of PasswordStoreChangeLists into a single
 // PasswordStoreChangeList. Does not check for duplicate values.
-PasswordStoreChangeList JoinPasswordStoreChanges(
-    std::vector<PasswordStoreChangeList> changes);
+absl::optional<PasswordStoreChangeList> JoinPasswordStoreChanges(
+    std::vector<absl::optional<PasswordStoreChangeList>> changes);
+
+// Returns logins if |result| holds them, or an empty list if |result|
+// holds an error.
+LoginsResult GetLoginsOrEmptyListOnFailure(LoginsResultOrError result);
+
+// Helper function allowing to bind base::OnceClosure to
+// PasswordStoreChangeListReply.
+PasswordStoreChangeListReply IgnoreChangeListAndRunCallback(
+    base::OnceClosure callback);
 
 }  // namespace password_manager
 

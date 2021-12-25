@@ -157,7 +157,7 @@ class MediaNotificationServiceTest : public ChromeRenderViewHostTestHarness {
 
   void SimulateMediaRoutesUpdate(
       const std::vector<media_router::MediaRoute>& routes) {
-    service_->cast_notification_producer_->OnRoutesUpdated(routes, {});
+    service_->cast_notification_producer_->OnRoutesUpdated(routes);
   }
 
   MediaNotificationService::PresentationManagerObservation*
@@ -200,7 +200,7 @@ class MediaNotificationServiceCastTest : public MediaNotificationServiceTest {
       media_router::MediaRoute::Id route_id) {
     media_router::MediaRoute media_route(route_id,
                                          media_router::MediaSource("source_id"),
-                                         "sink_id", "description", true, true);
+                                         "sink_id", "description", true);
     media_route.set_controller_type(
         media_router::RouteControllerType::kGeneric);
     return media_route;

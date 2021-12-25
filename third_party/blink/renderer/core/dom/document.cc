@@ -247,6 +247,7 @@
 #include "third_party/blink/renderer/core/layout/hit_test_canvas_result.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
 #include "third_party/blink/renderer/core/layout/layout_embedded_content.h"
+#include "third_party/blink/renderer/core/layout/layout_object_factory.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/text_autosizer.h"
 #include "third_party/blink/renderer/core/loader/cookie_jar.h"
@@ -280,7 +281,6 @@
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
 #include "third_party/blink/renderer/core/page/spatial_navigation_controller.h"
 #include "third_party/blink/renderer/core/page/validation_message_client.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/first_meaningful_paint_detector.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -2608,7 +2608,7 @@ void Document::GetPageDescription(uint32_t page_index,
         std::swap(width, height);
       break;
     case PageSizeType::kFixed: {
-      FloatSize size = style->PageSize();
+      gfx::SizeF size = style->PageSize();
       width = size.width();
       height = size.height();
       break;
@@ -2663,16 +2663,6 @@ void Document::SetIsXrOverlay(bool val, Element* overlay_element) {
   // The DOM overlay may change the effective root element. Need to update
   // compositing inputs to avoid a mismatch in CompositingRequirementsUpdater.
   GetLayoutView()->Layer()->SetNeedsCompositingInputsUpdate();
-
-  // Ensure that the graphics layer tree gets fully rebuilt on changes,
-  // similar to HTMLVideoElement::DidEnterFullscreen(). This may not be
-  // strictly necessary if the compositing changes are based on visibility
-  // settings, but helps ensure consistency in case it's changed to
-  // detaching layers or re-rooting the graphics layer tree.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    auto* compositor = GetLayoutView()->Compositor();
-    compositor->SetNeedsCompositingUpdate(kCompositingUpdateRebuildTree);
-  }
 }
 
 void Document::ScheduleUseShadowTreeUpdate(SVGUseElement& element) {
@@ -2705,10 +2695,11 @@ void Document::Initialize() {
   DCHECK(!ax_object_cache_ || this != &AXObjectCacheOwner());
 
   UpdateForcedColors();
-  layout_view_ = MakeGarbageCollected<LayoutView>(this);
+  scoped_refptr<ComputedStyle> style = GetStyleResolver().StyleForViewport();
+  layout_view_ = LayoutObjectFactory::CreateView(*this, *style);
   SetLayoutObject(layout_view_);
 
-  layout_view_->SetStyle(GetStyleResolver().StyleForViewport());
+  layout_view_->SetStyle(style);
 
   AttachContext context;
   AttachLayoutTree(context);
@@ -2803,8 +2794,6 @@ void Document::Shutdown() {
 
   if (GetFrame()->IsLocalRoot())
     GetPage()->GetChromeClient().AttachRootLayer(nullptr, GetFrame());
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    layout_view_->CleanUpCompositor();
 
   MutationObserver::CleanSlotChangeList(*this);
 
@@ -3738,9 +3727,6 @@ bool Document::DispatchBeforeUnloadEvent(ChromeClient* chrome_client,
 void Document::DispatchUnloadEvents(
     SecurityOrigin* committing_origin,
     absl::optional<Document::UnloadEventTiming>* unload_timing) {
-  // TODO(crbug.com/1161996): Remove this VLOG once the investigation is done.
-  VLOG(1) << "Document::DispatchUnloadEvents() URL = " << Url();
-
   PluginScriptForbiddenScope forbid_plugin_destructor_scripting;
   PageDismissalScope in_page_dismissal;
   if (parser_)
@@ -3815,9 +3801,6 @@ void Document::DispatchUnloadEvents(
     return;
 
   GetFrame()->Loader().SaveScrollAnchor();
-
-  // TODO(crbug.com/1161996): Remove this VLOG once the investigation is done.
-  VLOG(1) << "Actually dispatching an UnloadEvent: URL = " << Url();
 
   load_event_progress_ = kUnloadEventInProgress;
   Event& unload_event = *Event::Create(event_type_names::kUnload);
@@ -7268,13 +7251,13 @@ void Document::AdjustFloatQuadsForScrollAndAbsoluteZoom(
   }
 }
 
-void Document::AdjustFloatRectForScrollAndAbsoluteZoom(
-    FloatRect& rect,
+void Document::AdjustRectForScrollAndAbsoluteZoom(
+    gfx::RectF& rect,
     const LayoutObject& layout_object) const {
   if (!View())
     return;
 
-  AdjustForAbsoluteZoom::AdjustFloatRect(rect, layout_object);
+  AdjustForAbsoluteZoom::AdjustRectF(rect, layout_object);
 }
 
 void Document::SetThreadedParsingEnabledForTesting(bool enabled) {

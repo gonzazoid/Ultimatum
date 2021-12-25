@@ -8,6 +8,8 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/login/auth/extended_authenticator.h"
+#include "ash/components/login/auth/user_context.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/bind.h"
 #include "base/containers/contains.h"
@@ -21,8 +23,6 @@
 #include "chrome/browser/extensions/api/quick_unlock_private/quick_unlock_private_ash_utils.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chromeos/login/auth/extended_authenticator.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
@@ -240,8 +240,7 @@ QuickUnlockPrivateGetAuthTokenFunction::Run() {
   if (authenticator_allocator_) {
     extended_authenticator_ = authenticator_allocator_.Run(helper.get());
   } else {
-    extended_authenticator_ =
-        chromeos::ExtendedAuthenticator::Create(helper.get());
+    extended_authenticator_ = ash::ExtendedAuthenticator::Create(helper.get());
   }
 
   // The extension function needs to stay alive while the authenticator runs the
@@ -630,7 +629,7 @@ void QuickUnlockPrivateSetModesFunction::ModeChangeComplete(
   const user_manager::User* const user =
       chromeos::ProfileHelper::Get()->GetUserByProfile(
           GetActiveProfile(browser_context()));
-  const chromeos::UserContext user_context(*user);
+  const ash::UserContext user_context(*user);
 
   Respond(ArgumentList(SetModes::Results::Create()));
 }

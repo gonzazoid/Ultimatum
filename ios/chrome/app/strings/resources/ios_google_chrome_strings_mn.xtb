@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Энэ сайт болон Chrome-д нэвтэрнэ үү. Та синк хийхийг дараа асааж болно.</translation>
 <translation id="424864128008805179">Chrome-с гарах уу?</translation>
 <translation id="4249068189593983585">Chrome-н зөвлөгөө. Табын бусад сонголтыг харахын тулд дэлгэцийнхээ доод эсвэл дээд хэсэгт байрлах самбараас Табыг харуулах товчлуурыг удаан дарна уу.</translation>
-<translation id="4267862249323750454">Нууц үгийг <ph name="BEGIN_LINK" />Google-н Нууц үгний менежерт<ph name="END_LINK" /> хадгалдаг бөгөөд ингэснээр та үүнийг дурын төхөөрөмж дээр ашиглах боломжтой.</translation>
 <translation id="4523886039239821078">Зарим нэмэлт апп-ууд нь Chrome-ыг эвдрэхэд хүргэдэг. Тиймээс тэдгээрийг утсгана уу:</translation>
 <translation id="4633328489441962921">Chrome-н шинэчлэлтийг шалгах боломжгүй байна</translation>
 <translation id="4698415050768537821">Chrome бүх нууц үгийг шалгаж чадсангүй. Маргааш дахин оролдох буюу эсхүл <ph name="BEGIN_LINK" />Google Бүртгэлдээ байгаа нууц үгнүүдийг шалгана уу.<ph name="END_LINK" /></translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Google Chrome-н тусламжтай аюулгүй байгаарай</translation>
 <translation id="8772179140489533211">Chrome-д нэвтрэх сануулгыг харуулна.</translation>
+<translation id="8788269841521769222">Та энэ нууц үгийг санах шаардлагагүй. Үүнийг <ph name="EMAIL" />-д зориулж Google-н Нууц үгний менежерт хадгална</translation>
 <translation id="9112744793181547300">Chrome-г өгөгдмөлөөр тохируулах уу?</translation>
 </translationbundle>

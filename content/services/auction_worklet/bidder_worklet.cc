@@ -15,6 +15,7 @@
 #include "base/callback.h"
 #include "base/cxx17_backports.h"
 #include "base/logging.h"
+#include "base/memory/scoped_refptr.h"
 #include "base/strings/strcat.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
@@ -212,7 +213,7 @@ void BidderWorklet::GenerateBid(
   generate_bid_task->callback = std::move(generate_bid_callback);
 
   // If worklet script failed to load, fail and exit early.
-  if (!is_loading_ && !have_worklet_script_) {
+  if (worklet_js_load_state_ == LoadState::kFailure) {
     DeliverBidCallbackOnUserThread(generate_bid_task,
                                    mojom::BidderWorkletBidPtr(),
                                    /*error_msgs=*/std::vector<std::string>());
@@ -224,7 +225,9 @@ void BidderWorklet::GenerateBid(
       !trusted_bidding_signals_keys_->empty()) {
     generate_bid_task->trusted_bidding_signals =
         TrustedSignals::LoadBiddingSignals(
-            url_loader_factory_.get(), *trusted_bidding_signals_keys_,
+            url_loader_factory_.get(),
+            std::set<std::string>(trusted_bidding_signals_keys_->begin(),
+                                  trusted_bidding_signals_keys_->end()),
             top_window_origin.host(), *trusted_bidding_signals_url_, v8_helper_,
             base::BindOnce(&BidderWorklet::OnTrustedBiddingSignalsDownloaded,
                            base::Unretained(this), generate_bid_task));
@@ -255,9 +258,9 @@ void BidderWorklet::ReportWin(
   report_win_task->callback = std::move(callback);
 
   // If worklet script isn't loaded, can't run script immediately.
-  if (!have_worklet_script_) {
+  if (worklet_js_load_state_ != LoadState::kSuccess) {
     // If worklet script failed to load, fail and exit early.
-    if (!is_loading_) {
+    if (worklet_js_load_state_ == LoadState::kFailure) {
       DeliverReportWinOnUserThread(report_win_task,
                                    /*report_url=*/absl::optional<GURL>(),
                                    /*errors=*/std::vector<std::string>());
@@ -386,7 +389,7 @@ void BidderWorklet::V8State::GenerateBid(
     const url::Origin& browser_signal_top_window_origin,
     const url::Origin& browser_signal_seller_origin,
     base::Time auction_start_time,
-    std::unique_ptr<TrustedSignals::Result> trusted_bidding_signals_result,
+    scoped_refptr<TrustedSignals::Result> trusted_bidding_signals_result,
     GenerateBidCallbackInternal callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(v8_sequence_checker_);
 
@@ -683,16 +686,15 @@ void BidderWorklet::OnScriptDownloaded(WorkletLoader::Result worklet_script,
 
   worklet_loader_.reset();
 
-  is_loading_ = false;
-
   // Fail all pending tasks if the script failed to load.
   if (!worklet_script.success()) {
+    worklet_js_load_state_ = LoadState::kFailure;
     load_script_error_msg_ = std::move(error_msg);
     FailAllPendingTasks();
     return;
   }
 
-  have_worklet_script_ = true;
+  worklet_js_load_state_ = LoadState::kSuccess;
   v8_runner_->PostTask(FROM_HERE,
                        base::BindOnce(&BidderWorklet::V8State::SetWorkletScript,
                                       base::Unretained(v8_state_.get()),
@@ -717,7 +719,7 @@ void BidderWorklet::OnScriptDownloaded(WorkletLoader::Result worklet_script,
 
 void BidderWorklet::OnTrustedBiddingSignalsDownloaded(
     GenerateBidTaskList::iterator task,
-    std::unique_ptr<TrustedSignals::Result> result,
+    scoped_refptr<TrustedSignals::Result> result,
     absl::optional<std::string> error_msg) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(user_sequence_checker_);
 
@@ -730,8 +732,12 @@ void BidderWorklet::OnTrustedBiddingSignalsDownloaded(
 
 void BidderWorklet::GenerateBidIfReady(GenerateBidTaskList::iterator task) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(user_sequence_checker_);
-  if (task->trusted_bidding_signals || !have_worklet_script_)
+  // Script load failure should abort all tasks before getting here.
+  DCHECK_NE(worklet_js_load_state_, LoadState::kFailure);
+  if (task->trusted_bidding_signals ||
+      worklet_js_load_state_ != LoadState::kSuccess) {
     return;
+  }
 
   v8_runner_->PostTask(
       FROM_HERE,

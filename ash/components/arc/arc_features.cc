@@ -149,7 +149,7 @@ const base::Feature kUsbStorageUIFeature{"ArcUsbStorageUI",
 // When enabled, Android tries to use dalvik memory profile tuned based on the
 // device memory size.
 const base::Feature kUseDalvikMemoryProfile{"ArcUseDalvikMemoryProfile",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+                                            base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Controls whether the system/vendor images are mounted without specifying a
 // block size.
@@ -161,7 +161,15 @@ const base::Feature kUseDefaultBlockSize{"ArcVmUseDefaultBlockSize",
 // to delegate decoding tasks to VideoDecoder implementations, instead of using
 // VDA implementations created by GpuVideoDecodeAcceleratorFactory.
 const base::Feature kVideoDecoder{"ArcVideoDecoder",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
+                                  base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Feature to continuously log PSI memory pressure data to Chrome.
+const base::Feature kVmMemoryPSIReports{"ArcVmMemoryPSIReports",
+                                        base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Controls how frequently memory pressure data is logged
+const base::FeatureParam<int> kVmMemoryPSIReportsPeriod{&kVmMemoryPSIReports,
+                                                        "period", 10};
 
 // Controls whether a custom memory size is used when creating ARCVM. When
 // enabled, ARCVM is sized with the following formula:

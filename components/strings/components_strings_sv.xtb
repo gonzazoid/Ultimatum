@@ -112,6 +112,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="1308113895091915999">Tillgängligt erbjudande</translation>
 <translation id="1312803275555673949">Vad finns det för belägg för detta?</translation>
 <translation id="131405271941274527"><ph name="URL" /> vill skicka och ta emot information när du snuddar vid en NFC-enhet med telefonen</translation>
+<translation id="1314311879718644478">Visa innehåll med förstärkt verklighet</translation>
 <translation id="1314509827145471431">Bindning till höger</translation>
 <translation id="1318023360584041678">Sparades i en flikgrupp</translation>
 <translation id="1319245136674974084">Fråga inte igen för den här appen</translation>
@@ -176,6 +177,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="1472675084647422956">Visa fler</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Letar du efter information om webbläsarversionen? Besök</translation>
 <translation id="1476595624592550506">Ändra lösenordet</translation>
 <translation id="1483493594462132177">Skicka</translation>
 <translation id="1484290072879560759">Välj leveransadress</translation>
@@ -214,6 +216,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="1583429793053364125">Ett fel uppstod när webbsidan skulle visas.</translation>
 <translation id="1586541204584340881">Vilka tillägg du har installerat</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Vill du installera ARCore?</translation>
 <translation id="1592005682883173041">Lokal dataåtkomst</translation>
 <translation id="1594030484168838125">Välj</translation>
 <translation id="160851722280695521">Spela Dino Run-spelet i Chrome</translation>
@@ -1261,6 +1264,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="4968522289500246572">Den här appen har utformats för mobila enheter och kan påverkas om storleken ändras. Appen kanske inte fungerar som den ska eller startas om.</translation>
 <translation id="4969341057194253438">Radera inspelningen</translation>
 <translation id="4973922308112707173">Två hål högst upp</translation>
+<translation id="4976702386844183910">Besöktes senast <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Vill du använda mikrofonen?</translation>
 <translation id="4984339528288761049">Prc5 (kuvert)</translation>
 <translation id="4989163558385430922">Visa alla</translation>
@@ -1346,6 +1350,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="5215116848420601511">Betalningsmetoder och adresser som används med Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Fack 13</translation>
+<translation id="5216942107514965959">Besöktes senast i dag</translation>
 <translation id="5222812217790122047">E-postadress måste anges</translation>
 <translation id="5230733896359313003">Leveransadress</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="5333022057423422993">Chrome upptäckte att lösenordet som du precis använde har läckt ut vid ett dataintrång. Vi rekommenderar att du kontrollerar dina sparade lösenord för att skydda dina konton.</translation>
 <translation id="5334013548165032829">Detaljerade systemloggar</translation>
 <translation id="5334145288572353250">Vill du spara adressen?</translation>
+<translation id="5335920952954443287">Hjärta som slår</translation>
 <translation id="5340250774223869109">Appen blockeras</translation>
 <translation id="534295439873310000">NFC-enheter</translation>
 <translation id="5344579389779391559">Den här sidan kan försöka debitera dig</translation>
@@ -1531,6 +1537,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="5869522115854928033">Sparade lösenord</translation>
 <translation id="5873013647450402046">Din bank vill bekräfta att det är du.</translation>
 <translation id="5887400589839399685">Kortet har sparats</translation>
+<translation id="5887687176710214216">Besöktes senast i går</translation>
 <translation id="5895138241574237353">Starta om</translation>
 <translation id="5895187275912066135">Utfärdat</translation>
 <translation id="5901630391730855834">Gul</translation>
@@ -1724,6 +1731,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="6529602333819889595">&amp;Gör om Ta bort</translation>
 <translation id="6545864417968258051">Bluetooth-sökning</translation>
 <translation id="6547208576736763147">Två hål till vänster</translation>
+<translation id="6554732001434021288">Besöktes senast för <ph name="NUM_DAYS" /> dagar sedan</translation>
 <translation id="6556866813142980365">Upprepa</translation>
 <translation id="6569060085658103619">Du visar en tilläggssida</translation>
 <translation id="6573200754375280815">Två hål till höger</translation>
@@ -1886,6 +1894,7 @@ Annars blockeras detta av integritetsinställningarna. Om du tillåter detta kan
 <translation id="7118618213916969306">Sök efter webbadressen i Urklipp, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Stäng andra flikar eller program</translation>
 <translation id="7129409597930077180">Det går inte att skicka till den här adressen. Välj en annan adress.</translation>
+<translation id="7132939140423847331">Administratören tillåter inte att denna data kopieras.</translation>
 <translation id="7135130955892390533">Visa status</translation>
 <translation id="7138472120740807366">Leveranssätt</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2058,6 +2067,7 @@ Mer information.
 <translation id="7654909834015434372">När du redigerar kommentarer aktiveras den ursprungliga rotationen igen för dokumentet</translation>
 <translation id="765676359832457558">Dölj avancerade inställningar ...</translation>
 <translation id="7658239707568436148">Avbryt</translation>
+<translation id="7659878911471462949">Glädjetårar</translation>
 <translation id="7662298039739062396">Inställningen styrs av ett tillägg</translation>
 <translation id="7663736086183791259">Certifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Tillåts inte i inkognitoläge</translation>
@@ -2158,7 +2168,6 @@ Mer information.
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Får begära tillstånd att använda VR-enheter och VR-data</translation>
 <translation id="7984945080620862648">Det går inte att besöka <ph name="SITE" /> just nu på grund av att webbplatsen skickade röriga användaruppgifter som Chrome inte kan behandla. Nätverksfel och attacker är vanligtvis tillfälliga, så sidan fungerar troligen senare.</translation>
-<translation id="79859296434321399">Installera ARCore om du vill visa innehåll med förstärkt verklighet</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Bind</translation>
 <translation id="7992044431894087211">Skärmdelningen med <ph name="APPLICATION_TITLE" /> återupptogs</translation>
@@ -2262,6 +2271,7 @@ Mer information.
 <translation id="830498451218851433">Enkelfalsning</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Vilka appar som har installerats och hur ofta de används</translation>
+<translation id="8317207217658302555">Vill du uppdatera ARCore?</translation>
 <translation id="831997045666694187">kvällen</translation>
 <translation id="8321476692217554900">aviseringar</translation>
 <translation id="8328484624016508118">När du har stängt alla inkognitoflikar i Chrome raderas följande:
@@ -2332,7 +2342,6 @@ Mer information:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Återställ behörighet}other{Återställ behörigheter}}</translation>
 <translation id="8555010941760982128">Använd följande kod i kassan</translation>
 <translation id="8557066899867184262">CVC-koden finns på baksidan av kortet.</translation>
-<translation id="8558485628462305855">Uppdatera ARCore om du vill visa innehåll med förstärkt verklighet</translation>
 <translation id="8559762987265718583">Det gick inte att upprätta en privat anslutning till <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> eftersom enhetens datum och tid (<ph name="DATE_AND_TIME" />) inte stämmer.</translation>
 <translation id="8564182942834072828">Separata dokument/kopior grupperade per sida</translation>
 <translation id="8564985650692024650">Du rekommenderas att återställa lösenordet för <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> om du har återanvänt det på andra webbplatser.</translation>
@@ -2445,6 +2454,7 @@ Mer information:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />: tryck på Tabb och sedan på Retur om du vill öppna webbhistoriken i Chrome</translation>
 <translation id="8987927404178983737">Månad</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Letar du efter information om systemversionen? Besök</translation>
 <translation id="899688752321268742"><ph name="URL" /> vill veta när du använder enheten aktivt</translation>
 <translation id="8996941253935762404">Webbplatsen som öppnas innehåller skadliga program</translation>
 <translation id="8997023839087525404">Servern visade ett certifikat som inte lämnats ut via principen Certifikattransparens. Detta är ett krav för vissa certifikat för att säkerställa att de är pålitliga och skyddar mot hackare.</translation>

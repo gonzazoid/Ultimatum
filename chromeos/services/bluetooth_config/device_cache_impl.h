@@ -78,8 +78,9 @@ class DeviceCacheImpl : public DeviceCache,
                             device::BluetoothDevice::BatteryType type) override;
 
   // DeviceNameManager::Observer:
-  void OnDeviceNicknameChanged(const std::string& device_id,
-                               const std::string& nickname) override;
+  void OnDeviceNicknameChanged(
+      const std::string& device_id,
+      const absl::optional<std::string>& nickname) override;
 
   // Fetches all known devices from BluetoothAdapter and populates them into
   // |paired_devices_| and |unpaired_devices_|.
@@ -119,8 +120,8 @@ class DeviceCacheImpl : public DeviceCache,
   bool RemoveFromUnpairedDeviceList(device::BluetoothDevice* device);
 
   // Attempts to add updated metadata about |device| to |paired_devices_|. If
-  // |device| is not found in |unpaired_devices_|, no update is performed.
-  // Returns true if the device was updated in the list.
+  // |device| is not found in |unpaired_devices_|, it is added. Returns true if
+  // the device was updated in the list.
   bool AttemptUpdateUnpairedDeviceMetadata(device::BluetoothDevice* device);
 
   // Sorts |unpaired_devices_| based on signal strength. This function is called

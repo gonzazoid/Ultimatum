@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">使用可能なクーポン</translation>
 <translation id="1312803275555673949">それを支持する証拠は何ですか？</translation>
 <translation id="131405271941274527"><ph name="URL" /> が、NFC 搭載のスマートフォンをタップして情報を送受信するよう求めています</translation>
+<translation id="1314311879718644478">拡張現実コンテンツを表示します</translation>
 <translation id="1314509827145471431">製本（右綴じ）</translation>
 <translation id="1318023360584041678">タブグループに保存済み</translation>
 <translation id="1319245136674974084">このアプリでは次回から表示しない</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">表示項目を増やす</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">ブラウザのバージョン情報をお探しですか？次にアクセスしてください</translation>
 <translation id="1476595624592550506">パスワードを変更してください</translation>
 <translation id="1483493594462132177">送信</translation>
 <translation id="1484290072879560759">配送先住所を選択</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">このウェブページの表示中に問題が発生しました。</translation>
 <translation id="1586541204584340881">インストールした拡張機能</translation>
 <translation id="1588438908519853928">ノーマル</translation>
+<translation id="1589050138437146318">ARCore をインストールしますか？</translation>
 <translation id="1592005682883173041">ローカルデータへのアクセス</translation>
 <translation id="1594030484168838125">選択</translation>
 <translation id="160851722280695521">Chrome で Dino Run ゲームをプレイします</translation>
@@ -1252,6 +1255,7 @@
 <translation id="4968522289500246572">このアプリはモバイル向けに設計されているため、適切にサイズ変更されない可能性があります。アプリに問題が生じたり、再起動したりすることがあります。</translation>
 <translation id="4969341057194253438">録画を削除</translation>
 <translation id="4973922308112707173">2 穴パンチ（上）</translation>
+<translation id="4976702386844183910">最終アクセス日: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">マイクを使用しますか？</translation>
 <translation id="4984339528288761049">Prc5（封筒）</translation>
 <translation id="4989163558385430922">すべて表示</translation>
@@ -1337,6 +1341,7 @@
 <translation id="5215116848420601511">Google Pay のお支払い方法と住所</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">トレイ 13</translation>
+<translation id="5216942107514965959">最終アクセス日: 今日</translation>
 <translation id="5222812217790122047">メールアドレスは必須です</translation>
 <translation id="5230733896359313003">配送先住所</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1380,6 +1385,7 @@
 <translation id="5333022057423422993">たった今使用したパスワードがデータ侵害で検出されました。アカウントを保護するため、保存したパスワードを確認することをおすすめします。</translation>
 <translation id="5334013548165032829">詳細なシステムログ</translation>
 <translation id="5334145288572353250">住所を保存しますか？</translation>
+<translation id="5335920952954443287">揺れるハート</translation>
 <translation id="5340250774223869109">アプリケーションがブロックされました</translation>
 <translation id="534295439873310000">NFC デバイス</translation>
 <translation id="5344579389779391559">このページでは課金される恐れがあります</translation>
@@ -1522,6 +1528,7 @@
 <translation id="5869522115854928033">保存したパスワード</translation>
 <translation id="5873013647450402046">ご利用の銀行またはカード発行会社が本人確認を求めています。</translation>
 <translation id="5887400589839399685">カードが保存されました</translation>
+<translation id="5887687176710214216">最終アクセス日: 昨日</translation>
 <translation id="5895138241574237353">再起動</translation>
 <translation id="5895187275912066135">発行日</translation>
 <translation id="5901630391730855834">黄</translation>
@@ -1715,6 +1722,7 @@
 <translation id="6529602333819889595">削除のやり直し（&amp;R）</translation>
 <translation id="6545864417968258051">Bluetooth のスキャン</translation>
 <translation id="6547208576736763147">2 穴パンチ（左）</translation>
+<translation id="6554732001434021288">最終アクセス日: <ph name="NUM_DAYS" /> 日前</translation>
 <translation id="6556866813142980365">やり直す</translation>
 <translation id="6569060085658103619">拡張機能のページを表示しています</translation>
 <translation id="6573200754375280815">2 穴パンチ（右）</translation>
@@ -1877,6 +1885,7 @@
 <translation id="7118618213916969306">クリップボードにある URL（<ph name="SHORT_URL" />）を検索します</translation>
 <translation id="7119414471315195487">他のタブやプログラムを閉じる</translation>
 <translation id="7129409597930077180">この住所には配送できません。別の住所を選択してください。</translation>
+<translation id="7132939140423847331">このデータのコピーは管理者によって禁止されています。</translation>
 <translation id="7135130955892390533">ステータスを表示</translation>
 <translation id="7138472120740807366">配達方法</translation>
 <translation id="7139724024395191329">管轄区域</translation>
@@ -2049,6 +2058,7 @@
 <translation id="7654909834015434372">メモを編集すると、ドキュメントは元の向きに戻ります</translation>
 <translation id="765676359832457558">詳細設定を表示しない...</translation>
 <translation id="7658239707568436148">キャンセル</translation>
+<translation id="7659878911471462949">泣き笑い</translation>
 <translation id="7662298039739062396">拡張機能によって指定される設定</translation>
 <translation id="7663736086183791259">証明書 <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">シークレット モードでは許可されていません</translation>
@@ -2149,7 +2159,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">バーチャル リアリティ デバイスとデータの使用を要求できる</translation>
 <translation id="7984945080620862648"><ph name="SITE" /> から、Chrome で処理できないスクランブル化された認証情報が返されたため、現在このサイトにはアクセスできません。通常、ネットワーク エラーや不正な操作は一時的なものです。少し時間をおくと、またページにアクセスできるようになる可能性があります。</translation>
-<translation id="79859296434321399">拡張現実（AR）コンテンツを表示するには ARCore をインストールしてください</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">製本</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> との画面共有が再開されました</translation>
@@ -2253,6 +2262,7 @@
 <translation id="830498451218851433">2 つ折り</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">インストールしたアプリと使用頻度</translation>
+<translation id="8317207217658302555">ARCore を更新しますか？</translation>
 <translation id="831997045666694187">夕方</translation>
 <translation id="8321476692217554900">通知</translation>
 <translation id="8328484624016508118">すべてのシークレット タブを閉じると、Chrome で以下のデータが削除されます。
@@ -2323,7 +2333,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{権限をリセット}other{権限をリセット}}</translation>
 <translation id="8555010941760982128">ご購入手続き時にこのコードを使用</translation>
 <translation id="8557066899867184262">CVC はカードの裏面に記載されています。</translation>
-<translation id="8558485628462305855">拡張現実（AR）コンテンツを表示するには ARCore を更新してください</translation>
 <translation id="8559762987265718583">デバイスの日時（<ph name="DATE_AND_TIME" />）が正しくないため、<ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> へのプライベート接続を確立できません。</translation>
 <translation id="8564182942834072828">個別のドキュメント（丁合いなし）</translation>
 <translation id="8564985650692024650"><ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> パスワードを他のサイトで再使用した場合、Chromium ではパスワードの再設定を促すメッセージが表示されます。</translation>
@@ -2436,6 +2445,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" /> です。Tab、Enter キーの順に押すと、Chrome の閲覧履歴を表示します</translation>
 <translation id="8987927404178983737">月</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">システムのバージョン情報をお探しですか？次にアクセスしてください</translation>
 <translation id="899688752321268742"><ph name="URL" /> がこのデバイスのアクティブ状態の検出を求めています</translation>
 <translation id="8996941253935762404">この先のサイトには有害なプログラムがあります</translation>
 <translation id="8997023839087525404">サーバーから提示された証明書は、証明書の透明性ポリシーを介して公開されていません。一部の証明書は、信頼性の確保と攻撃者からの保護のため、証明書の透明性ポリシーを介して公開されることが要件となっています。</translation>

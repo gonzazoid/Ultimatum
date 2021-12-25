@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">ઑફર ઉપલબ્ધ છે</translation>
 <translation id="1312803275555673949">કયા પુરાવા તેને સપોર્ટ કરે છે?</translation>
 <translation id="131405271941274527">જ્યારે તમે NFC ડિવાઇસ પર તમારા ફોન પર ટૅપ કરો, ત્યારે <ph name="URL" /> માહિતી મોકલવા અને પ્રાપ્ત કરવા માગે છે</translation>
+<translation id="1314311879718644478">ઑગ્મેન્ટેડ રિયાલિટી કન્ટેન્ટ જુઓ</translation>
 <translation id="1314509827145471431">જમણી બાજુએ જોડો</translation>
 <translation id="1318023360584041678">ટૅબ ગ્રૂપમાં સાચવ્યું</translation>
 <translation id="1319245136674974084">આ ઍપ માટે ફરીથી પૂછશો નહીં</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">વધુ બતાવો</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">બ્રાઉઝરનું વર્ઝન શોધી રહ્યાં છો? મુલાકાત લો</translation>
 <translation id="1476595624592550506">તમારો પાસવર્ડ બદલો</translation>
 <translation id="1483493594462132177">મોકલો</translation>
 <translation id="1484290072879560759">વિતરણ માટેનું સરનામું પસંદ કરો</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">આ વેબપેજ બતાવતી વખતે કંઈક ખોટું થયું.</translation>
 <translation id="1586541204584340881">તમે કયા એક્સ્ટેંશન ઇન્સ્ટૉલ કર્યા છે</translation>
 <translation id="1588438908519853928">સામાન્ય</translation>
+<translation id="1589050138437146318">ARCore ઇન્સ્ટૉલ કરીએ?</translation>
 <translation id="1592005682883173041">સ્થાનિક ડેટા ઍક્સેસ</translation>
 <translation id="1594030484168838125">પસંદ કરો</translation>
 <translation id="160851722280695521">Chromeમાં Dino Run ગેમ રમો</translation>
@@ -1260,6 +1263,7 @@
 <translation id="4968522289500246572">આ ઍપ મોબાઇલ માટે બનાવવામાં આવી છે અને કદાચ તે યોગ્ય રીતે કદ બદલી શકશે નહીં. ઍપમાં સમસ્યાઓ આવી શકે છે અથવા તે ફરી શરૂ થઈ શકે છે.</translation>
 <translation id="4969341057194253438">રેકોર્ડિંગ ડિલીટ કરો</translation>
 <translation id="4973922308112707173">ઉપરની બાજુએ બે કાણાં પાડો</translation>
+<translation id="4976702386844183910">છેલ્લે <ph name="DATE" />ના રોજ મુલાકાત લીધી</translation>
 <translation id="4984088539114770594">માઇક્રોફોનનો ઉપયોગ કરીએ?</translation>
 <translation id="4984339528288761049">Prc5 (એન્વલપ)</translation>
 <translation id="4989163558385430922">બધા જુઓ</translation>
@@ -1345,6 +1349,7 @@
 <translation id="5215116848420601511">Google Payનો ઉપયોગ કરતી ચુકવણી પદ્ધતિઓ અને ઍડ્રેસ</translation>
 <translation id="5215363486134917902">ફોલિયો-Sp</translation>
 <translation id="521659676233207110">ટ્રે 13</translation>
+<translation id="5216942107514965959">છેલ્લે આજે મુલાકાત લીધી</translation>
 <translation id="5222812217790122047">ઇમેઇલ આવશ્યક છે</translation>
 <translation id="5230733896359313003">વિતરણ માટેનું સરનામું</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1388,6 +1393,7 @@
 <translation id="5333022057423422993">Chromeને તમે હમણાં જ ડેટા ઉલ્લંઘનમાં ઉપયોગમાં લીધેલો પાસવર્ડ મળ્યો છે. તમારા એકાઉન્ટને સુરક્ષિત રાખવા માટે, અમે તમારા સાચવેલા પાસવર્ડને ચેક કરવાનો સુઝાવ આપીએ છીએ.</translation>
 <translation id="5334013548165032829">વિગતવાર સિસ્ટમ લૉગ</translation>
 <translation id="5334145288572353250">સરનામું સાચવીએ?</translation>
+<translation id="5335920952954443287">ધબકતું હૃદય</translation>
 <translation id="5340250774223869109">ઍપ્લિકેશન બ્લૉક કરેલી છે</translation>
 <translation id="534295439873310000">NFC ડિવાઇસ</translation>
 <translation id="5344579389779391559">આ પેજ કદાચ તમારી પાસેથી શુલ્ક વસૂલ કરવાનો પ્રયાસ કરી શકે છે</translation>
@@ -1530,6 +1536,7 @@
 <translation id="5869522115854928033">સાચવેલા પાસવર્ડ્સ</translation>
 <translation id="5873013647450402046">તમારી બેંક કન્ફર્મ કરવા માગે છે કે આ તમે જ છો.</translation>
 <translation id="5887400589839399685">કાર્ડ સાચવ્યું</translation>
+<translation id="5887687176710214216">છેલ્લે કાલે મુલાકાત લીધી</translation>
 <translation id="5895138241574237353">પુનઃપ્રારંભ કરો</translation>
 <translation id="5895187275912066135">ના રોજ રજૂ કરાયું</translation>
 <translation id="5901630391730855834">પીળો</translation>
@@ -1723,6 +1730,7 @@
 <translation id="6529602333819889595">&amp;ફરી કરો ડિલીટ કરો</translation>
 <translation id="6545864417968258051">બ્લૂટૂથ સ્કૅનિંગ</translation>
 <translation id="6547208576736763147">ડાબી બાજુએ બે ચતુષ્કોણ કાણાં પાડો</translation>
+<translation id="6554732001434021288">છેલ્લે <ph name="NUM_DAYS" /> દિવસ પહેલાં મુલાકાત લીધી</translation>
 <translation id="6556866813142980365">ફરી કરો</translation>
 <translation id="6569060085658103619">તમે એક્સ્ટેન્શન પેજ જોઈ રહ્યાં છો</translation>
 <translation id="6573200754375280815">જમણી બાજુએ બે કાણાં પાડો</translation>
@@ -1885,6 +1893,7 @@
 <translation id="7118618213916969306">ક્લિપબોર્ડ URL શોધો, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">અન્ય ટૅબ અથવા પ્રોગ્રામ બંધ કરો</translation>
 <translation id="7129409597930077180">આ સરનામે વિતરણ કરી શકાતું નથી. કોઈ ભિન્ન સરનામું પસંદ કરો.</translation>
+<translation id="7132939140423847331">તમારા ઍડમિન દ્વારા આ ડેટાને કૉપિ કરવાથી પ્રતિબંધિત કરવામાં આવ્યો છે.</translation>
 <translation id="7135130955892390533">સ્ટેટસ બતાવો</translation>
 <translation id="7138472120740807366">વિતરણ પદ્ધતિ</translation>
 <translation id="7139724024395191329">એમિરેટ</translation>
@@ -2057,6 +2066,7 @@
 <translation id="7654909834015434372">જ્યારે તમે ટીકાટિપ્પણીમાં ફેરફાર કરશો, ત્યારે આ દસ્તાવેજ તેના ઑરિજિનલ રોટેશન પર પાછો ફરશે</translation>
 <translation id="765676359832457558">વિગતવાર સેટિંગ છુપાવો...</translation>
 <translation id="7658239707568436148">રદ કરો</translation>
+<translation id="7659878911471462949">ખુશીના આંસુ</translation>
 <translation id="7662298039739062396">એક્સટેન્શન દ્વારા સેટિંગ નિયંત્રિત કરેલ છે</translation>
 <translation id="7663736086183791259">પ્રમાણપત્ર <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">છુપા મોડમાં મંજૂરી નથી</translation>
@@ -2157,7 +2167,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">વર્ચ્યુઅલ રિયાલિટી ડિવાઇસનો અને ડેટાનો ઉપયોગ કરવાનું પૂછી શકે છે</translation>
 <translation id="7984945080620862648">તમે અત્યારે <ph name="SITE" />ની મુલાકાત લઈ શકતાં નથી કારણ કે વેબસાઇટે સમજાય નહીં તેવા ઓળખપત્રો મોકલ્યા છે જેની પર Chrome પ્રક્રિયા કરી શકતું નથી. નેટવર્ક ભૂલો અને હુમલા સામાન્ય રીતે અસ્થાયી છે, તેથી આ પેજ સંભવિત રીતે પછીથી કાર્ય કરશે.</translation>
-<translation id="79859296434321399">ઑગ્મેન્ટેડ રિયાલિટી કન્ટેન્ટ જોવા માટે, ARCore ઇન્સ્ટૉલ કરો</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">જોડો</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> સાથે સ્ક્રીન શેરિંગની સુવિધા ફરી શરૂ કરવામાં આવી</translation>
@@ -2261,6 +2270,7 @@
 <translation id="830498451218851433">અડધું વાળો</translation>
 <translation id="8307358339886459768">નાનો-ફોટો</translation>
 <translation id="8307888238279532626">ઇન્સ્ટૉલ થયેલી ઍપ અને તેમનો ઉપયોગ કેટલી વાર કરવામાં આવે છે</translation>
+<translation id="8317207217658302555">ARCore અપડેટ કરીએ?</translation>
 <translation id="831997045666694187">સાંજ</translation>
 <translation id="8321476692217554900">નોટિફિકેશન</translation>
 <translation id="8328484624016508118">બધી છૂપી ટૅબ બંધ કર્યા પછી, Chrome આ સાફ કરશે:
@@ -2331,7 +2341,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{પરવાનગી રીસેટ કરો}one{પરવાનગી રીસેટ કરો}other{બધી પરવાનગી રીસેટ કરો}}</translation>
 <translation id="8555010941760982128">ચેકઆઉટ વખતે આ કોડનો ઉપયોગ કરો</translation>
 <translation id="8557066899867184262">CVC તમારા કાર્ડની પાછળ હોય છે.</translation>
-<translation id="8558485628462305855">ઑગ્મેન્ટેડ રિયાલિટી કન્ટેન્ટ જોવા માટે ARCore અપડેટ કરો</translation>
 <translation id="8559762987265718583"><ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> પર ખાનગી કનેક્શન સ્થાપિત કરી શકાતું નથી કારણ કે તમારા ઉપકરણની તારીખ અને સમય (<ph name="DATE_AND_TIME" />) અયોગ્ય છે.</translation>
 <translation id="8564182942834072828">અલગ દસ્તાવેજો/ગોઠવણી વિનાની કૉપિ</translation>
 <translation id="8564985650692024650">જો તમે અન્ય સાઇટ પર <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> પાસવર્ડનો ફરી ઉપયોગ કર્યો હોય, તો Chromium તેને રીસેટ કરવાનો સુઝાવ આપે છે.</translation>
@@ -2443,6 +2452,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Chromeમાં તમારો બ્રાઉઝિંગ ઇતિહાસ જોવા માટે, પહેલાં Tab અને પછી Enter કી દબાવો</translation>
 <translation id="8987927404178983737">મહિનો</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">સિસ્ટમનું વર્ઝન શોધી રહ્યાં છો? મુલાકાત લો</translation>
 <translation id="899688752321268742"><ph name="URL" /> જાણવા માગે છે કે તમે સક્રિય રૂપે આ ડિવાઇસનો ઉપયોગ ક્યારે કરો છો</translation>
 <translation id="8996941253935762404">સાઇટમાં આગળ હાનિકારક પ્રોગ્રામ્સ છે</translation>
 <translation id="8997023839087525404">સર્વરે એવું પ્રમાણપત્ર પ્રસ્તુત કર્યું કે જે પ્રમાણપત્ર પારદર્શિતા નીતિનો ઉપયોગ કરીને સાર્વજનિક રીતે જાહેર કર્યું ન હતું. આ કેટલાક પ્રમાણપત્રો માટે એ ખાતરી કરવા હેતુ આવશ્યક છે કે તેઓ વિશ્વસનીય છે અને હુમલાખારો સામે રક્ષણ કરે છે.</translation>

@@ -159,6 +159,8 @@ extern const char kEnterpriseEnrollmentInitialModulus[];
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const char kEnterpriseEnrollmentModulusLimit[];
 COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const char kDisallowPolicyBlockDevMode[];
+COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const char kExtensionInstallEventChromeLogForTests[];
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const char kExternalMetricsCollectionInterval[];
@@ -174,7 +176,7 @@ COMPONENT_EXPORT(ASH_CONSTANTS) extern const char kFirstExecAfterBoot[];
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const char kForceDevToolsAvailable[];
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const char kForceFirstRunUI[];
 COMPONENT_EXPORT(ASH_CONSTANTS)
-extern const char kForceHWIDCheckFailureForTest[];
+extern const char kForceHWIDCheckResultForTest[];
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const char kForceHappinessTrackingSystem[];
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const char kForceLaunchBrowser[];

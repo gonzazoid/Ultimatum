@@ -5,8 +5,8 @@
 #         chromeos
 #         fuchsia
 #         linux ubuntu
-#         mac bigsur catalina lion highsierra mac-10.12 mojave mountainlion
-#             sierra
+#         mac bigsur catalina lion highsierra mac-10.12 mojave monterey
+#             mountainlion sierra
 #         win win7 win8 win10 ]
 # Devices
 # tags: [ android-nexus-5 android-nexus-5x android-nexus-9 android-pixel-2
@@ -110,9 +110,6 @@ crbug.com/1207726 [ fuchsia ] GpuProcess_canvas2d [ RetryOnFailure ]
 # Started crashing with passthrough field trial.
 crbug.com/1099576 [ mac amd ] GpuProcess_mac_webgl_backgrounded_high_performance [ Failure ]
 crbug.com/1099576 [ mac intel ] GpuProcess_mac_webgl_backgrounded_high_performance [ Failure ]
-
-# Flakily hits a DCHECK during shared image creation.
-crbug.com/1188437 [ linux intel display-server-wayland ] GpuProcess_webgl [ RetryOnFailure ]
 
 # Flakey/slow tests using clang_rt.
 crbug.com/1261260 [ android android-nexus-5x ] GpuProcess_webgpu_iframe_removed [ Failure ]

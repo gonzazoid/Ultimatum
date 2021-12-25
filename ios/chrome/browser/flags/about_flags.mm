@@ -64,6 +64,7 @@
 #include "ios/chrome/browser/policy/policy_features.h"
 #include "ios/chrome/browser/policy/policy_util.h"
 #include "ios/chrome/browser/screen_time/screen_time_buildflags.h"
+#import "ios/chrome/browser/sessions/session_features.h"
 #include "ios/chrome/browser/system_flags.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_feature.h"
 #import "ios/chrome/browser/ui/default_promo/default_browser_utils.h"
@@ -532,6 +533,10 @@ const flags_ui::FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kIOSSharedHighlightingColorChangeDescription,
      flags_ui::kOsIos,
      FEATURE_VALUE_TYPE(web::features::kIOSSharedHighlightingColorChange)},
+    {"ios-shared-highlighting-v2",
+     flag_descriptions::kIOSSharedHighlightingV2Name,
+     flag_descriptions::kIOSSharedHighlightingV2Description, flags_ui::kOsIos,
+     FEATURE_VALUE_TYPE(shared_highlighting::kIOSSharedHighlightingV2)},
     {"ios-persist-crash-restore-infobar",
      flag_descriptions::kIOSPersistCrashRestoreName,
      flag_descriptions::kIOSPersistCrashRestoreDescription, flags_ui::kOsIos,
@@ -594,9 +599,6 @@ const flags_ui::FeatureEntry kFeatureEntries[] = {
          kInterestFeedV2ClickAndViewActionsConditionalUploadDescription,
      flags_ui::kOsIos,
      FEATURE_VALUE_TYPE(feed::kInterestFeedV2ClicksAndViewsConditionalUpload)},
-    {"tabs-bulkactions-ios", flag_descriptions::kTabsBulkActionsName,
-     flag_descriptions::kTabsBulkActionsDescription, flags_ui::kOsIos,
-     FEATURE_VALUE_TYPE(kTabsBulkActions)},
     {"tabs-search-ios", flag_descriptions::kTabsSearchName,
      flag_descriptions::kTabsSearchDescription, flags_ui::kOsIos,
      FEATURE_VALUE_TYPE(kTabsSearch)},
@@ -715,9 +717,6 @@ const flags_ui::FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kEnableDiscoverFeedShorterCacheName,
      flag_descriptions::kEnableDiscoverFeedShorterCacheDescription,
      flags_ui::kOsIos, FEATURE_VALUE_TYPE(kEnableDiscoverFeedShorterCache)},
-    {"shared-highlighting-v2", flag_descriptions::kIOSSharedHighlightingV2Name,
-     flag_descriptions::kIOSSharedHighlightingV2Description, flags_ui::kOsIos,
-     FEATURE_VALUE_TYPE(shared_highlighting::kSharedHighlightingV2)},
     {"shared-highlighting-amp",
      flag_descriptions::kIOSSharedHighlightingAmpName,
      flag_descriptions::kIOSSharedHighlightingAmpDescription, flags_ui::kOsIos,
@@ -764,6 +763,21 @@ const flags_ui::FeatureEntry kFeatureEntries[] = {
      flags_ui::kOsIos,
      FEATURE_VALUE_TYPE(
          password_manager::features::kIOSEnablePasswordManagerBrandingUpdate)},
+    {"default-mode-ua", flag_descriptions::kAddSettingForDefaultPageModeName,
+     flag_descriptions::kAddSettingForDefaultPageModeDescription,
+     flags_ui::kOsIos, FEATURE_VALUE_TYPE(kAddSettingForDefaultPageMode)},
+    {"ios-media-permissions-control",
+     flag_descriptions::kMediaPermissionsControlName,
+     flag_descriptions::kMediaPermissionsControlDescription, flags_ui::kOsIos,
+     FEATURE_VALUE_TYPE(web::features::kMediaPermissionsControl)},
+    {"enable-save-session-tabs-in-separate-files",
+     flag_descriptions::kSaveSessionTabsToSeparateFilesName,
+     flag_descriptions::kSaveSessionTabsToSeparateFilesDescription,
+     flags_ui::kOsIos,
+     FEATURE_VALUE_TYPE(sessions::kSaveSessionTabsToSeparateFiles)},
+    {"use-sf-symbols-samples", flag_descriptions::kUseSFSymbolsSamplesName,
+     flag_descriptions::kUseSFSymbolsSamplesDescription, flags_ui::kOsIos,
+     FEATURE_VALUE_TYPE(kUseSFSymbolsSamples)},
 };
 
 bool SkipConditionalFeatureEntry(const flags_ui::FeatureEntry& entry) {

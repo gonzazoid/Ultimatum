@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/login/auth/key.h"
+#include "ash/components/login/auth/user_context.h"
 #include "base/bind.h"
 #include "base/logging.h"
 #include "base/values.h"
@@ -19,8 +21,6 @@
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/common/extensions/api/login.h"
 #include "chrome/common/pref_names.h"
-#include "chromeos/login/auth/key.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user.h"
@@ -109,10 +109,10 @@ LoginLaunchManagedGuestSessionFunction::Run() {
   for (const user_manager::User* user : user_manager->GetUsers()) {
     if (!user || user->GetType() != user_manager::USER_TYPE_PUBLIC_ACCOUNT)
       continue;
-    chromeos::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                                  user->GetAccountId());
+    ash::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+                             user->GetAccountId());
     if (parameters->password) {
-      context.SetKey(chromeos::Key(*parameters->password));
+      context.SetKey(ash::Key(*parameters->password));
       context.SetManagedGuestSessionLaunchExtensionId(extension_id());
     }
 
@@ -216,9 +216,9 @@ LoginUnlockManagedGuestSessionFunction::Run() {
     return RespondNow(Error(login_api_errors::kAnotherUnlockAttemptInProgress));
   }
 
-  chromeos::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                                active_user->GetAccountId());
-  context.SetKey(chromeos::Key(parameters->password));
+  ash::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+                           active_user->GetAccountId());
+  context.SetKey(ash::Key(parameters->password));
   handler->Authenticate(
       context,
       base::BindOnce(

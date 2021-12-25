@@ -83,6 +83,7 @@
 <translation id="1414981605391750300">Googleનો સંપર્ક કરી રહ્યાં છીએ. આમાં એક મિનિટ લાગી શકે છે…</translation>
 <translation id="1416550906796893042">ઍપ્લિકેશન વર્ઝન</translation>
 <translation id="1430915738399379752">પ્રિન્ટ</translation>
+<translation id="1436784010935106834">દૂર કરેલું</translation>
 <translation id="1448440926884431741">Bookmarksમાં તમારી ટ્રૅક કરેલી પ્રોડક્ટની ગોઠવણ કરો</translation>
 <translation id="1450753235335490080"><ph name="CONTENT_TYPE" /> શેર કરી શકતાં નથી</translation>
 <translation id="1466383950273130737">Chromeની ભાષા પસંદ કરો</translation>
@@ -104,6 +105,7 @@
 <translation id="1571304935088121812">વપરાશકર્તાનામ કૉપિ કરો</translation>
 <translation id="1592864538817356322">માનક સંરક્ષણ:</translation>
 <translation id="1628019612362412531">{NUM_SELECTED,plural, =1{પસંદ કરેલ 1 આઇટમ દૂર કરો}one{પસંદ કરેલ # આઇટમ દૂર કરો}other{પસંદ કરેલ # આઇટમ દૂર કરો}}</translation>
+<translation id="1633659023549081553">Chromeના હોમપેજ પર જઈને નવું કન્ટેન્ટ શોધો</translation>
 <translation id="1641113438599504367">સલામત બ્રાઉઝિંગ</translation>
 <translation id="164269334534774161">તમે <ph name="CREATION_TIME" />માંથી આ પેજની ઑફલાઇન કૉપિ જોઈ રહ્યા છો</translation>
 <translation id="1644574205037202324">ઇતિહાસ</translation>
@@ -202,7 +204,6 @@
 <translation id="2172905120685242547">વિન્ડો બંધ કરીએ?</translation>
 <translation id="2175927920773552910">QR કોડ</translation>
 <translation id="218608176142494674">શેરિંગ</translation>
-<translation id="2195339740518523951">Chromeની સૌથી વધુ મજબૂત સુરક્ષા મેળવો</translation>
 <translation id="2200113223741723867">વપરાશના ડેટાનું શેરિંગ મેનેજ કરો</translation>
 <translation id="2218567645332692482">નૅવિગેશનને HTTPS પર અપગ્રેડ કરો અને તેને સપોર્ટ ન કરતી સાઇટ લોડ કરતાં પહેલાં ચેતવણી મેળવો</translation>
 <translation id="2227444325776770048"><ph name="USER_FULL_NAME" /> તરીકે ચાલુ રાખો</translation>
@@ -220,6 +221,7 @@
 <translation id="2321958826496381788">જ્યાં સુધી તમે આ અનુકૂળ રીતે વાંચી ન શકો ત્યાં સુધી સ્લાઇડર ખેંચો. ફકરા પર ડબલ-ટેપિંગ પછી ટેક્સ્ટ ઓછામાં ઓછી આટલી મોટી દેખાવી જોઈએ.</translation>
 <translation id="2323763861024343754">સાઇટ સ્ટોરેજ</translation>
 <translation id="2328985652426384049">સાઇન ઇન કરી શકાતું નથી</translation>
+<translation id="2342601525305963189">Chrome વિશે ટિપ:</translation>
 <translation id="234265804618409743">તમારો કૅમેરા ખોલી શકતાં નથી. કંઈક ખોટું થયું.</translation>
 <translation id="2345671828921229300">કોઈ શબ્દને શોધવા માટે, ટચ કરીને થોડીવાર દબાવી રાખો</translation>
 <translation id="2349710944427398404">Chrome દ્વારા ઉપયોગમાં લેવાયેલી કુલ સ્ટોરેજ, એકાઉન્ટ, બુકમાર્ક અને સાચવેલા સેટિંગ સહિત</translation>
@@ -263,6 +265,7 @@
 <translation id="2534582914273493287">તમે જેની મુલાકાત લો તે URLs Googleને મોકલવામાં આવે છે</translation>
 <translation id="2536728043171574184">આ પેજની ઓફલાઇન કૉપિ જોઈ રહ્યા છે</translation>
 <translation id="2546283357679194313">કૂકીઝ અને સાઇટ ડેટા</translation>
+<translation id="2558692642259318568">તમારા ડિવાઇસ પર પ્રવૃત્તિ સાચવ્યા વિના બ્રાઉઝ કરવા માટે, છૂપો મોડ અજમાવી જુઓ</translation>
 <translation id="2561519700418191927">વીડિયોના પ્રીવ્યૂ</translation>
 <translation id="2567385386134582609">છબી</translation>
 <translation id="2567545343356994513">જોખમકારક વેબસાઇટ, ડાઉનલોડ અને એક્સ્ટેન્શન સામે વધુ ઝડપી તેમજ સક્રિય સંરક્ષણ</translation>
@@ -274,6 +277,7 @@
 <translation id="2612676031748830579">કાર્ડ નંબર</translation>
 <translation id="2625189173221582860">પાસવર્ડ કૉપિ કર્યો</translation>
 <translation id="2631006050119455616">બચાવેલ</translation>
+<translation id="2634905176438867146">Chromeને તમારા ડિફૉલ્ટ બ્રાઉઝર તરીકે સેટ કરવાની રીત જાણો</translation>
 <translation id="2645657967708199252">તમારું <ph name="CONNECTION_TYPE" /> કનેક્શન કદાચ ડાઉનલોડ કરવાની તમારી પ્રક્રિયાને ધીમી કરી શકે છે</translation>
 <translation id="2647434099613338025">ભાષા ઉમેરો</translation>
 <translation id="2649068648233607930">તમારું બ્રાઉઝર <ph name="DOMAIN" /> દ્વારા મેનેજ કરવામાં આવે છે</translation>
@@ -358,6 +362,7 @@
 <translation id="3037177537145227281">કિંમત ટ્રૅક કરી રહ્યાં છીએ</translation>
 <translation id="3037517125981011456">Chromeમાં સાઇન ઇન કરવા માટે સંકેતો બતાવે છે</translation>
 <translation id="3046945242843292318">આગલી વખતે આ સાઇટ પર ઝડપથી ઍક્સેસ મેળવો</translation>
+<translation id="3055259925215945098">બુકમાર્ક ખસેડ્યું</translation>
 <translation id="305593374596241526">સ્થાન બંધ છે, તેને <ph name="BEGIN_LINK" />Android સેટિંગ<ph name="END_LINK" />માં ચાલુ કરો.</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> બુકમાર્ક}one{<ph name="BOOKMARKS_COUNT_MANY" /> બુકમાર્ક}other{<ph name="BOOKMARKS_COUNT_MANY" /> બુકમાર્ક}}</translation>
 <translation id="3062802207422175757">Chrome પર તમારી રુચિ વિશેના લેખ</translation>
@@ -386,6 +391,7 @@
 <translation id="3234978181857588512">ડિવાઇસમાં સાચવો</translation>
 <translation id="3236059992281584593">1 મિનિટ બાકી</translation>
 <translation id="3237087289225714896">પહેલેથી લોડ કરવાનો માનક મોડ:</translation>
+<translation id="3237433641417325993">સૂચવેલા લેખો જોવા માટે નીચેની તરફ સ્ક્રોલ કરો</translation>
 <translation id="3244271242291266297">MM</translation>
 <translation id="3245429137663807393">જો તમે Chromeના વપરાશના રિપોર્ટ પણ શેર કરતા હો, તો તે રિપોર્ટમાં તમે મુલાકાત લો છો તે URLs શામેલ હોય છે</translation>
 <translation id="3250563604907490871">તમે વાઇ-ફાઇથી કનેક્ટ થશો ત્યારે છબીના વર્ણનોની સુવિધા ફરીથી કાર્ય કરશે</translation>
@@ -537,7 +543,6 @@
 <translation id="4170011742729630528">સેવા ઉપલબ્ધ નથી; પછી ફરીથી પ્રયાસ કરો</translation>
 <translation id="4179980317383591987"><ph name="AMOUNT" /> ડેટા વપરાયો</translation>
 <translation id="4181841719683918333">ભાષાઓ</translation>
-<translation id="4183868528246477015">Google Lens વડે શોધો <ph name="BEGIN_NEW" />નવું<ph name="END_NEW" /></translation>
 <translation id="4195643157523330669">નવા ટૅબમાં ખોલો</translation>
 <translation id="4196597275619698563">કાર્ડ બનાવો</translation>
 <translation id="4198423547019359126">કોઈ ડાઉનલોડ સ્થાનો ઉપલબ્ધ નથી</translation>
@@ -571,7 +576,6 @@
 <translation id="4411535500181276704">લાઇટ મોડ</translation>
 <translation id="4415276339145661267">તમારું Google એકાઉન્ટ મેનેજ કરો</translation>
 <translation id="4425140285732600465">કિંમત ટ્રૅક કરી રહ્યાં છીએ. જો કોઈપણ સાઇટ પર કિંમતમાં ઘટાડો થાય, તો અલર્ટ મેળવો.</translation>
-<translation id="4427306783828095590">વધારેલી સુરક્ષા ફિશિંગ અને માલવેરને બ્લૉક કરવામાં વધુ સહાયરૂપ થાય છે</translation>
 <translation id="4450672886426705087">Google પરથી મળેલા શોધ પરિણામો.</translation>
 <translation id="4452411734226507615"><ph name="TAB_TITLE" /> ટૅબ બંધ કરો</translation>
 <translation id="4452548195519783679"><ph name="FOLDER_NAME" /> પર બુકમાર્ક કર્યું</translation>
@@ -651,6 +655,7 @@
 <translation id="4835385943915508971">Chrome ને વિનંતી કરેલ સંસાધનની ઍક્સેસ નથી.</translation>
 <translation id="4837753911714442426">પેજને પ્રિન્ટ કરવાના વિકલ્પો ખોલો</translation>
 <translation id="4842092870884894799">પાસવર્ડ જનરેશન પોપઅપ દર્શાવે છે</translation>
+<translation id="4842515939542199281">તમારા વૉઇસ વડે શોધવા માટે, માઇક્રોફોન પર ટૅપ કરો</translation>
 <translation id="4850886885716139402">જુઓ</translation>
 <translation id="4860895144060829044">કૉલ કરો</translation>
 <translation id="4864369630010738180">સાઇન ઇન થઈ રહ્યું છે...</translation>
@@ -697,6 +702,7 @@
 <translation id="5091249083535528968">વપરાશનો વધારાનો ડેટા</translation>
 <translation id="509429900233858213">કોઈ ભૂલ આવી છે.</translation>
 <translation id="510275257476243843">1 કલાક બાકી</translation>
+<translation id="5115811374190515607"><ph name="PRODUCT_NAME" /> પર</translation>
 <translation id="5118713593561876160">રુચિઓ</translation>
 <translation id="5123685120097942451">છૂપા મોડમાંની ટૅબ</translation>
 <translation id="5126510351761255129">તમારું કાર્ડ ચકાસો</translation>
@@ -801,6 +807,7 @@
 <translation id="5749068826913805084">ફાઇલો ડાઉનલોડ કરવા માટે Chromeને સ્ટોરેજ ઍક્સેસની જરૂર છે.</translation>
 <translation id="5749237766298580851">બંધ <ph name="SEPARATOR" /> આનો સુઝાવ આપવામાં આવતો નથી</translation>
 <translation id="5752232708629533680">માત્ર GIF શેર કરો</translation>
+<translation id="5753139477036638699">તમે Chromeમાં શોધવા માટે તમારા વૉઇસનો ઉપયોગ કરી શકો છો</translation>
 <translation id="5754350196967618083">Discover રિફ્રેશ કરી શકાતું નથી</translation>
 <translation id="5763382633136178763">છૂપા ટેબ્સ</translation>
 <translation id="5763514718066511291">આ ઍપ માટેની URL કૉપિ કરવા માટે ટૅપ કરો</translation>
@@ -826,6 +833,7 @@
 <translation id="5854512288214985237">Googleને કોઈ આંકડા કે ક્રૅશ રિપોર્ટ મોકલવામાં આવતા નથી</translation>
 <translation id="5855546874025048181">આને સુધારો: <ph name="REFINE_TEXT" /></translation>
 <translation id="5857447844686706637">કંઈક ખોટું થયું. કિંમત અપડેટ કરી શક્યા નથી.</translation>
+<translation id="5859968346865909126">તમે સેટિંગમાં જઈને તેને ચાલુ કે બંધ કરી શકો છો</translation>
 <translation id="5860033963881614850">બંધ</translation>
 <translation id="5860491529813859533">ચાલુ કરો</translation>
 <translation id="5862731021271217234">તમારા અન્ય ઉપકરણો પરથી તમારા ટૅબ મેળવવા માટે, સિંક કરવાનું ચાલુ કરો</translation>
@@ -1011,6 +1019,7 @@
 <translation id="6813446258015311409">Chromeમાં સાઇન ઇન કરવાની શીટ ખોલવામાં આવી.</translation>
 <translation id="6814033694018386318">તમે Google સાથે આ શેર કરો છો</translation>
 <translation id="6817747507826986771">આ પેજ ઝડપથી શેર કરો. આ શૉર્ટકટમાં ફેરફાર કરવા માટે, ટચ કરીને થોડીવાર દબાવી રાખો.</translation>
+<translation id="6819199143469632133">બધા ડિવાઇસ પર તમારી Google સામગ્રી મેળવવા માટે, સાઇન ઇન કરો</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6824899148643461612"><ph name="TAB_TITLE" />, ટૅબ, પસંદ કરી</translation>
 <translation id="6828070228333235514">કિંમત ટ્રૅક કરવાનું બંધ કરો</translation>
@@ -1049,6 +1058,7 @@
 <translation id="7027549951530753705"><ph name="ITEM_TITLE" /> રિસ્ટોર કર્યું</translation>
 <translation id="7029390216614421513">QR કોડ/બારકોડને આ ફ્રેમમાં મૂકો.</translation>
 <translation id="7029809446516969842">પાસવર્ડ</translation>
+<translation id="7037830628447527439">તમારા Google એકાઉન્ટ વડે Chromeમાં સાઇન ઇન કરો</translation>
 <translation id="7038956721828960940">chrome_image_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="7054588988317389591">છબીના વર્ણનો મેળવીએ?</translation>
 <translation id="7055152154916055070">રીડાયરેક્ટ કરવાનું બ્લૉક કરવામાં આવ્યું છે:</translation>
@@ -1070,6 +1080,7 @@
 <translation id="7177466738963138057">તમે આને થોડા સમય પછી સેટિંગમાં જઈને બદલી શકો છો</translation>
 <translation id="7177873915659574692">QR કોડ બનાવી શકતાં નથી. URL <ph name="CHARACTER_LIMIT" />થી વધુ અક્ષરો ધરાવે છે.</translation>
 <translation id="7180611975245234373">રિફ્રેશ કરો</translation>
+<translation id="718226107353899806">તમે <ph name="MAX_NUM_REACTIONS" /> જેટલી પ્રતિક્રિયા ઉમેરી શકો છો</translation>
 <translation id="7187993566681480880">તમને Chrome પર સલામત રાખે છે અને જ્યારે તમે સાઇન ઇન થયા હો, ત્યારે Googleની અન્ય ઍપમાં તમારી સુરક્ષા બહેતર બનાવવામાં ઉપયોગમાં લેવાઈ શકે છે.</translation>
 <translation id="718926126787620637">બુકમાર્ક ફોલ્ડરોની સૂચિ સંપૂર્ણ ઊંચાઈએ ખોલી</translation>
 <translation id="7191430249889272776">ટૅબ બૅકગ્રાઉન્ડમાં ખોલવામાં આવી છે.</translation>
@@ -1100,6 +1111,7 @@
 <translation id="7359002509206457351">ચુકવણી પદ્ધતિઓને ઍક્સેસ કરો</translation>
 <translation id="7375125077091615385">પ્રકાર:</translation>
 <translation id="7376560087009844242">પેજની વધુ ટેક્સ્ટને શામેલ કરીને, 'શોધવા માટે ટચ કરો'માં તમે કદાચ બહેતર પરિણામો જોઈ શકશો. આમાં ફેરફાર કરવા માટે, તમે કોઈપણ સમયે <ph name="BEGIN_LINK" />સેટિંગ<ph name="END_LINK" />ની મુલાકાત લઈ શકો છો.</translation>
+<translation id="7379900596734708416">સાઇટ માટેની ઘેરી થીમ ઉપલબ્ધ છે</translation>
 <translation id="7386842512861524348">આ સાઇટનું કનેક્શન હંમેશાં સુરક્ષિત હોય છે, સિવાય કે Chrome તમને અન્યથા જણાવે.</translation>
 <translation id="7396940094317457632"><ph name="FILE_NAME" />.</translation>
 <translation id="7400418766976504921">URL</translation>
@@ -1232,7 +1244,6 @@
 <translation id="8035133914807600019">નવું ફોલ્ડર...</translation>
 <translation id="8037750541064988519"><ph name="DAYS" /> દિવસ બાકી</translation>
 <translation id="8037801708772278989">હમણાં જ ચેક કર્યું</translation>
-<translation id="8040831032425909005">ઝડપી શોધ વિજેટનું આઇકન</translation>
 <translation id="804335162455518893">SD કાર્ડ મળ્યું નથી</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> છૂપી ટૅબ}one{<ph name="TAB_COUNT_NORMAL" /> છૂપી ટૅબ}other{<ph name="TAB_COUNT_NORMAL" /> છૂપી ટૅબ}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB ઉપલબ્ધ</translation>
@@ -1402,6 +1413,7 @@
 <translation id="8945143127965743188"><ph name="LANG" /> - આ ભાષા ડાઉનલોડ કરી શકાઈ નથી. થોડા સમય પછી ફરી પ્રયાસ કરો.</translation>
 <translation id="8951232171465285730">Chrome એ તમારો <ph name="MEGABYTES" /> MB ડેટા બચાવ્યો</translation>
 <translation id="8955719471735800169">સૌથી ઉપર પાછા જાઓ</translation>
+<translation id="8964479563882643397">કોઈ નવી છૂપી ટૅબ ખોલવા માટે, મેનૂ ખોલો</translation>
 <translation id="8965591936373831584">બાકી</translation>
 <translation id="8967427617812342790">વાંચન સૂચિમાં ઉમેરો</translation>
 <translation id="8968085728801125376">{TAB_COUNT,plural, =1{<ph name="INCOGNITO_TAB_COUNT" /> છૂપું અને વધુ <ph name="TAB_COUNT_ONE" /> ટૅબ બંધ કરવામાં આવશે}one{<ph name="INCOGNITO_TAB_COUNT" /> છૂપું અને વધુ <ph name="TAB_COUNT_MANY" /> ટૅબ બંધ કરવામાં આવશે}other{<ph name="INCOGNITO_TAB_COUNT" /> છૂપા અને વધુ <ph name="TAB_COUNT_MANY" /> ટૅબ બંધ કરવામાં આવશે}}</translation>

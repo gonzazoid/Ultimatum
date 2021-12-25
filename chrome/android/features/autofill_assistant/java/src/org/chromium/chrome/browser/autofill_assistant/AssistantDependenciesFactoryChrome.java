@@ -4,19 +4,19 @@
 
 package org.chromium.chrome.browser.autofill_assistant;
 
-import org.chromium.content_public.browser.WebContents;
+import android.app.Activity;
 
 /**
  * Factory for creating dependencies when running in Chrome.
  */
 public class AssistantDependenciesFactoryChrome implements AssistantDependenciesFactory {
     @Override
-    public AssistantDependencies createDependencies(WebContents webContents) {
-        return new AssistantDependenciesChrome(webContents);
+    public AssistantDependencies createDependencies(Activity activity) {
+        return new AssistantDependenciesChrome(activity);
     }
 
     @Override
     public AssistantStaticDependencies createStaticDependencies() {
-        return new AssistantStaticDependenciesChrome() {};
+        return new AssistantStaticDependenciesChrome();
     }
 }

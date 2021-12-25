@@ -114,7 +114,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cookie.CookieSourceSchemeName" enum="CookieSourceSchemeName"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>bingler@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
   <summary>
@@ -164,7 +164,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Cookie.Count2" units="units" expires_after="2022-04-10">
+<histogram name="Cookie.Count2" units="units" expires_after="2022-06-12">
   <owner>bingler@chromium.org</owner>
   <owner>morlovich@chromium.org</owner>
   <summary>
@@ -195,7 +195,7 @@ chromium-metrics-reviews@google.com.
   </token>
 </histogram>
 
-<histogram name="Cookie.DomainSet" enum="Boolean" expires_after="2022-04-17">
+<histogram name="Cookie.DomainSet" enum="Boolean" expires_after="2022-06-19">
   <owner>bingler@chromium.org</owner>
   <owner>miketaylr@chromium.org</owner>
   <summary>
@@ -477,7 +477,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Cookie.NumKeys" units="keys" expires_after="2022-04-17">
+<histogram name="Cookie.NumKeys" units="keys" expires_after="2022-06-19">
   <owner>cfredric@chromium.org</owner>
   <owner>kaustubhag@chromium.org</owner>
   <summary>
@@ -487,8 +487,41 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Cookie.PartitionCount" units="partitions"
+    expires_after="2022-12-06">
+  <owner>dylancutler@chromium.org</owner>
+  <owner>src/net/cookies/OWNERS</owner>
+  <summary>
+    This histogram records the number of cookie jar partitions. This metric is
+    only recorded when partitioned cookies are enabled. This count does not
+    include the unpartitioned cookie jar. Only counts cookie jar partitions with
+    at least one cookie. This metric is recorded every 10 minutes.
+  </summary>
+</histogram>
+
+<histogram name="Cookie.PartitionedCookieCount" units="cookies"
+    expires_after="2022-12-06">
+  <owner>dylancutler@chromium.org</owner>
+  <owner>src/net/cookies/OWNERS</owner>
+  <summary>
+    This histogram records the number of cookies in the partitioned cookie jar.
+    This metric is only recorded when partitioned cookies are enabled. This
+    metric is recorded every 10 minutes.
+  </summary>
+</histogram>
+
+<histogram name="Cookie.PartitionedCookiesInRequest" units="cookies"
+    expires_after="2022-12-06">
+  <owner>dylancutler@chromium.org</owner>
+  <owner>src/net/cookies/OWNERS</owner>
+  <summary>
+    This histogram records the number of partitioned cookies in requests. Only
+    recorded when partitioned cookies are enabled to reduce noise.
+  </summary>
+</histogram>
+
 <histogram name="Cookie.PerFirstPartySetCount" units="cookies"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>cfredric@chromium.org</owner>
   <owner>bingler@chromium.org</owner>
   <summary>
@@ -637,7 +670,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cookie.RequestSameSiteContext" enum="SameSiteCookieContext"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>bingler@chromium.org</owner>
   <owner>morlovich@chromium.org</owner>
   <summary>
@@ -705,7 +738,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cookie.SamePartyReadIncluded.IsHTTP" enum="BooleanHTTPVsJS"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>cfredric@chromium.org</owner>
   <owner>bingler@chromium.org</owner>
   <summary>
@@ -742,7 +775,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cookie.SamePartySetIncluded.IsHTTP" enum="BooleanHTTPVsJS"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>cfredric@chromium.org</owner>
   <owner>bingler@chromium.org</owner>
   <summary>

@@ -17,15 +17,14 @@ class FakeContentCaptureSender {
   FakeContentCaptureSender();
   virtual ~FakeContentCaptureSender();
 
+  void Bind(content::RenderFrameHost* frame);
+
   void DidCaptureContent(const ContentCaptureData& captured_content,
                          bool first_data);
 
   void DidUpdateContent(const ContentCaptureData& captured_content);
 
   void DidRemoveContent(const std::vector<int64_t>& data);
-
-  mojo::PendingAssociatedReceiver<mojom::ContentCaptureReceiver>
-  GetPendingAssociatedReceiver();
 
  private:
   mojo::AssociatedRemote<mojom::ContentCaptureReceiver>
@@ -150,6 +149,12 @@ class ContentCaptureTestHelper {
   ContentCaptureData test_data_change_;
   ContentCaptureData test_data_update_;
 };
+
+void VerifySession(const ContentCaptureSession& expected,
+                   const ContentCaptureSession& result);
+
+ContentCaptureFrame GetExpectedTestData(const ContentCaptureData& data,
+                                        int64_t expected_id);
 
 }  // namespace content_capture
 

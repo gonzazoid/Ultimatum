@@ -102,7 +102,7 @@ class BidderWorklet : public mojom::BidderWorklet {
     // Set while loading is in progress.
     std::unique_ptr<TrustedSignals> trusted_bidding_signals;
     // Results of loading trusted bidding signals.
-    std::unique_ptr<TrustedSignals::Result> trusted_bidding_signals_result;
+    scoped_refptr<TrustedSignals::Result> trusted_bidding_signals_result;
     // Error message returned by attempt to load `trusted_bidding_signals_`.
     // Errors loading it are not fatal, so such errors are cached here and only
     // reported on bid completion.
@@ -165,7 +165,7 @@ class BidderWorklet : public mojom::BidderWorklet {
         const url::Origin& browser_signal_top_window_origin,
         const url::Origin& browser_signal_seller_origin,
         base::Time auction_start_time,
-        std::unique_ptr<TrustedSignals::Result> trusted_bidding_signals_result,
+        scoped_refptr<TrustedSignals::Result> trusted_bidding_signals_result,
         GenerateBidCallbackInternal callback);
 
     void ConnectDevToolsAgent(
@@ -205,6 +205,8 @@ class BidderWorklet : public mojom::BidderWorklet {
     SEQUENCE_CHECKER(v8_sequence_checker_);
   };
 
+  enum class LoadState { kLoading, kSuccess, kFailure };
+
   void ResumeIfPaused();
   void Start();
 
@@ -213,7 +215,7 @@ class BidderWorklet : public mojom::BidderWorklet {
 
   void OnTrustedBiddingSignalsDownloaded(
       GenerateBidTaskList::iterator task,
-      std::unique_ptr<TrustedSignals::Result> result,
+      scoped_refptr<TrustedSignals::Result> result,
       absl::optional<std::string> error_msg);
 
   // Checks if the script has been loaded successfully, and the
@@ -251,12 +253,8 @@ class BidderWorklet : public mojom::BidderWorklet {
 
   const GURL script_source_url_;
 
-  // True until `worklet_loader_` has completed loading (successfully or
-  // otherwise).
-  bool is_loading_ = true;
-
   std::unique_ptr<WorkletLoader> worklet_loader_;
-  bool have_worklet_script_ = false;
+  LoadState worklet_js_load_state_ = LoadState::kLoading;
 
   // Values copied from the interest group used to create the BidderWorklet.
   const absl::optional<GURL> trusted_bidding_signals_url_;

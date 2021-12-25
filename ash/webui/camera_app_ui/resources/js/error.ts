@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {AppWindow} from './app_window.js';
 import {assertInstanceof} from './assert.js';
 import * as metrics from './metrics.js';
 import {
@@ -44,7 +43,7 @@ function toStackFrame(callsite: CallSite): StackFrame {
  * Gets stack frames from error.
  * @return return null if failed to get frames from error.
  */
-export function getStackFrames(error: Error): StackFrame[]|null {
+function getStackFrames(error: Error): StackFrame[]|null {
   const prevPrepareStackTrace = Error.prepareStackTrace;
   Error.prepareStackTrace = (error, stack) => {
     try {
@@ -94,7 +93,7 @@ function formatErrorStack(error: Error, frames: StackFrame[]|null): string {
           .join('');
 }
 
-const appWindow: AppWindow|null = window['appWindow'];
+const appWindow = window.appWindow;
 
 /**
  * Initializes error collecting functions.

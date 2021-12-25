@@ -16,7 +16,7 @@
 #include "base/files/file_path.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/time/time.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "components/prefs/pref_change_registrar.h"
 
 class AppControllerProfileObserver;
@@ -199,6 +199,15 @@ class TabMenuBridge;
 //   * In CommandDispatcher, which independently searches for a matching
 //     keyEquivalent.
 - (void)updateMenuItemKeyEquivalents;
+
+// Returns YES if `window` is a normal, tabbed, non-app browser window.
+// Serves as a swizzle point for unit tests to avoid creating Browser
+// instances.
+- (BOOL)windowHasBrowserTabs:(NSWindow*)window;
+
+// Testing API.
+- (void)setCloseWindowMenuItemForTesting:(NSMenuItem*)menuItem;
+- (void)setCloseTabMenuItemForTesting:(NSMenuItem*)menuItem;
 
 @end
 

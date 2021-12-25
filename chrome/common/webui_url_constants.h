@@ -143,7 +143,6 @@ extern const char kChromeUIOmniboxHost[];
 extern const char kChromeUIOmniboxURL[];
 #if defined(OS_CHROMEOS)
 extern const char kChromeUIAppDisabledURL[];
-extern const char kChromeUIOsCroshAppURL[];
 extern const char kChromeUIOsFlagsAppURL[];
 extern const char kChromeUIOsUrlAppURL[];
 #endif
@@ -155,7 +154,9 @@ extern const char kChromeUIPrefsInternalsHost[];
 extern const char kChromeUIPrintURL[];
 extern const char kChromeUIQuitHost[];
 extern const char kChromeUIQuitURL[];
+// TODO(crbug.com/1202165): Remove when new quota-internals page is done.
 extern const char kChromeUIQuotaInternalsHost[];
+extern const char kChromeUIQuotaInternals2Host[];
 extern const char kChromeUIResetPasswordHost[];
 extern const char kChromeUIResetPasswordURL[];
 extern const char kChromeUIRestartHost[];
@@ -330,55 +331,27 @@ extern const char kChromeUIUserImageURL[];
 extern const char kChromeUIVmHost[];
 extern const char kChromeUIVmUrl[];
 
-extern const char kOsUICroshURL[];
-extern const char kOsUIFileManagerURL[];
-extern const char kOsUITerminalURL[];
 extern const char kOsUIAccountManagerErrorURL[];
 extern const char kOsUIAccountManagerWelcomeURL[];
 extern const char kOsUIAccountMigrationWelcomeURL[];
 extern const char kOsUIAddSupervisionURL[];
 extern const char kOsUIAppDisabledURL[];
-extern const char kOsUIArcGraphicsTracingURL[];
-extern const char kOsUIArcOverviewTracingURL[];
-extern const char kOsUIArcPowerControlURL[];
-extern const char kOsUIAssistantOptInURL[];
-extern const char kOsUIBluetoothPairingURL[];
 extern const char kOsUICrashesUrl[];
 extern const char kOsUICreditsURL[];
-extern const char kOsUICrostiniCreditsURL[];
-extern const char kOsUICrostiniInstallerUrl[];
-extern const char kOsUICrostiniUpgraderUrl[];
-extern const char kOsUICryptohomeURL[];
 extern const char kOsUIDeviceLogUrl[];
-extern const char kOsUIDiagnosticsAppURL[];
 extern const char kOsUIDriveInternalsUrl[];
 extern const char kOsUIEmojiPickerURL[];
 extern const char kOsUIGpuURL[];
 extern const char kOsUIHistogramsURL[];
-extern const char kOsUIIntenetConfigDialogURL[];
-extern const char kOsUIIntenetDetailDialogURL[];
 extern const char kOsUIInvalidationsUrl[];
 extern const char kOsUILockScreenNetworkURL[];
-extern const char kOsUILockScreenStartReauthURL[];
-extern const char kOsUIMobileSetupURL[];
-extern const char kOsUIMultiDeviceSetupUrl[];
 extern const char kOsUINetworkUrl[];
-extern const char kOsUIOSCreditsURL[];
 extern const char kOsUIOSSettingsURL[];
-extern const char kOsUIPowerUrl[];
-extern const char kOsUIPrintManagementUrl[];
 extern const char kOsUIRestartURL[];
 extern const char kOsUIScanningAppURL[];
-extern const char kOsUISetTimeURL[];
 extern const char kOsUISettingsURL[];
 extern const char kOsUISignInInternalsUrl[];
-extern const char kOsUISlowURL[];
-extern const char kOsUISmbCredentialsURL[];
-extern const char kOsUISmbShareURL[];
 extern const char kOsUISyncInternalsUrl[];
-extern const char kOsUISysInternalsUrl[];
-extern const char kOsUIUserImageURL[];
-extern const char kOsUIVmUrl[];
 
 // Returns true if this web UI is part of the "system UI". Generally this is
 // UI that opens in a window (not a browser tab) and that on other operating

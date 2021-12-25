@@ -31,7 +31,6 @@
 <translation id="2478931088402984578"><ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" />-г сонгоно уу</translation>
 <translation id="2567507405773541360">Энгийн, аюулгүй бөгөөд урьд өмнөхөөс илүү хурдан Chromium-р илүү ихийг хийгээрэй</translation>
 <translation id="2590893390871230428">Chromium-н өгөгдлөө синк хийх</translation>
-<translation id="259094968798709429">Нууц үгийг <ph name="BEGIN_LINK" />Нууц үгний менежерт<ph name="END_LINK" /> хадгалдаг бөгөөд ингэснээр та үүнийг дурын төхөөрөмж дээр ашиглах боломжтой.</translation>
 <translation id="2650312721222849884">Та Chromium-г хаанаас ч ашигласан бай табуудаа харахын тулд синк хийхийг асаана уу</translation>
 <translation id="2684230048001240293">Та өөрийн бүх төхөөрөмж дээрх табууд, нууц үгнүүд болон төлбөрийн мэдээллээ синк хийхийн тулд Chromium-г өгөгдмөлөөр тохируулна уу</translation>
 <translation id="2730884209570016437">Таны камерыг өөр апп-д ашиглаж байгаа тул үүнийг Chromium ашиглах боломжгүй</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">Энэ бүртгэл болон хадгалаагүй аливаа өгөгдлийг Chromium-с хасна.</translation>
 <translation id="894437814105052438">Та гарсан үед Chromium таны Google Бүртгэлд ямар ч шинэ өгөгдөл синк хийхгүй. Өмнө нь синк хийсэн өгөгдөл бүртгэлд үлдэнэ.</translation>
 <translation id="9022552996538154597">Chromium дансандаа нэвтрэх</translation>
+<translation id="9059693977935746710">Та энэ нууц үгийг санах шаардлагагүй. Үүнийг <ph name="EMAIL" />-д зориулж Нууц үгний менежерт хадгална</translation>
 <translation id="9089354809943900324">Chromium хуучирсан байна</translation>
 <translation id="9110075932708282655">Chromium-г өгөгдмөлөөр ашиглана уу</translation>
 <translation id="921174536258924340">Chromium бүх нууц үгийг шалгаж чадсангүй. Маргааш дахин оролдох буюу эсхүл <ph name="BEGIN_LINK" />Google Бүртгэлдээ байгаа нууц үгнүүдийг шалгана уу.<ph name="END_LINK" /></translation>

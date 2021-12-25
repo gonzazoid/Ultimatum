@@ -58,10 +58,6 @@ ImageData* ImageData::ValidateAndCreate(
     exception_state.ThrowTypeError("Overload resolution failed.");
     return nullptr;
   }
-  if (settings && settings->hasColorSpace()) {
-    if (!ColorSpaceNameIsValid(settings->colorSpace(), exception_state))
-      return nullptr;
-  }
 
   if (!width) {
     exception_state.ThrowDOMException(
@@ -121,11 +117,14 @@ ImageData* ImageData::ValidateAndCreate(
   }
 
   // Query the color space and storage format from |settings|.
-  CanvasColorSpace color_space = params.default_color_space;
+  PredefinedColorSpace color_space = params.default_color_space;
   ImageDataStorageFormat storage_format = ImageDataStorageFormat::kUint8;
   if (settings) {
-    if (settings->hasColorSpace())
-      color_space = CanvasColorSpaceFromName(settings->colorSpace());
+    if (settings->hasColorSpace() &&
+        !ValidateAndConvertColorSpace(settings->colorSpace(), color_space,
+                                      exception_state)) {
+      return nullptr;
+    }
     if (settings->hasStorageFormat()) {
       switch (settings->storageFormat().AsEnum()) {
         case V8ImageDataStorageFormat::Enum::kUint8:
@@ -281,7 +280,7 @@ ImageData* ImageData::CreateForTest(const gfx::Size& size) {
     return nullptr;
 
   return MakeGarbageCollected<ImageData>(size, byte_array,
-                                         CanvasColorSpace::kSRGB,
+                                         PredefinedColorSpace::kSRGB,
                                          ImageDataStorageFormat::kUint8);
 }
 
@@ -289,7 +288,7 @@ ImageData* ImageData::CreateForTest(const gfx::Size& size) {
 // to be validated on the call site.
 ImageData* ImageData::CreateForTest(const gfx::Size& size,
                                     NotShared<DOMArrayBufferView> buffer_view,
-                                    CanvasColorSpace color_space,
+                                    PredefinedColorSpace color_space,
                                     ImageDataStorageFormat storage_format) {
   return MakeGarbageCollected<ImageData>(size, buffer_view, color_space,
                                          storage_format);
@@ -309,7 +308,7 @@ ScriptPromise ImageData::CreateImageBitmap(ScriptState* script_state,
       exception_state);
 }
 
-CanvasColorSpace ImageData::GetCanvasColorSpace() const {
+PredefinedColorSpace ImageData::GetPredefinedColorSpace() const {
   return color_space_;
 }
 
@@ -318,7 +317,7 @@ ImageDataStorageFormat ImageData::GetImageDataStorageFormat() const {
 }
 
 String ImageData::colorSpace() const {
-  return CanvasColorSpaceToName(color_space_);
+  return PredefinedColorSpaceName(color_space_);
 }
 
 String ImageData::storageFormat() const {
@@ -365,9 +364,9 @@ SkPixmap ImageData::GetSkPixmap() const {
       data = data_->GetAsUint8ClampedArray()->Data();
       break;
   }
-  SkImageInfo info =
-      SkImageInfo::Make(width(), height(), color_type, kUnpremul_SkAlphaType,
-                        CanvasColorSpaceToSkColorSpace(GetCanvasColorSpace()));
+  SkImageInfo info = SkImageInfo::Make(
+      width(), height(), color_type, kUnpremul_SkAlphaType,
+      PredefinedColorSpaceToSkColorSpace(GetPredefinedColorSpace()));
   return SkPixmap(info, data, info.minRowBytes());
 }
 
@@ -395,7 +394,8 @@ v8::Local<v8::Object> ImageData::AssociateWithWrapper(
     // This is a perf hack breaking the web interop.
 
     v8::Local<v8::Value> v8_data;
-    ScriptState* script_state = ScriptState::From(wrapper->CreationContext());
+    ScriptState* script_state =
+        ScriptState::From(wrapper->GetCreationContextChecked());
     if (!ToV8Traits<V8ImageDataArray>::ToV8(script_state, data_)
              .ToLocal(&v8_data)) {
       return wrapper;
@@ -415,7 +415,7 @@ v8::Local<v8::Object> ImageData::AssociateWithWrapper(
 
 ImageData::ImageData(const gfx::Size& size,
                      NotShared<DOMArrayBufferView> data,
-                     CanvasColorSpace color_space,
+                     PredefinedColorSpace color_space,
                      ImageDataStorageFormat storage_format)
     : size_(size),
       settings_(ImageDataSettings::Create()),

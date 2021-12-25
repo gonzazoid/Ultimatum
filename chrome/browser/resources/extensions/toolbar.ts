@@ -14,7 +14,6 @@ import './pack_dialog.js';
 import {getToastManager} from 'chrome://resources/cr_elements/cr_toast/cr_toast_manager.js';
 import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {listenOnce} from 'chrome://resources/js/util.m.js';
-import {IronA11yAnnouncer} from 'chrome://resources/polymer/v3_0/iron-a11y-announcer/iron-a11y-announcer.js';
 import {html, PolymerElement} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 export interface ToolbarDelegate {
@@ -62,7 +61,7 @@ class ExtensionsToolbarElement extends ExtensionsToolbarElementBase {
       },
 
       devModeControlledByPolicy: Boolean,
-      isSupervised: Boolean,
+      isChildAccount: Boolean,
 
       // <if expr="chromeos">
       kioskEnabled: Boolean,
@@ -84,7 +83,7 @@ class ExtensionsToolbarElement extends ExtensionsToolbarElementBase {
   delegate: ToolbarDelegate;
   inDevMode: boolean;
   devModeControlledByPolicy: boolean;
-  isSupervised: boolean;
+  isChildAccount: boolean;
 
   // <if expr="chromeos">
   kioskEnabled: boolean;
@@ -110,17 +109,17 @@ class ExtensionsToolbarElement extends ExtensionsToolbarElementBase {
   }
 
   private shouldDisableDevMode_(): boolean {
-    return this.devModeControlledByPolicy || this.isSupervised;
+    return this.devModeControlledByPolicy || this.isChildAccount;
   }
 
   private getTooltipText_(): string {
     return this.i18n(
-        this.isSupervised ? 'controlledSettingChildRestriction' :
-                            'controlledSettingPolicy');
+        this.isChildAccount ? 'controlledSettingChildRestriction' :
+                              'controlledSettingPolicy');
   }
 
   private getIcon_(): string {
-    return this.isSupervised ? 'cr20:kite' : 'cr20:domain';
+    return this.isChildAccount ? 'cr20:kite' : 'cr20:domain';
   }
 
   private onDevModeToggleChange_(e: CustomEvent<boolean>) {

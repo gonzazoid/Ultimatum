@@ -448,6 +448,8 @@ class CONTENT_EXPORT RenderFrameHostImpl
   void GetCanonicalUrl(
       base::OnceCallback<void(const absl::optional<GURL>&)> callback) override;
   bool IsErrorDocument() override;
+  DocumentRef GetDocumentRef() override;
+  WeakDocumentPtr GetWeakDocumentPtr() override;
 
   // Additional non-override const version of GetMainFrame.
   const RenderFrameHostImpl* GetMainFrame() const;
@@ -482,7 +484,9 @@ class CONTENT_EXPORT RenderFrameHostImpl
   void EvictFromBackForwardCacheWithReason(
       BackForwardCacheMetrics::NotRestoredReason reason);
   void EvictFromBackForwardCacheWithReasons(
-      const BackForwardCacheCanStoreDocumentResult& can_store);
+      const BackForwardCacheCanStoreDocumentResult& can_store_flat,
+      std::unique_ptr<BackForwardCacheCanStoreTreeResult> can_store_tree =
+          nullptr);
 
   // Only for testing sticky WebBackForwardCacheDisablingFeature.
   void UseDummyStickyBackForwardCacheDisablingFeatureForTesting();
@@ -1926,8 +1930,6 @@ class CONTENT_EXPORT RenderFrameHostImpl
     return preferred_color_scheme_;
   }
 
-  const std::string& GetEncoding() const { return canonical_encoding_; }
-
   // Returns a base salt used to generate frame-specific IDs for media-device
   // enumerations.
   const std::string& GetMediaDeviceIDSaltBase() const {
@@ -2413,6 +2415,11 @@ class CONTENT_EXPORT RenderFrameHostImpl
   scoped_refptr<BrowsingContextState>& browsing_context_state() {
     return browsing_context_state_;
   }
+
+  // Retrieve proxies in a way that is no longer dependent on access to
+  // FrameTreeNode or RenderFrameHostManager.
+  RenderFrameProxyHost* GetProxyToParent();
+  RenderFrameProxyHost* GetProxyToOuterDelegate();
 
  protected:
   friend class RenderFrameHostFactory;
@@ -3842,12 +3849,6 @@ class CONTENT_EXPORT RenderFrameHostImpl
   // not.
   bool is_overriding_user_agent_ = false;
 
-  // The last reported character encoding, not canonicalized.
-  std::string last_reported_encoding_;
-
-  // The canonicalized character encoding.
-  std::string canonical_encoding_;
-
   // Used to intercept DidCommit* calls in tests.
   raw_ptr<CommitCallbackInterceptor> commit_callback_interceptor_ = nullptr;
 
@@ -3985,6 +3986,11 @@ class CONTENT_EXPORT RenderFrameHostImpl
     // "Owned" but not with std::unique_ptr, as a DocumentServiceBase is
     // allowed to delete itself directly.
     std::vector<internal::DocumentServiceBase*> services;
+
+    // Produces weak pointers to the hosting RenderFrameHostImpl. This is
+    // invalidated whenever DocumentAssociatedData is destroyed, due to
+    // RenderFrameHost deletion or cross-document navigation.
+    base::WeakPtrFactory<RenderFrameHostImpl> weak_ptr_factory;
   };
 
   // Reset immediately before a RenderFrameHost is reused for hosting a new

@@ -277,7 +277,7 @@ export class SettingsAppearancePageElement extends
   /** @return Whether to show the "USE GTK+" button. */
   private showUseSystem_(themeId: string, useSystemTheme: boolean): boolean {
     return (!!themeId || !useSystemTheme) &&
-        !this.appearanceBrowserProxy_.isSupervised();
+        !this.appearanceBrowserProxy_.isChildAccount();
   }
 
   /**
@@ -328,7 +328,7 @@ export class SettingsAppearancePageElement extends
     // <if expr="is_linux and not chromeos and not lacros">
     i18nId = useSystemTheme ? 'systemTheme' : 'classicTheme';
     // </if>
-    // <if expr="not is_linux or chromeos or lacros">
+    // <if expr="not is_linux or chromeos_ash or chromeos_lacros">
     i18nId = 'chooseFromWebStore';
     // </if>
     this.themeSublabel_ = this.i18n(i18nId);

@@ -46,6 +46,7 @@
 #include "content/public/common/url_utils.h"
 #include "media/audio/audio_manager.h"
 #include "media/mojo/mojom/media_service.mojom.h"
+#include "net/base/features.h"
 #include "net/cookies/site_for_cookies.h"
 #include "net/ssl/client_cert_identity.h"
 #include "net/ssl/client_cert_store.h"
@@ -1008,6 +1009,7 @@ bool ContentBrowserClient::HandleExternalProtocol(
     ui::PageTransition page_transition,
     bool has_user_gesture,
     const absl::optional<url::Origin>& initiating_origin,
+    RenderFrameHost* initiator_document,
     mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory) {
   return true;
 }
@@ -1035,8 +1037,7 @@ bool ContentBrowserClient::CanAcceptUntrustedExchangesIfNeeded() {
 }
 
 void ContentBrowserClient::OnNetworkServiceDataUseUpdate(
-    int process_id,
-    int route_id,
+    GlobalRenderFrameHostId render_frame_host_id,
     int32_t network_traffic_annotation_id_hash,
     int64_t recv_bytes,
     int64_t sent_bytes) {}
@@ -1300,4 +1301,14 @@ bool ContentBrowserClient::ShouldDisableOriginAgentClusterDefault(
     BrowserContext* browser_context) {
   return false;
 }
+
+bool ContentBrowserClient::ShouldPreconnectNavigation(
+    BrowserContext* browser_context) {
+  return false;
+}
+
+bool ContentBrowserClient::IsFirstPartySetsEnabled() {
+  return base::FeatureList::IsEnabled(net::features::kFirstPartySets);
+}
+
 }  // namespace content

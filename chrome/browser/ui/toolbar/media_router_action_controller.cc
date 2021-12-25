@@ -61,24 +61,21 @@ void MediaRouterActionController::OnIssuesCleared() {
 }
 
 void MediaRouterActionController::OnRoutesUpdated(
-    const std::vector<media_router::MediaRoute>& routes,
-    const std::vector<media_router::MediaRoute::Id>& joinable_route_ids) {
+    const std::vector<media_router::MediaRoute>& routes) {
   has_local_display_route_ =
       std::find_if(routes.begin(), routes.end(),
                    [this](const media_router::MediaRoute& route) {
                      // The Cast icon should be hidden if there only are
                      // non-local and non-display routes.
-                     if (!route.is_local() || !route.for_display()) {
+                     if (!route.is_local()) {
                        return false;
                      }
-
                      // When this feature is disabled, we show the Cast icon
                      // regardless of the media source.
                      if (!media_router::GlobalMediaControlsCastStartStopEnabled(
                              this->profile_)) {
                        return true;
                      }
-
                      // When the feature is enabled, presentation routes are
                      // controlled through the global media controls most of the
                      // time. So we do not request to show the Cast icon when

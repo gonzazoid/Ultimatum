@@ -392,6 +392,7 @@
 <translation id="3497063866483065785">{COUNT,plural, =1{ചോദ്യചിഹ്നം}other{# ചോദ്യചിഹ്നങ്ങൾ}}</translation>
 <translation id="3505359110822747654">ChromeVox മെനുകൾ ചുരുക്കുക</translation>
 <translation id="3514822174137761109">{COUNT,plural, =1{കാരറ്റ്}other{# കാരറ്റുകൾ}}</translation>
+<translation id="3518600448524470129">{COUNT,plural, =1{വെള്ള ബുള്ളറ്റ്}other{# വെള്ള ബുള്ളറ്റുകൾ}}</translation>
 <translation id="352577523970648069">എഡിറ്റ് ചെയ്യാവുന്ന ഒരു ടെക്‌സ്‌റ്റ് ഫീൽഡ്</translation>
 <translation id="3538907380453898475">dscrplst</translation>
 <translation id="3549141990712742152"><ph name="TEXT" /> മുറിക്കുക.</translation>
@@ -675,6 +676,7 @@
 <translation id="5597170376237141345">അടുത്ത ചെക്ക്ബോക്സ്</translation>
 <translation id="5598905979683743333"><ph name="NAME" />, റേഡിയോ ബട്ടൺ തിരഞ്ഞെടുത്തത് മാറ്റി</translation>
 <translation id="5601172225407283979">ഡിഫോൾട്ട് പ്രവർത്തനം നിർവഹിക്കുക</translation>
+<translation id="5604302400025591178">{COUNT,plural, =1{സമചതുര ബുള്ളറ്റ്}other{# സമചതുര ബുള്ളറ്റുകൾ}}</translation>
 <translation id="5608798115546226984">സ്വയമേവയുള്ള പൂർത്തിയാക്കൽ ഇൻലൈൻ</translation>
 <translation id="5616029807486814372">അടുത്ത പാഠം</translation>
 <translation id="561939826962581046">സമയം</translation>
@@ -1097,6 +1099,7 @@
 <translation id="8659501358298941449">ഡ്രോപ്പ് ഡൗൺ ലിസ്റ്റുകൾ</translation>
 <translation id="8666733765751421568">അവസാനം <ph name="TYPE" /></translation>
 <translation id="867187640362843212">ശീർഷകം 5</translation>
+<translation id="8690400660839620419">{COUNT,plural, =1{}other{നെസ്റ്റഡ് നില #}}</translation>
 <translation id="8693391540059827073">എന്റെ പ്രിയപ്പെട്ട ഋതു</translation>
 <translation id="8696284982970258155">ഹണിഡ്യൂ</translation>
 <translation id="8697111817566059991">{COUNT,plural, =1{പൈപ്പ്}other{# ലംബമായ പൈപ്പുകൾ}}</translation>
@@ -1164,6 +1167,7 @@
 <translation id="9223032053830369045">കടും ചുവപ്പ്</translation>
 <translation id="923331726185079994">ChromeVox അപ്‌ഡേറ്റ് ചെയ്‌തു</translation>
 <translation id="93384979447910801">കടും കടൽ പച്ച</translation>
+<translation id="937605981140327129">TalkBack നിലവിൽ ഇൻസ്റ്റാൾ ചെയ്തിട്ടില്ല. Play Store-ൽ നിന്ന് Android AccessibilitySuite ഇൻസ്റ്റാൾ ചെയ്ത ശേഷം വീണ്ടും ശ്രമിക്കുക.</translation>
 <translation id="948171205378458592">സംഭാഷണ റേറ്റ് കുറയ്ക്കുക</translation>
 <translation id="957570623732056069">ഈ പാഠം നാവിഗേറ്റ് ചെയ്യാൻ ഒരു വിരൽ ഉപയോഗിച്ച് ഇടത്തോട്ടോ വലത്തോട്ടോ സ്വൈപ്പ് ചെയ്യുക</translation>
 <translation id="958854023026327378">ഒരു വിരൽ ഉപയോഗിച്ച് താഴോട്ട് സ്വൈപ്പ് ചെയ്യുക</translation>

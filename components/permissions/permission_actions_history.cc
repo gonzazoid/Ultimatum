@@ -5,7 +5,6 @@
 
 #include "base/containers/adapters.h"
 #include "base/json/values_util.h"
-#include "base/no_destructor.h"
 #include "base/ranges/algorithm.h"
 #include "base/strings/string_piece.h"
 #include "base/values.h"
@@ -52,7 +51,7 @@ constexpr base::TimeDelta kPermissionActionMaxAge = base::Days(90);
 std::vector<PermissionActionsHistory::Entry>
 PermissionActionsHistory::GetHistory(const base::Time& begin,
                                      EntryFilter entry_filter) {
-  const base::DictionaryValue* dictionary =
+  const base::Value* dictionary =
       pref_service_->GetDictionary(prefs::kPermissionActions);
   if (!dictionary)
     return {};

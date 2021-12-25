@@ -6,7 +6,9 @@
 
 #include <utility>
 
+#include "ash/components/login/auth/user_context.h"
 #include "ash/constants/ash_features.h"
+#include "ash/constants/ash_pref_names.h"
 #include "ash/constants/ash_switches.h"
 #include "ash/public/cpp/login_screen.h"
 #include "ash/public/cpp/shell_window_ids.h"
@@ -44,7 +46,6 @@
 #include "chrome/browser/ui/webui/chromeos/login/signin_fatal_error_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/user_creation_screen_handler.h"
 #include "chrome/common/channel_info.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/startup_metric_utils/browser/startup_metric_utils.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user.h"
@@ -103,6 +104,36 @@ bool AllAllowlistedUsersPresent() {
   return true;
 }
 
+bool IsLazyWebUILoadingEnabled() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          ::chromeos::switches::kEnableOobeTestAPI)) {
+    // Load WebUI for the test API explicitly because it's Web API.
+    return false;
+  }
+
+  // Policy override.
+  if (g_browser_process->local_state()->IsManagedPreference(
+          prefs::kLoginScreenWebUILazyLoading)) {
+    return g_browser_process->local_state()->GetBoolean(
+        ash::prefs::kLoginScreenWebUILazyLoading);
+  }
+
+  // Feature override.
+  if (base::FeatureList::GetInstance()->IsFeatureOverridden(
+          features::kEnableLazyLoginWebUILoading.name)) {
+    return base::FeatureList::IsEnabled(features::kEnableLazyLoginWebUILoading);
+  }
+
+  // Disable for stable and beta.
+  if ((chrome::GetChannel() == version_info::Channel::STABLE) ||
+      (chrome::GetChannel() == version_info::Channel::BETA)) {
+    return false;
+  }
+
+  // Enable for dev builds.
+  return true;
+}
+
 }  // namespace
 
 LoginDisplayHostMojo::AuthState::AuthState(
@@ -120,22 +151,9 @@ LoginDisplayHostMojo::LoginDisplayHostMojo(DisplayedScreen displayed_screen)
       system_info_updater_(std::make_unique<MojoSystemInfoDispatcher>()) {
   user_selection_screen_->SetView(user_board_view_mojo_.get());
 
-  // Do not load WebUI before it is needed if feature permits.
-  bool enable_lazy_webui_loading = false;
-  if (base::FeatureList::GetInstance()->IsFeatureOverridden(
-          features::kEnableLazyLoginWebUILoading.name)) {
-    enable_lazy_webui_loading =
-        base::FeatureList::IsEnabled(features::kEnableLazyLoginWebUILoading);
-  } else if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-                 ::chromeos::switches::kEnableOobeTestAPI)) {
-    // Load WebUI for the test API explicitly because it's Web API.
-    enable_lazy_webui_loading = false;
-  } else if ((chrome::GetChannel() != version_info::Channel::STABLE) &&
-             (chrome::GetChannel() != version_info::Channel::BETA)) {
-    enable_lazy_webui_loading = true;
-  }
+  // Do not load WebUI before it is needed if policy and feature permit.
   // Force load WebUI if feature is not enabled.
-  if (!enable_lazy_webui_loading &&
+  if (!IsLazyWebUILoadingEnabled() &&
       displayed_screen == DisplayedScreen::SIGN_IN_SCREEN) {
     EnsureOobeDialogLoaded();
   }
@@ -500,8 +518,7 @@ void LoginDisplayHostMojo::HandleAuthenticateUserWithPasswordOrPin(
   DCHECK(user);
   UserContext user_context(*user);
   user_context.SetIsUsingPin(authenticated_by_pin);
-  user_context.SetKey(
-      Key(chromeos::Key::KEY_TYPE_PASSWORD_PLAIN, "" /*salt*/, password));
+  user_context.SetKey(Key(Key::KEY_TYPE_PASSWORD_PLAIN, "" /*salt*/, password));
   user_context.SetPasswordKey(Key(password));
   user_context.SetLoginInputMethodIdUsed(input_method::InputMethodManager::Get()
                                              ->GetActiveIMEState()
@@ -665,6 +682,10 @@ void LoginDisplayHostMojo::EnsureOobeDialogLoaded() {
   dialog_ = new OobeUIDialogDelegate(weak_factory_.GetWeakPtr());
   dialog_->GetOobeUI()->signin_screen_handler()->SetDelegate(
       login_display_.get());
+
+  // It may happen that LoginDisplayHostMojo::SetUserCount was called before
+  // the dialog_ was created. Set number of users once again here.
+  SetUserCount(user_count_);
 
   views::View* web_dialog_view = dialog_->GetWebDialogView();
   scoped_observation_.Observe(web_dialog_view);

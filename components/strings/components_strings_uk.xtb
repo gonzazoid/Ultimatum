@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Доступна пропозиція</translation>
 <translation id="1312803275555673949">Які є докази?</translation>
 <translation id="131405271941274527">Сайт <ph name="URL" /> хоче обмінюватися даними з телефоном через NFC</translation>
+<translation id="1314311879718644478">Перегляньте контент у режимі доповненої реальності</translation>
 <translation id="1314509827145471431">Зшити праворуч</translation>
 <translation id="1318023360584041678">Збережено в групі вкладок</translation>
 <translation id="1319245136674974084">Не запитувати знову для цього додатка</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">Показати більше</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Шукаєте версію веб-переглядача? Перейдіть на сторінку</translation>
 <translation id="1476595624592550506">Змініть пароль</translation>
 <translation id="1483493594462132177">Надіслати</translation>
 <translation id="1484290072879560759">Вибрати адресу доставки</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">Під час завантаженння цієї сторінки сталася помилка.</translation>
 <translation id="1586541204584340881">встановлені розширення;</translation>
 <translation id="1588438908519853928">Звичайний</translation>
+<translation id="1589050138437146318">Установити ARCore?</translation>
 <translation id="1592005682883173041">Доступ до локальних даних</translation>
 <translation id="1594030484168838125">Вибрати</translation>
 <translation id="160851722280695521">Грайте в гру Dino Run у Chrome</translation>
@@ -1261,6 +1264,7 @@
 <translation id="4968522289500246572">Цей додаток створено для мобільних пристроїв, тому можуть виникати проблеми зі зміною розміру на різних екранах. Також можуть траплятися помилки в роботі й перезапуски.</translation>
 <translation id="4969341057194253438">Видалити запис</translation>
 <translation id="4973922308112707173">Пробити два отвори вгорі</translation>
+<translation id="4976702386844183910">Останнє відвідування: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Використовувати мікрофон?</translation>
 <translation id="4984339528288761049">Prc5 (конверт)</translation>
 <translation id="4989163558385430922">Показати все</translation>
@@ -1346,6 +1350,7 @@
 <translation id="5215116848420601511">Способи оплати й адреси, пов’язані з Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Лоток 13</translation>
+<translation id="5216942107514965959">Останнє відвідування: сьогодні</translation>
 <translation id="5222812217790122047">Укажіть електронну адресу</translation>
 <translation id="5230733896359313003">Адреса доставки</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@
 <translation id="5333022057423422993">Веб-переглядач Chrome виявив, що введений пароль розкрито через порушення безпеки даних. Щоб захистити свої облікові записи, радимо перевірити надійність збережених паролів.</translation>
 <translation id="5334013548165032829">Докладні журнали системи</translation>
 <translation id="5334145288572353250">Зберегти адресу?</translation>
+<translation id="5335920952954443287">Пульсуюче серце</translation>
 <translation id="5340250774223869109">Додаток заблоковано</translation>
 <translation id="534295439873310000">Пристрої NFC</translation>
 <translation id="5344579389779391559">Ця сторінка може спробувати стягнути плату</translation>
@@ -1531,6 +1537,7 @@
 <translation id="5869522115854928033">Збережені паролі</translation>
 <translation id="5873013647450402046">Банку потрібне підтвердження вашої особи.</translation>
 <translation id="5887400589839399685">Картку збережено</translation>
+<translation id="5887687176710214216">Останнє відвідування: вчора</translation>
 <translation id="5895138241574237353">Перезапустити</translation>
 <translation id="5895187275912066135">Дата видачі</translation>
 <translation id="5901630391730855834">Жовтий</translation>
@@ -1724,6 +1731,7 @@
 <translation id="6529602333819889595">&amp;Повторити видалення</translation>
 <translation id="6545864417968258051">Пошук пристроїв Bluetooth</translation>
 <translation id="6547208576736763147">Пробити два отвори ліворуч</translation>
+<translation id="6554732001434021288">Останнє відвідування: <ph name="NUM_DAYS" /> дн. тому</translation>
 <translation id="6556866813142980365">Повторити</translation>
 <translation id="6569060085658103619">Ви переглядаєте сторінку розширень</translation>
 <translation id="6573200754375280815">Пробити два отвори праворуч</translation>
@@ -1886,6 +1894,7 @@
 <translation id="7118618213916969306">Пошук URL-адреси з буфера обміну, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Закрийте інші вкладки та програми</translation>
 <translation id="7129409597930077180">Неможливо відправити замовлення на цю адресу. Укажіть іншу адресу.</translation>
+<translation id="7132939140423847331">Ваш адміністратор заборонив копіювати ці дані.</translation>
 <translation id="7135130955892390533">Показати статус</translation>
 <translation id="7138472120740807366">Спосіб доставки</translation>
 <translation id="7139724024395191329">Емірат</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">Коли ви редагуєте примітки, відновлюється початкова орієнтація документа</translation>
 <translation id="765676359832457558">Сховати розширені налаштування...</translation>
 <translation id="7658239707568436148">Скасувати</translation>
+<translation id="7659878911471462949">Сльози радості</translation>
 <translation id="7662298039739062396">Налаштуванням керує розширення</translation>
 <translation id="7663736086183791259">Сертифікат <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Заборонено в анонімному режимі</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Може просити дозвіл використовувати пристрої й дані віртуальної реальності</translation>
 <translation id="7984945080620862648">Зараз не можна перейти на сторінку <ph name="SITE" />, оскільки веб-сайт надіслав зашифровані облікові дані, які Chrome не може обробити. Помилки мережі й атаки зазвичай є тимчасовими, тому ця сторінка може працювати пізніше.</translation>
-<translation id="79859296434321399">Щоб переглядати вміст у режимі доповненої реальності, установіть ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Зшити</translation>
 <translation id="7992044431894087211">Показ екрана за допомогою додатка <ph name="APPLICATION_TITLE" /> відновлено</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">Зігнути посередині</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Установлені додатки та як часто ними користуються</translation>
+<translation id="8317207217658302555">Оновити ARCore?</translation>
 <translation id="831997045666694187">Увечері</translation>
 <translation id="8321476692217554900">сповіщення</translation>
 <translation id="8328484624016508118">Коли ви закриєте всі анонімні вкладки, у Chrome буде видалено:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Скинути дозвіл}one{Скинути дозволи}few{Скинути дозволи}many{Скинути дозволи}other{Скинути дозволи}}</translation>
 <translation id="8555010941760982128">Використайте цей код під час оплати</translation>
 <translation id="8557066899867184262">Код CVC розташований на зворотному боці картки.</translation>
-<translation id="8558485628462305855">Щоб переглядати вміст у режимі доповненої реальності, оновіть ARCore</translation>
 <translation id="8559762987265718583">Не вдається встановити конфіденційне з’єднання з <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, оскільки на пристрої встановлено неправильні дату й час (<ph name="DATE_AND_TIME" />).</translation>
 <translation id="8564182942834072828">Окремі документи/непідібрані копії</translation>
 <translation id="8564985650692024650">Chromium радить скинути пароль <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, якщо ви застосовували його на інших сайтах.</translation>
@@ -2445,6 +2454,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />; натисніть Tab, а потім – Enter, щоб переглянути історію веб-перегляду в Chrome</translation>
 <translation id="8987927404178983737">Місяць</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Шукаєте версію системи? Перейдіть на сторінку</translation>
 <translation id="899688752321268742">Сайт <ph name="URL" /> хоче дізнаватися, чи ви активно використовуєте цей пристрій</translation>
 <translation id="8996941253935762404">Сайт містить шкідливі програми</translation>
 <translation id="8997023839087525404">Сервер надав сертифікат без інформації про перевірку. Це обов’язкові дані для деяких сертифікатів. Вони підтверджують надійність сертифіката й захищають від атак зловмисників.</translation>

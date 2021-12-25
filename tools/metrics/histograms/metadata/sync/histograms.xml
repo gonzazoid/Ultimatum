@@ -261,7 +261,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.BookmarkModelMerger.UnsyncedEntitiesUponCompletion"
-    units="bookmarks" expires_after="2022-04-17">
+    units="bookmarks" expires_after="2022-06-19">
   <owner>rushans@google.com</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -274,7 +274,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.BookmarkModelMerger.ValidInputUpdates" units="bookmarks"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>rushans@google.com</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -604,7 +604,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.CustomSync3" enum="SyncModelTypes"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>treib@chromium.org</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -757,7 +757,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.InvalidBookmarkSpecifics"
-    enum="InvalidBookmarkSpecificsError" expires_after="2022-04-10">
+    enum="InvalidBookmarkSpecificsError" expires_after="2022-06-12">
   <owner>mastiz@chromium.org</owner>
   <owner>rushans@google.com</owner>
   <component>Services&gt;Sync</component>
@@ -778,7 +778,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.Local.Enabled" enum="BooleanEnabled"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>pastarmovj@chromium.org</owner>
   <component>Services&gt;Sync</component>
   <summary>
@@ -1005,7 +1005,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.ModelTypeIncrementalUpdateReceived" enum="SyncModelTypes"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>rushans@google.com</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -1199,11 +1199,7 @@ chromium-metrics-reviews@google.com.
     measure the same time in GetUpdatesResponse-s.
   </summary>
   <token key="SyncModelType" variants="SyncModelType">
-    <variant name="">
-      <obsolete>
-        Base histogram. Use suffixes of this histogram instead.
-      </obsolete>
-    </variant>
+    <variant name=""/>
   </token>
 </histogram>
 
@@ -1220,11 +1216,7 @@ chromium-metrics-reviews@google.com.
     data type, but those are *not* counted in this metric.
   </summary>
   <token key="SyncModelType" variants="SyncModelType">
-    <variant name="">
-      <obsolete>
-        Base histogram. Use suffixes of this histogram instead.
-      </obsolete>
-    </variant>
+    <variant name=""/>
   </token>
 </histogram>
 
@@ -1284,7 +1276,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.PassphraseType" enum="SyncPassphraseType"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>treib@chromium.org</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -1384,7 +1376,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.PostedClientToServerMessage"
-    enum="SyncClientToServerMessageContents" expires_after="2022-04-17">
+    enum="SyncClientToServerMessageContents" expires_after="2022-06-19">
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>
   <summary>
@@ -1412,7 +1404,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.PostedClientToServerMessageError2" enum="SyncErrorType"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>mastiz@chromium.org</owner>
   <owner>treib@chromium.org</owner>
   <component>Services&gt;Sync</component>
@@ -1488,7 +1480,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.ProblematicServerSideBookmarks"
-    enum="RemoteBookmarkUpdateError" expires_after="2022-04-17">
+    enum="RemoteBookmarkUpdateError" expires_after="2022-06-19">
   <owner>mastiz@chromium.org</owner>
   <owner>rushans@google.com</owner>
   <component>Services&gt;Sync</component>
@@ -1718,7 +1710,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.SyncErrorInfobarDisplayed" enum="SyncErrorInfobarTypes"
-    expires_after="2022-04-10">
+    expires_after="2022-06-19">
   <owner>fernandex@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <component>Services&gt;Sync</component>
@@ -1892,7 +1884,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Sync.TypedURLDatabaseError" enum="SyncTypedUrlDatabaseError"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>jkrcal@chromium.org</owner>
   <owner>mastiz@chromium.org</owner>
   <component>Services&gt;Sync</component>

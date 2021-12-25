@@ -53,7 +53,7 @@ public class SemanticColorUtils {
 
     /** Returns the semantic color value that corresponds to default_text_color_accent1. */
     public static @ColorInt int getDefaultTextColorAccent1(Context context) {
-        return resolve(R.attr.colorPrimary, R.color.default_text_color_blue, context);
+        return resolve(R.attr.colorPrimary, R.color.default_text_color_blue_baseline, context);
     }
 
     /** Returns the semantic color value that corresponds to default_icon_color. */
@@ -105,5 +105,11 @@ public class SemanticColorUtils {
     /** Returns the semantic color value that corresponds to navigation_bubble_background_color. */
     public static @ColorInt int getNavigationBubbleBackgroundColor(Context context) {
         return getDefaultBgColorElev2(context);
+    }
+
+    // Colors that will be experimented with. This is independent of |IS_FULL_DYNAMIC_COLORS|.
+    /** Returns the semantic color value that corresponds to default_text_color_link. */
+    public static @ColorInt int getDefaultTextColorLink(Context context) {
+        return context.getColor(R.color.default_text_color_link_baseline);
     }
 }

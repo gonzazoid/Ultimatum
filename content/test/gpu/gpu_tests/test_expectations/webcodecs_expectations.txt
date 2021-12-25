@@ -5,8 +5,8 @@
 #         chromeos
 #         fuchsia
 #         linux ubuntu
-#         mac bigsur catalina lion highsierra mac-10.12 mojave mountainlion
-#             sierra
+#         mac bigsur catalina lion highsierra mac-10.12 mojave monterey
+#             mountainlion sierra
 #         win win7 win8 win10 ]
 # Devices
 # tags: [ android-nexus-5 android-nexus-5x android-nexus-9 android-pixel-2
@@ -83,7 +83,6 @@ crbug.com/1208827 [ chromeos-board-amd64-generic ] WebCodecs_Encode_capture_avc1
 
 crbug.com/1256493 [ chromeos-board-kevin ] WebCodecs_copyTo_hw_decoder [ Failure ]
 crbug.com/1207682 [ android ] WebCodecs_* [ RetryOnFailure ]
-crbug.com/1277585 [ win amd ] WebCodecs_SVC_* [ Failure ]
 
 #######################################################################
 # Automated Entries After This Point - Do Not Manually Add Below Here #

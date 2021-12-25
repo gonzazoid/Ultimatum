@@ -54,6 +54,7 @@
 #include "ui/views/focus/focus_manager.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/flex_layout.h"
+#include "ui/views/view_class_properties.h"
 #include "ui/views/view_utils.h"
 
 namespace ash {
@@ -131,8 +132,13 @@ constexpr int kSortUiControlPreferredSize = 20;
 // The number of columns available for the ContinueSectionView.
 constexpr int kContinueColumnCount = 4;
 
-// The vertical spacing above and below the separator.
-constexpr int kSeparatorVerticalInset = 16;
+// The vertical spacing between recent apps and continue section view.
+constexpr int kRecentAppsTopMargin = 16;
+
+// The vertical spacing above and below the separator when using kRegular/kDense
+// AppListConfigType.
+constexpr int kRegularSeparatorVerticalInset = 16;
+constexpr int kDenseSeparatorVerticalInset = 8;
 
 // The width of the separator.
 constexpr int kSeparatorWidth = 240;
@@ -261,6 +267,7 @@ class AppsContainerView::ContinueContainer : public views::View {
   ContinueContainer(AppsContainerView* apps_container,
                     AppListViewDelegate* view_delegate) {
     SetPaintToLayer(ui::LAYER_NOT_DRAWN);
+
     SetLayoutManager(std::make_unique<views::FlexLayout>())
         ->SetOrientation(views::LayoutOrientation::kVertical);
 
@@ -278,16 +285,18 @@ class AppsContainerView::ContinueContainer : public views::View {
     separator_ = AddChildView(std::make_unique<views::Separator>());
     separator_->SetColor(ColorProvider::Get()->GetContentLayerColor(
         ColorProvider::ContentLayerType::kSeparatorColor));
-    separator_->SetBorder(
-        views::CreateEmptyBorder(gfx::Insets(kSeparatorVerticalInset, 0)));
     separator_->SetPreferredSize(
-        gfx::Size(kSeparatorWidth,
-                  kSeparatorVerticalInset * 2 + views::Separator::kThickness));
+        gfx::Size(kSeparatorWidth, views::Separator::kThickness));
+    // Initially set the vertical inset to kRegularSeparatorVerticalInset. The
+    // value will be updated in `AppsContainerView::UpdateAppListConfig()`
+    separator_->SetProperty(views::kMarginsKey,
+                            gfx::Insets(kRegularSeparatorVerticalInset, 0));
     separator_->SetPaintToLayer();
     separator_->layer()->SetFillsBoundsOpaquely(false);
     separator_->SetProperty(views::kCrossAxisAlignmentKey,
                             views::LayoutAlignment::kCenter);
 
+    UpdateRecentAppsMargins();
     UpdateSeparatorVisibility();
   }
 
@@ -295,6 +304,9 @@ class AppsContainerView::ContinueContainer : public views::View {
   void ChildVisibilityChanged(views::View* child) override {
     if (child == recent_apps_ || child == continue_section_)
       UpdateSeparatorVisibility();
+
+    if (child == continue_section_)
+      UpdateRecentAppsMargins();
   }
 
   void OnThemeChanged() override {
@@ -303,11 +315,37 @@ class AppsContainerView::ContinueContainer : public views::View {
         ColorProvider::ContentLayerType::kSeparatorColor));
   }
 
+  bool HasRecentApps() const {
+    return recent_apps_ && recent_apps_->GetVisible();
+  }
+
+  void UpdateAppListConfig(AppListConfig* config) {
+    if (recent_apps_)
+      recent_apps_->UpdateAppListConfig(config);
+
+    const int separator_vertical_inset =
+        config->type() == AppListConfigType::kRegular
+            ? kRegularSeparatorVerticalInset
+            : kDenseSeparatorVerticalInset;
+    separator_->SetProperty(views::kMarginsKey,
+                            gfx::Insets(separator_vertical_inset, 0));
+  }
+
   ContinueSectionView* continue_section() { return continue_section_; }
   RecentAppsView* recent_apps() { return recent_apps_; }
   views::View* separator() { return separator_; }
 
  private:
+  void UpdateRecentAppsMargins() {
+    if (!recent_apps_ || !continue_section_)
+      return;
+    // Remove recent apps top margin if continue section is hidden.
+    recent_apps_->SetProperty(
+        views::kMarginsKey,
+        gfx::Insets(continue_section_->GetVisible() ? kRecentAppsTopMargin : 0,
+                    0, 0, 0));
+  }
+
   void UpdateSeparatorVisibility() {
     if (!separator_ || !recent_apps_ || !continue_section_)
       return;
@@ -472,8 +510,8 @@ void AppsContainerView::UpdateAppListConfig(const gfx::Rect& contents_bounds) {
 
   apps_grid_view()->UpdateAppListConfig(app_list_config_.get());
   app_list_folder_view()->UpdateAppListConfig(app_list_config_.get());
-  if (GetRecentApps())
-    GetRecentApps()->UpdateAppListConfig(app_list_config_.get());
+  if (continue_container_)
+    continue_container_->UpdateAppListConfig(app_list_config_.get());
 }
 
 void AppsContainerView::OnActiveAppListModelsChanged(
@@ -809,22 +847,23 @@ void AppsContainerView::Layout() {
       GetContentsBounds(),
       contents_view_->GetSearchBoxSize(AppListState::kStateApps));
   gfx::Rect grid_rect = rect;
-  grid_rect.Inset(margins.left(), kGridFadeoutZoneHeight - grid_insets.top(),
-                  margins.right(), margins.bottom());
+  grid_rect.Inset(margins.left(), kGridFadeoutZoneHeight, margins.right(),
+                  margins.bottom());
   // The grid rect insets are added to calculated margins. Given that the
   // grid bounds rect should include insets, they have to be removed from
   // added margins.
-  grid_rect.Inset(-grid_insets.left(), 0, -grid_insets.right(),
-                  -grid_insets.bottom());
+  grid_rect.Inset(-grid_insets);
   scrollable_container_->SetBoundsRect(grid_rect);
+  bool first_page_config_changed = false;
   if (features::IsProductivityLauncherEnabled()) {
+    const int continue_container_height =
+        continue_container_->GetPreferredSize().height();
     continue_container_->SetBoundsRect(
-        gfx::Rect(0, 0, grid_rect.width(),
-                  continue_container_->GetPreferredSize().height()));
+        gfx::Rect(0, 0, grid_rect.width(), continue_container_height));
     // Setting this offset prevents the app items in the grid from overlapping
     // with the continue section.
-    apps_grid_view_->set_first_page_offset(
-        continue_container_->bounds().height());
+    first_page_config_changed = apps_grid_view_->ConfigureFirstPagePadding(
+        continue_container_height, continue_container_->HasRecentApps());
   }
 
   // Make sure that UpdateTopLevelGridDimensions() happens after setting the
@@ -832,8 +871,15 @@ void AppsContainerView::Layout() {
   // shown in the grid.
   UpdateTopLevelGridDimensions();
 
-  apps_grid_view_->SetBoundsRect(
-      gfx::Rect(0, 0, grid_rect.width(), grid_rect.height()));
+  const gfx::Rect apps_grid_bounds(grid_rect.size());
+  if (apps_grid_view_->bounds() != apps_grid_bounds) {
+    apps_grid_view_->SetBoundsRect(apps_grid_bounds);
+  } else if (first_page_config_changed) {
+    // Apps grid layout depends on the continue container bounds, so explicitly
+    // call layout to ensure apps grid view gets laid out even if its bounds do
+    // not change.
+    apps_grid_view_->Layout();
+  }
 
   // Record the distance of y position between suggestion chip container
   // and apps grid view to avoid duplicate calculation of apps grid view's
@@ -1036,11 +1082,12 @@ int AppsContainerView::GetMinTopMarginForAppsGrid(
   const int suggestion_chip_container_size =
       features::IsProductivityLauncherEnabled()
           ? 0
-          : kSuggestionChipContainerHeight;
+          : kSuggestionChipContainerHeight + kSuggestionChipContainerTopMargin;
+
   // NOTE: Use the fadeout zone height as min top margin to match the apps grid
   // view's bottom margin.
   return search_box_size.height() + kGridFadeoutZoneHeight +
-         kSuggestionChipContainerTopMargin + suggestion_chip_container_size;
+         suggestion_chip_container_size;
 }
 
 int AppsContainerView::GetIdealHorizontalMargin() const {

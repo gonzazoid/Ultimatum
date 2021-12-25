@@ -6,6 +6,9 @@
 
 #include <string>
 
+#include "ash/wm/window_state.h"
+#include "ash/wm/window_util.h"
+#include "base/base64.h"
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
 #include "base/logging.h"
@@ -33,6 +36,11 @@ const char kBorealisWindowPrefix[] = "org.chromium.borealis.";
 // the GuestOsRegistryService), so to identify them we prepend this.
 const char kBorealisAnonymousPrefix[] = "borealis_anon:";
 
+// Base64-encoded shell application id of borealis client when it is in full-
+// screen mode.
+const char kFullscreenClientShellId[] =
+    "b3JnLmNocm9taXVtLmJvcmVhbGlzLndtY2xhc3Muc3RlYW0=";
+
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(std::string, kShelfAppIdKey, nullptr)
 
 // Returns an ID for this window (which is the app_id or startup_id, depending
@@ -54,7 +62,7 @@ std::string BorealisIdToAppId(Profile* profile, unsigned borealis_id) {
            ->GetRegisteredApps(guest_os::GuestOsRegistryService::VmType::
                                    ApplicationList_VmType_BOREALIS)) {
     absl::optional<int> app_id = GetBorealisAppId(item.second.Exec());
-    if (app_id && app_id.value() == borealis_id) {
+    if (app_id && app_id.value() == static_cast<int>(borealis_id)) {
       return item.first;
     }
   }
@@ -109,6 +117,30 @@ bool BorealisWindowManager::IsBorealisWindow(const aura::Window* window) {
 // static
 bool BorealisWindowManager::IsBorealisWindowId(const std::string& window_id) {
   return base::StartsWith(window_id, kBorealisWindowPrefix);
+}
+
+// static
+bool BorealisWindowManager::ShouldNewWindowBeMinimized() {
+  aura::Window* active_window = ash::window_util::GetActiveWindow();
+  if (!active_window || !IsBorealisWindow(active_window))
+    return false;
+
+  auto* window_state = ash::WindowState::Get(active_window);
+  if (!window_state || !window_state->IsFullscreen())
+    return false;
+
+  const std::string* active_window_id = GetWindowId(active_window);
+  if (!active_window_id)
+    return false;
+
+  std::string fullscreen_client_id;
+  if (!base::Base64Decode(kFullscreenClientShellId, &fullscreen_client_id))
+    return false;
+
+  if (*active_window_id == fullscreen_client_id)
+    return false;
+
+  return true;
 }
 
 BorealisWindowManager::BorealisWindowManager(Profile* profile)

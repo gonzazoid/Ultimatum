@@ -36,8 +36,7 @@ struct CONTENT_EXPORT MediaStreamRequest {
                      blink::mojom::MediaStreamType video_type,
                      bool disable_local_echo,
                      bool request_pan_tilt_zoom_permission,
-                     // TODO(crbug.com/1276822): Remove default value.
-                     bool region_capture_capable = false);
+                     bool region_capture_capable);
 
   MediaStreamRequest(const MediaStreamRequest& other);
 
@@ -101,7 +100,7 @@ class MediaStreamUI {
       const DesktopMediaID& media_id,
       blink::mojom::MediaStreamStateChange new_state)>;
 
-  virtual ~MediaStreamUI() {}
+  virtual ~MediaStreamUI() = default;
 
   // Called when MediaStream capturing is started. Chrome layer can call |stop|
   // to stop the stream, or |source| to change the source of the stream, or

@@ -152,7 +152,6 @@ COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kCryptAuthV2Enrollment;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kCryptohomeRecoveryFlow;
-COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kDarkLightMode;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kDemoModeSWA;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kDeskTemplateSync;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kDeviceActiveClient;
@@ -234,6 +233,8 @@ extern const base::Feature kFilesSinglePartitionFormat;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kFilesTrash;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kFiltersInRecents;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kFirmwareUpdaterApp;
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const base::Feature kFullscreenAlertBubble;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kFuseBox;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kGaiaCloseViewMessage;
@@ -264,6 +265,8 @@ COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kHideArcMediaNotifications;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kHideShelfControlsInTabletMode;
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const base::Feature kHoldingSpaceInProgressAnimationV2;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kHoldingSpaceInProgressDownloadsIntegration;
 COMPONENT_EXPORT(ASH_CONSTANTS)
@@ -296,6 +299,8 @@ COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kLacrosPrimary;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kLacrosSupport;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kForceProfileMigrationCompletion;
+COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const base::Feature kLacrosProfileMigrationForAnyUser;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kLanguagePacksHandwriting;
 COMPONENT_EXPORT(ASH_CONSTANTS)
@@ -455,15 +460,14 @@ COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kTabClusterUI;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kTelemetryExtension;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kTerminalSSH;
 COMPONENT_EXPORT(ASH_CONSTANTS)
+extern const base::Feature kTerminalTmuxIntegration;
+COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kTrafficCountersSettingsUi;
 COMPONENT_EXPORT(ASH_CONSTANTS) extern const base::Feature kTrilinearFiltering;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kUseAuthsessionAuthentication;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kUseBluetoothSystemInAsh;
-// Visible for testing. Call UseBrowserSyncConsent() to check the flag.
-COMPONENT_EXPORT(ASH_CONSTANTS)
-extern const base::Feature kUseBrowserSyncConsent;
 COMPONENT_EXPORT(ASH_CONSTANTS)
 extern const base::Feature kUseMessagesStagingUrl;
 COMPONENT_EXPORT(ASH_CONSTANTS)
@@ -549,10 +553,13 @@ COMPONENT_EXPORT(ASH_CONSTANTS) bool IsFamilyLinkOnSchoolDeviceEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsFastPairEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsFileManagerSwaEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsFirmwareUpdaterAppEnabled();
+COMPONENT_EXPORT(ASH_CONSTANTS) bool IsFullscreenAlertBubbleEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsGaiaCloseViewMessageEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsGaiaReauthEndpointEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsHideArcMediaNotificationsEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool IsHideShelfControlsInTabletModeEnabled();
+COMPONENT_EXPORT(ASH_CONSTANTS)
+bool IsHoldingSpaceInProgressAnimationV2Enabled();
 COMPONENT_EXPORT(ASH_CONSTANTS)
 bool IsHoldingSpaceInProgressDownloadsIntegrationEnabled();
 COMPONENT_EXPORT(ASH_CONSTANTS)
@@ -651,7 +658,6 @@ COMPONENT_EXPORT(ASH_CONSTANTS) bool IsWindowControlMenuEnabled();
 // TODO(michaelpg): Remove after M71 branch to re-enable Play Store by default.
 COMPONENT_EXPORT(ASH_CONSTANTS) bool ShouldShowPlayStoreInDemoMode();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool ShouldUseAttachApn();
-COMPONENT_EXPORT(ASH_CONSTANTS) bool ShouldUseBrowserSyncConsent();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool ShouldUseV1DeviceSync();
 COMPONENT_EXPORT(ASH_CONSTANTS) bool ShouldUseV2DeviceSync();
 

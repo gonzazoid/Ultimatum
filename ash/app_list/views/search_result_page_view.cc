@@ -30,6 +30,7 @@
 #include "base/memory/ptr_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "ui/accessibility/platform/ax_unique_id.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/metadata/metadata_header_macros.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -231,6 +232,8 @@ void SearchResultPageView::InitializeContainers(
     AppListViewDelegate* view_delegate,
     AppListMainView* app_list_main_view,
     SearchBoxView* search_box_view) {
+  DCHECK(view_delegate);
+  view_delegate_ = view_delegate;
   dialog_controller_ = std::make_unique<SearchResultPageDialogController>(this);
 
   if (features::IsProductivityLauncherEnabled()) {
@@ -429,26 +432,25 @@ void SearchResultPageView::NotifyA11yResultsChanged() {
 void SearchResultPageView::NotifySelectedResultChanged() {
   // Result selection should be handled by |productivity_launcher_search_page_|.
   DCHECK(!features::IsProductivityLauncherEnabled());
-  if (ignore_result_changes_for_a11y_ ||
-      !result_selection_controller_->selected_location_details() ||
+  if (ignore_result_changes_for_a11y_)
+    return;
+
+  SearchBoxView* search_box = AppListPage::contents_view()->GetSearchBoxView();
+  if (!result_selection_controller_->selected_location_details() ||
       !result_selection_controller_->selected_result()) {
+    search_box->SetA11yActiveDescendant(absl::nullopt);
     return;
   }
 
-  SearchBoxView* search_box = AppListPage::contents_view()->GetSearchBoxView();
-  // Ignore result selection change if the focus moved away from the search boc
-  // textfield, for example to the close button.
-  if (!search_box->search_box()->HasFocus())
-    return;
-
   views::View* selected_view =
       result_selection_controller_->selected_result()->GetSelectedView();
-  if (!selected_view)
+  if (!selected_view) {
+    search_box->SetA11yActiveDescendant(absl::nullopt);
     return;
+  }
 
-  selected_view->NotifyAccessibilityEvent(ax::mojom::Event::kSelection, true);
-  NotifyAccessibilityEvent(ax::mojom::Event::kSelectedChildrenChanged, true);
-  search_box->set_a11y_selection_on_search_result(true);
+  search_box->SetA11yActiveDescendant(
+      selected_view->GetViewAccessibility().GetUniqueId().Get());
 }
 
 void SearchResultPageView::OnActiveAppListModelsChanged(
@@ -472,6 +474,10 @@ void SearchResultPageView::OnSearchResultContainerResultsChanging() {
 }
 
 void SearchResultPageView::OnSearchResultContainerResultsChanged() {
+  // Skip updates during shutdown.
+  if (!view_delegate_->HasValidProfile())
+    return;
+
   // Result selection should be handled by |productivity_launcher_search_page_|.
   DCHECK(!features::IsProductivityLauncherEnabled());
   DCHECK(!result_container_views_.empty());

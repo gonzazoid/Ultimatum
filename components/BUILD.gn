@@ -236,6 +236,7 @@ test("components_unittests") {
     deps += [
       "//components/autofill/ios/browser:unit_tests",
       "//components/autofill/ios/form_util:unit_tests",
+      "//components/crash/core/app:unit_tests",
       "//components/feed/core/v2/public/ios:feed_ios_unit_tests",
       "//components/image_fetcher/ios:unit_tests",
       "//components/language/ios/browser:unit_tests",
@@ -791,7 +792,6 @@ if (!is_ios) {
         "browser_ui/client_certificate/android/ssl_client_certificate_request_browsertest.cc",
         "test/android/browsertests_apk/components_browser_tests_jni_onload.cc",
       ]
-      sources -= [ "autofill/content/browser/risk/fingerprint_browsertest.cc" ]
       deps += [
         "//components/autofill_assistant/browser",
         "//components/autofill_assistant/browser:proto",
@@ -838,6 +838,31 @@ if (!is_ios) {
     # On other platforms, no components should depend on Chrome.
     if (!is_chromeos_lacros) {
       assert_no_deps = [ "//chrome/*" ]
+    }
+
+    if (is_fuchsia) {
+      additional_manifest_fragments = [
+        "//build/config/fuchsia/test/font_capabilities.test-cmx",
+        "//build/config/fuchsia/test/jit_capabilities.test-cmx",
+        "//build/config/fuchsia/test/network_capabilities.test-cmx",
+        "//build/config/fuchsia/test/present_view_capabilities.test-cmx",
+      ]
+    }
+
+    # This test won't work as-is on POSIX platforms, where fork()+exec() is
+    # used to launch child processes, failure does not happen until exec().
+    # See also ServiceProcessLauncherTest.FailToLaunchProcess and
+    # UtilityProcessHostBrowserTest.FailToLaunchProcess.
+    if (!is_posix || is_mac) {
+      sources += [
+        "metrics/content/content_stability_metrics_provider_browsertest.cc",
+      ]
+      deps += [
+        "//components/prefs:test_support",
+        "//components/variations",
+        "//content/test:content_test_mojo_bindings",
+        "//sandbox",
+      ]
     }
   }
 
@@ -920,6 +945,7 @@ if (is_android) {
       "//components/gcm_driver/android:components_gcm_driver_junit_tests",
       "//components/image_fetcher:junit",
       "//components/installedapp/android:junit",
+      "//components/language/android:junit",
       "//components/media_router/browser/android:junit",
       "//components/messages/android:junit",
       "//components/messages/android/internal:junit",

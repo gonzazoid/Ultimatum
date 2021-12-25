@@ -36,6 +36,7 @@ Vissa funktioner kanske inte är tillgängliga och ändringar i inställningarna
 <translation id="2313870531055795960">Kontrollera webbadresser mot en lista över osäkra webbplatser i Chromium. Om du utsätts för försök att kapa ditt lösenord på en webbplats eller om du laddar ned en skadlig fil kan webbadresserna skickas från Chromium till Säker webbsökning tillsammans med delar av sidinnehållet.</translation>
 <translation id="2343156876103232566">Logga in på Chromium på båda enheterna om du vill skicka ett nummer från Android-telefonen.</translation>
 <translation id="2347108572062610441">Det här tillägget har ändrat vilken sida som visas när du startar Chromium.</translation>
+<translation id="2359808026110333948">Fortsätt</translation>
 <translation id="2396765026452590966">Tillägget <ph name="EXTENSION_NAME" /> har ändrat vilken sida som visas när du startar Chromium.</translation>
 <translation id="2401032172288869980">Du behöver ge Chromium kamera- och mikrofonbehörighet för den här webbplatsen</translation>
 <translation id="2483889755041906834">I Chromium</translation>
@@ -110,20 +111,22 @@ Vissa funktioner kanske inte är tillgängliga och ändringar i inställningarna
 <translation id="4271805377592243930">Få hjälp med Chromium</translation>
 <translation id="4285930937574705105">Installationen misslyckades på grund av ett ospecificerat fel. Stäng Chromium om det är igång och försök sedan igen.</translation>
 <translation id="4407044323746248786">Vill du avsluta Chromium ändå?</translation>
+<translation id="4414390922528416758">Anpassa de viktigaste integritetsvalen i Chromium. Alla inställningar och alternativ som finns beskrivs inte i den här guiden.</translation>
 <translation id="4415566066719264597">Låt Chromium köras i bakgrunden</translation>
 <translation id="4423735387467980091">Anpassa och kontrollera Chromium</translation>
+<translation id="4427306783828095590">Förbättrat skydd är bättre på att blockera nätfiske och skadlig programvara</translation>
 <translation id="452711251841752011">Välkommen till Chromium, ett nytt webbläsarfönster har öppnats</translation>
 <translation id="4544142686420020088">Ett fel uppstod och Chromium uppdaterades inte. <ph name="BEGIN_LINK" />Åtgärda uppdateringsproblem och misslyckade uppdateringar i Chromium<ph name="END_LINK" />.</translation>
 <translation id="454579500955453258">Vill du fortsätta med en ny Chromium-profil?</translation>
 <translation id="4567424176335768812">Du är inloggad som <ph name="USER_EMAIL_ADDRESS" />. Nu kan du komma åt dina bokmärken, historik och andra inställningar på alla enheter som du är inloggad på.</translation>
 <translation id="459535195905078186">Chromium-appar</translation>
+<translation id="4621240073146040695">Nästan klart! Slutför uppdateringen genom att starta om Chromium.</translation>
 <translation id="4665829708273112819">Varning! Chromium kan inte förhindra att tillägg registrerar din webbhistorik. Om du vill inaktivera det här tillägget i inkognitoläge avmarkerar du det här alternativet.</translation>
 <translation id="4677944499843243528">Profilen verkar användas av en annan Chromium-process (<ph name="PROCESS_ID" />) på en annan dator (<ph name="HOST_NAME" />). Profilen har låsts så att den inte används på otillåtet sätt. Om du är säker på att profilen inte används i några andra processer låser du upp profilen och startar om Chromium.</translation>
 <translation id="469338717132742108">Få hjälp med Chromium OS</translation>
 <translation id="4708774505295300557">Någon har tidigare loggat in i Chrome som <ph name="ACCOUNT_EMAIL_LAST" /> på den här datorn. Skapa en ny Chromium-användare så att dina uppgifter hålls separat.</translation>
 <translation id="4746050847053251315">Vill du avsluta Chromium ändå?</translation>
 <translation id="4748217263233248895">En särskild säkerhetsuppdatering för Chromium installerades precis. Starta om webbläsaren nu. Flikarna återställs efteråt.</translation>
-<translation id="4750035648288509542">Uppdateringen är snart klar! Starta Chromium igen för att avsluta uppdateringen. Inkognitofönster öppnas inte igen.</translation>
 <translation id="4788777615168560705">Chromium kan inte kontrollera dina lösenord. Försök igen om 24 timmar eller <ph name="BEGIN_LINK" />kontrollera lösenorden i ditt Google-konto<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Detta använder samma stavningskontroll som Google Sök. Text som du skriver i webbläsaren skickas till Google. Du kan när som helst ändra detta i inställningarna.</translation>
 <translation id="4888717733111232871">Regel som tillåter inkommande mDNS-trafik för Chromium.</translation>
@@ -237,6 +240,7 @@ Chromium kan inte återställa dina inställningar.</translation>
 <translation id="7561906087460245826">Rensa även data från Chromium (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Om en inställning saknas på den här sidan tittar du i <ph name="LINK_BEGIN" />
       inställningarna för Chromium OS<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">Du har aktiverat Förbättrad säker webbsökning i kontot. Skaffa funktionen även för Chromium.</translation>
 <translation id="761356813943268536">Chromium använder din kamera och mikrofon.</translation>
 <translation id="7617377681829253106">Vi har förbättrat Chromium</translation>
 <translation id="7686590090926151193">Chromium är inte din standardwebbläsare</translation>
@@ -296,5 +300,6 @@ Chromium kan inte återställa dina inställningar.</translation>
 <translation id="9214764063801632699">Chromium OS-system</translation>
 <translation id="93478295209880648">Chromium kanske inte fungerar ordentligt eftersom den inte längre stöds på Windows XP och Windows Vista</translation>
 <translation id="965162752251293939">Vem ska använda Chromium?</translation>
+<translation id="967427899662692980">Få det bästa skyddet i Chromium</translation>
 <translation id="985602178874221306">The Chromium Authors</translation>
 </translationbundle>

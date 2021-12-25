@@ -5,9 +5,9 @@
 #ifndef CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_STORAGE_H_
 #define CHROME_BROWSER_ASH_LOGIN_QUICK_UNLOCK_QUICK_UNLOCK_STORAGE_H_
 
+#include "ash/components/login/auth/user_context.h"
 #include "base/time/default_clock.h"
 #include "base/time/time.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/keyed_service/core/keyed_service.h"
 
 class Profile;
@@ -61,7 +61,7 @@ class QuickUnlockStorage : public KeyedService {
   // Creates a new authentication token to be used by the quickSettingsPrivate
   // API for authenticating requests. Resets the expiration timer and
   // invalidates any previously issued tokens.
-  std::string CreateAuthToken(const chromeos::UserContext& user_context);
+  std::string CreateAuthToken(const UserContext& user_context);
 
   // Returns true if the current authentication token has expired.
   bool GetAuthTokenExpired();

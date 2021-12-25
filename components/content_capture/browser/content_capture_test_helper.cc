@@ -4,31 +4,42 @@
 
 #include "components/content_capture/browser/content_capture_test_helper.h"
 
+#include "testing/gtest/include/gtest/gtest.h"
+
 namespace content_capture {
 
 FakeContentCaptureSender::FakeContentCaptureSender() = default;
 
 FakeContentCaptureSender::~FakeContentCaptureSender() = default;
 
+void FakeContentCaptureSender::Bind(content::RenderFrameHost* frame) {
+  DCHECK(frame);
+  content_capture_receiver_.reset();
+  OnscreenContentProvider::BindContentCaptureReceiver(
+      content_capture_receiver_.BindNewEndpointAndPassDedicatedReceiver(),
+      frame);
+}
+
 void FakeContentCaptureSender::DidCaptureContent(
     const ContentCaptureData& captured_content,
     bool first_data) {
+  base::RunLoop run_loop;
   content_capture_receiver_->DidCaptureContent(captured_content, first_data);
+  run_loop.RunUntilIdle();
 }
 
 void FakeContentCaptureSender::DidUpdateContent(
     const ContentCaptureData& captured_content) {
+  base::RunLoop run_loop;
   content_capture_receiver_->DidUpdateContent(captured_content);
+  run_loop.RunUntilIdle();
 }
 
 void FakeContentCaptureSender::DidRemoveContent(
     const std::vector<int64_t>& data) {
+  base::RunLoop run_loop;
   content_capture_receiver_->DidRemoveContent(data);
-}
-
-mojo::PendingAssociatedReceiver<mojom::ContentCaptureReceiver>
-FakeContentCaptureSender::GetPendingAssociatedReceiver() {
-  return content_capture_receiver_.BindNewEndpointAndPassDedicatedReceiver();
+  run_loop.RunUntilIdle();
 }
 
 SessionRemovedTestHelper::SessionRemovedTestHelper() = default;
@@ -141,6 +152,25 @@ void ContentCaptureTestHelper::InitTestData(const std::u16string& data1,
   test_data_update_.value = data1;
   test_data_update_.bounds = gfx::Rect(10, 10);
   test_data_update_.children.push_back(child2);
+}
+
+void VerifySession(const ContentCaptureSession& expected,
+                   const ContentCaptureSession& result) {
+  EXPECT_EQ(expected.size(), result.size());
+  for (size_t i = 0; i < expected.size(); i++) {
+    EXPECT_EQ(expected[i].id, result[i].id);
+    EXPECT_EQ(expected[i].url, result[i].url);
+    EXPECT_EQ(expected[i].bounds, result[i].bounds);
+    EXPECT_TRUE(result[i].children.empty());
+  }
+}
+
+ContentCaptureFrame GetExpectedTestData(const ContentCaptureData& data,
+                                        int64_t expected_id) {
+  ContentCaptureFrame expected(data);
+  // Replaces the id with expected id.
+  expected.id = expected_id;
+  return expected;
 }
 
 }  // namespace content_capture

@@ -659,6 +659,8 @@ _BANNED_CPP_FUNCTIONS = (
        '^chrome/services/sharing/nearby/',
        # gRPC provides some C++ libraries that use std::shared_ptr<>.
        '^chromeos/services/libassistant/grpc/',
+       '^chromecast/cast_core/grpc',
+       '^chromecast/cast_core/runtime/browser',
        # Fuchsia provides C++ libraries that use std::shared_ptr<>.
        '.*fuchsia.*test\.(cc|h)',
        _THIRD_PARTY_EXCEPT_BLINK],  # Not an error in third_party folders.
@@ -3467,6 +3469,22 @@ def _CheckAndroidXmlStyle(input_api, output_api, is_check_on_upload):
   else:
     return checkxmlstyle.CheckStyleOnCommit(input_api, output_api)
 
+def _CheckAndroidInfoBarDeprecation(input_api, output_api):
+  """Checks Android Infobar Deprecation """
+
+  import sys
+  original_sys_path = sys.path
+  try:
+    sys.path = sys.path + [input_api.os_path.join(
+        input_api.PresubmitLocalPath(), 'tools', 'android',
+        'infobar_deprecation')]
+    import infobar_deprecation
+  finally:
+    # Restore sys.path to what it was before.
+    sys.path = original_sys_path
+
+  return infobar_deprecation.CheckDeprecationOnUpload(input_api, output_api)
+
 
 class PydepsChecker(object):
   def __init__(self, input_api, pydeps_files):
@@ -3704,8 +3722,6 @@ def CheckNoDeprecatedCss(input_api, output_api):
                    input_api.DEFAULT_FILES_TO_SKIP +
                    (r"^chrome/common/extensions/docs",
                     r"^chrome/docs",
-                    r"^components/dom_distiller/core/css/distilledpage_ios.css",
-                    r"^components/neterror/resources/neterror.css",
                     r"^native_client_sdk"))
   file_filter = lambda f: input_api.FilterSourceFile(
       f, files_to_check=file_inclusion_pattern, files_to_skip=files_to_skip)
@@ -4166,6 +4182,7 @@ def ChecksAndroidSpecificOnUpload(input_api, output_api):
   results.extend(_CheckAndroidXmlStyle(input_api, output_api, True))
   results.extend(_CheckNewImagesWarning(input_api, output_api))
   results.extend(_CheckAndroidNoBannedImports(input_api, output_api))
+  results.extend(_CheckAndroidInfoBarDeprecation(input_api, output_api))
   return results
 
 def ChecksAndroidSpecificOnCommit(input_api, output_api):

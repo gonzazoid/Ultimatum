@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "base/containers/contains.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "build/build_config.h"
 #include "chrome/browser/autofill/mock_autofill_popup_controller.h"
@@ -291,6 +290,33 @@ TEST_F(AutofillPopupViewNativeViewsTest, ClickDisabledEntry) {
       ui::ET_MOUSE_PRESSED, inside_point, inside_point, ui::EventTimeForNow(),
       ui::EF_RIGHT_MOUSE_BUTTON, ui::EF_RIGHT_MOUSE_BUTTON);
   widget_->OnMouseEvent(&click_mouse_event);
+}
+
+// Ensure that the voice_over value of suggestions is presented to the
+// accessibility layer.
+TEST_F(AutofillPopupViewNativeViewsTest, VoiceOverTest) {
+  const std::u16string voice_over_value = u"Password for user@gmail.com";
+  // Create a realistic suggestion for a password.
+  autofill::Suggestion suggestion(u"user@gmail.com");
+  suggestion.is_value_secondary = false;
+  suggestion.label = u"example.com";
+  suggestion.voice_over = voice_over_value;
+  suggestion.additional_label = u"\u2022\u2022\u2022\u2022";
+  suggestion.frontend_id = autofill::POPUP_ITEM_ID_USERNAME_ENTRY;
+
+  // Create autofill menu.
+  autofill_popup_controller_.set_suggestions({suggestion});
+  view_ = std::make_unique<autofill::AutofillPopupViewNativeViews>(
+      autofill_popup_controller_.GetWeakPtr(), widget_.get());
+  widget_->SetContentsView(view_.get());
+  widget_->Show();
+  view_->Show();
+
+  // Verify that the accessibility layer gets the right string to read out.
+  ui::AXNodeData node_data;
+  view_->GetRowsForTesting()[0]->GetAccessibleNodeData(&node_data);
+  EXPECT_EQ(voice_over_value,
+            node_data.GetString16Attribute(ax::mojom::StringAttribute::kName));
 }
 
 // Tests that (only) clickable items trigger an AcceptSuggestion event.

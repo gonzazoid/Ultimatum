@@ -3450,15 +3450,6 @@ interface HTMLEmbedElement : HTMLElement
     setter src
     setter type
     setter width
-interface HTMLFencedFrameElement : HTMLElement
-    attribute @@toStringTag
-    getter height
-    getter src
-    getter width
-    method constructor
-    setter height
-    setter src
-    setter width
 interface HTMLFieldSetElement : HTMLElement
     attribute @@toStringTag
     getter disabled
@@ -4258,9 +4249,11 @@ interface HTMLSelectElement : HTMLElement
 interface HTMLSelectMenuElement : HTMLElement
     attribute @@toStringTag
     getter form
+    getter labels
     getter name
     getter open
     getter required
+    getter selectedOption
     getter type
     getter validationMessage
     getter validity
@@ -5724,6 +5717,7 @@ interface NDEFReader : EventTarget
     getter onreading
     getter onreadingerror
     method constructor
+    method makeReadOnly
     method scan
     method write
     setter onreading
@@ -10580,7 +10574,6 @@ interface WebGLVertexArrayObject
 interface WebId
     attribute @@toStringTag
     method constructor
-    method logout
     method provide
 interface WebKitCSSMatrix : DOMMatrixReadOnly
     attribute @@toStringTag

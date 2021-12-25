@@ -70,8 +70,11 @@ class AppSearchProvider : public SearchProvider {
 
  private:
   void UpdateResults();
+
+  // Updates the zero-state app recommendations ("recent apps").
   void UpdateRecommendedResults(
       const base::flat_map<std::string, uint16_t>& id_to_app_list_index);
+
   void UpdateQueriedResults();
 
   // Publishes either the queried results or recommendation.
@@ -85,7 +88,6 @@ class AppSearchProvider : public SearchProvider {
   // zero state recommendation latency.
   void MaybeRecordQueryLatencyHistogram(bool is_queried_search);
 
-  Profile* profile_;
   AppListControllerDelegate* const list_controller_;
   std::u16string query_;
   base::TimeTicks query_start_time_;

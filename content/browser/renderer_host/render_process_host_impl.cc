@@ -66,6 +66,10 @@
 #include "components/discardable_memory/public/mojom/discardable_shared_memory_manager.mojom.h"
 #include "components/discardable_memory/service/discardable_shared_memory_manager.h"
 #include "components/metrics/single_sample_metrics.h"
+#include "components/services/storage/public/cpp/buckets/bucket_id.h"
+#include "components/services/storage/public/cpp/buckets/bucket_info.h"
+#include "components/services/storage/public/cpp/buckets/constants.h"
+#include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/cache_storage_control.mojom.h"
 #include "components/services/storage/public/mojom/indexed_db_control.mojom.h"
 #include "components/tracing/common/tracing_switches.h"
@@ -108,6 +112,7 @@
 #include "content/browser/renderer_host/recently_destroyed_hosts.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_message_filter.h"
+#include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/renderer_host/render_widget_helper.h"
 #include "content/browser/renderer_host/renderer_sandboxed_process_launcher_delegate.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
@@ -127,6 +132,7 @@
 #include "content/common/pseudonymization_salt.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_or_resource_context.h"
+#include "content/public/browser/browser_thread.h"
 #include "content/public/browser/device_service.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/network_service_instance.h"
@@ -175,6 +181,7 @@
 #include "services/resource_coordinator/public/mojom/memory_instrumentation/memory_instrumentation.mojom.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "storage/browser/database/database_tracker.h"
+#include "storage/browser/quota/quota_manager.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/common/page/launching_process_state.h"
@@ -2073,8 +2080,22 @@ void RenderProcessHostImpl::CreateLockManager(
     const url::Origin& origin,
     mojo::PendingReceiver<blink::mojom::LockManager> receiver) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  storage_partition_impl_->GetQuotaManager()->proxy()->GetOrCreateBucket(
+      blink::StorageKey(origin), storage::kDefaultBucketName,
+      GetUIThreadTaskRunner({}),
+      base::BindOnce(&RenderProcessHostImpl::CreateLockManagerWithBucketInfo,
+                     weak_factory_.GetWeakPtr(), render_frame_id,
+                     std::move(receiver)));
+}
+
+void RenderProcessHostImpl::CreateLockManagerWithBucketInfo(
+    int render_frame_id,
+    mojo::PendingReceiver<blink::mojom::LockManager> receiver,
+    storage::QuotaErrorOr<storage::BucketInfo> bucket) {
   storage_partition_impl_->GetLockManager()->BindReceiver(
-      GetID(), render_frame_id, origin, std::move(receiver));
+      GetID(), render_frame_id, bucket.ok() ? bucket->id : storage::BucketId(),
+      std::move(receiver));
 }
 
 void RenderProcessHostImpl::CreatePermissionService(
@@ -2381,10 +2402,13 @@ void RenderProcessHostImpl::RegisterMojoInterfaces() {
 #endif
 
 #if defined(OS_WIN)
-  registry->AddInterface(
-      base::BindRepeating(&DWriteFontProxyImpl::Create),
-      base::ThreadPool::CreateSequencedTaskRunner(
-          {base::TaskPriority::USER_BLOCKING, base::MayBlock()}));
+  scoped_refptr<base::SequencedTaskRunner> font_runner;
+  if (!base::FeatureList::IsEnabled(features::kDWriteFontProxyOnIO)) {
+    font_runner = base::ThreadPool::CreateSequencedTaskRunner(
+        {base::TaskPriority::USER_BLOCKING, base::MayBlock()});
+  }
+  registry->AddInterface(base::BindRepeating(&DWriteFontProxyImpl::Create),
+                         font_runner);
 #endif
 
   file_system_manager_impl_.reset(new FileSystemManagerImpl(
@@ -2713,7 +2737,12 @@ void RenderProcessHostImpl::ForEachRenderFrameHost(
     base::RepeatingCallback<void(RenderFrameHost*)> on_render_frame_host) {
   for (auto rfh_id : render_frame_host_id_set_) {
     RenderFrameHostImpl* rfh = RenderFrameHostImpl::FromID(rfh_id);
-    CHECK(rfh);
+    // Note that some RenderFrameHosts in the set may not be found by FromID if
+    // we get here during their destructor (e.g., while deleting their subframe
+    // RenderFrameHosts).
+    if (!rfh)
+      continue;
+
     // Speculative RFHs are not exposed to //content embedders, so we have to
     // explicitly check them here to avoid leaks.
     if (rfh->lifecycle_state() ==

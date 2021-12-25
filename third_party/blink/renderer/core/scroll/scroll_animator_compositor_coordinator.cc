@@ -14,8 +14,6 @@
 #include "third_party/blink/renderer/platform/animation/compositor_animation.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_timeline.h"
 #include "third_party/blink/renderer/platform/animation/compositor_keyframe_model.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
 
@@ -187,9 +185,6 @@ bool ScrollAnimatorCompositorCoordinator::ReattachCompositorAnimationIfNeeded(
     CompositorAnimationTimeline* timeline) {
   bool reattached = false;
   CompositorElementId element_id = GetScrollElementId();
-  DCHECK(element_id || (RuntimeEnabledFeatures::CompositeAfterPaintEnabled() ||
-                        !GetScrollableArea()->LayerForScrolling()));
-
   if (element_id != element_id_) {
     if (compositor_animation_ && timeline) {
       // Detach from old layer (if any).
@@ -254,11 +249,7 @@ bool ScrollAnimatorCompositorCoordinator::HasImplOnlyAnimationUpdate() const {
 
 CompositorElementId ScrollAnimatorCompositorCoordinator::GetScrollElementId()
     const {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return GetScrollableArea()->GetScrollElementId();
-
-  cc::Layer* layer = GetScrollableArea()->LayerForScrolling();
-  return layer ? layer->element_id() : CompositorElementId();
+  return GetScrollableArea()->GetScrollElementId();
 }
 
 void ScrollAnimatorCompositorCoordinator::UpdateImplOnlyCompositorAnimations() {

@@ -4401,6 +4401,50 @@ be describing additional metrics about the same event.
   </metric>
 </event>
 
+<event name="ChromeOSApp.InputEvent">
+  <owner>nancylingwang@chromium.org</owner>
+  <owner>dominickn@chromium.org</owner>
+  <summary>
+    Records each five minutes in Chrome OS to log the input events happened on
+    the app window. This is logged only when the user allows app syncing or
+    allows sync of everything, and the user does not set up a sync passphrase.
+  </summary>
+  <metric name="AppInputEventCount">
+    <summary>
+      The number of the input events happened in each five mintues.
+    </summary>
+  </metric>
+  <metric name="AppInputEventSource" enum="AppInputEventSource">
+    <summary>
+      An enum that records the input event source.
+    </summary>
+  </metric>
+  <metric name="AppType" enum="AppType">
+    <summary>
+      An enum that records the app type.
+    </summary>
+    <aggregation>
+      <history>
+        <statistics>
+          <enumeration/>
+        </statistics>
+      </history>
+    </aggregation>
+  </metric>
+  <metric name="UserDeviceMatrix" enum="UserDeviceMatrix">
+    <summary>
+      An enum that records the user type and the device type.
+    </summary>
+    <aggregation>
+      <history>
+        <statistics>
+          <enumeration/>
+        </statistics>
+      </history>
+    </aggregation>
+  </metric>
+</event>
+
 <event name="ChromeOSApp.InstalledApp">
   <owner>nancylingwang@chromium.org</owner>
   <owner>dominickn@chromium.org</owner>
@@ -8889,7 +8933,6 @@ be describing additional metrics about the same event.
 </event>
 
 <event name="IOS.IsDefaultBrowser">
-  <owner>javierrobles@chromium.org</owner>
   <owner>rkgibson@chromium.org</owner>
   <summary>
     As of iOS14, users will be able to set a default browser other than Safari.
@@ -15396,12 +15439,11 @@ be describing additional metrics about the same event.
 </event>
 
 <event name="PrefetchProxy" singular="True">
-  <owner>robertogden@chromium.org</owner>
+  <owner>curranmax@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+  <owner>spelchat@chromium.org</owner>
   <summary>
-    Metrics related to the privacy-preserving prefetch proxy. Recorded only for
-    Lite mode (AKA Data Saver) users.
+    Metrics related to the privacy-preserving prefetch proxy.
   </summary>
   <metric name="count_css_js_loaded_cache_before_fcp">
     <summary>
@@ -15474,9 +15516,9 @@ be describing additional metrics about the same event.
 </event>
 
 <event name="PrefetchProxy.AfterSRPClick" singular="True">
-  <owner>robertogden@chromium.org</owner>
+  <owner>curranmax@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+  <owner>spelchat@chromium.org</owner>
   <summary>
     Metrics related to the privacy-preserving prefetch proxy on the page load
     after the SRP. Recorded only for eligible users on the first mainframe
@@ -15513,9 +15555,9 @@ be describing additional metrics about the same event.
 </event>
 
 <event name="PrefetchProxy.PrefetchedResource">
-  <owner>robertogden@chromium.org</owner>
+  <owner>curranmax@chromium.org</owner>
   <owner>ryansturm@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+  <owner>spelchat@chromium.org</owner>
   <summary>
     Each event corresponds to a single resource, either mainframe or
     subresource, that was prefetched during an Isolated Prerender. Logged one or
@@ -18648,6 +18690,13 @@ be describing additional metrics about the same event.
       App backgrounding on Android to is considered to be the end of page visit
       as well, as the app could be evicted by Android anytime after that
       happens.
+    </summary>
+  </metric>
+  <metric name="UserInitiated" enum="Boolean">
+    <summary>
+      True if this page visit was initiated by user input. For renderer
+      navigations, only true if the code can trace back to the original input
+      event - there are cases where this known not to be possible.
     </summary>
   </metric>
 </event>

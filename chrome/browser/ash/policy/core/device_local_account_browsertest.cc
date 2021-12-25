@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "ash/components/login/auth/user_context.h"
 #include "ash/components/settings/timezone_settings.h"
 #include "ash/constants/ash_paths.h"
 #include "ash/constants/ash_switches.h"
@@ -113,7 +114,6 @@
 #include "chrome/grit/chromium_strings.h"
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/dbus/session_manager/fake_session_manager_client.h"
-#include "chromeos/login/auth/user_context.h"
 #include "chromeos/network/policy_certificate_provider.h"
 #include "components/crx_file/crx_verifier.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
@@ -659,8 +659,8 @@ class DeviceLocalAccountTest : public DevicePolicyCrosBrowserTest,
     auto* controller = ash::ExistingUserController::current_controller();
     ASSERT_TRUE(controller);
 
-    chromeos::UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                                       account_id_1_);
+    ash::UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+                                  account_id_1_);
     user_context.SetPublicSessionLocale(locale);
     user_context.SetPublicSessionInputMethod(input_method);
     controller->Login(user_context, ash::SigninSpecifics());
@@ -1481,8 +1481,8 @@ IN_PROC_BROWSER_TEST_F(DeviceLocalAccountTest, UserAvatarImage) {
   EXPECT_FALSE(user->HasDefaultImage());
   EXPECT_EQ(user_manager::User::USER_IMAGE_EXTERNAL, user->image_index());
   EXPECT_TRUE(ash::test::AreImagesEqual(policy_image, user->GetImage()));
-  const base::DictionaryValue* images_pref =
-      g_browser_process->local_state()->GetDictionary("user_image_info");
+  const base::DictionaryValue* images_pref = &base::Value::AsDictionaryValue(
+      *g_browser_process->local_state()->GetDictionary("user_image_info"));
   ASSERT_TRUE(images_pref);
   const base::DictionaryValue* image_properties;
   ASSERT_TRUE(images_pref->GetDictionaryWithoutPathExpansion(

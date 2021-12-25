@@ -481,6 +481,16 @@ void AbortOtpRequest(ScriptState* script_state) {
   webotp_service->Abort();
 }
 
+// Abort an ongoing FederatedCredential get() operation.
+void AbortFederatedCredentialRequest(ScriptState* script_state) {
+  if (!script_state->ContextIsValid())
+    return;
+
+  auto* fedcm_get_request =
+      CredentialManagerProxy::From(script_state)->FedCmGetRequest();
+  fedcm_get_request->CancelTokenRequest();
+}
+
 void OnStoreComplete(std::unique_ptr<ScopedPromiseResolver> scoped_resolver) {
   auto* resolver = scoped_resolver->Release();
   AssertSecurityRequirementsBeforeResponse(
@@ -844,22 +854,42 @@ void OnRequestIdToken(ScriptPromiseResolver* resolver,
           "one time."));
       return;
     }
-    case RequestIdTokenStatus::kErrorFedCmNotSupportedByProvider: {
-      resolver->Reject(MakeGarbageCollected<DOMException>(
-          DOMExceptionCode::kNotSupportedError,
-          "The indicated provider does not support FedCM."));
-      return;
-    }
-    case RequestIdTokenStatus::kErrorFetchingWellKnown: {
+    case RequestIdTokenStatus::kErrorFetchingWellKnownHttpNotFound: {
       resolver->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kNetworkError,
-          "Error fetching the provider's .well-known configuration."));
+          "The provider's .well-known configuration cannot be found."));
       return;
     }
-    case RequestIdTokenStatus::kErrorInvalidWellKnown: {
+    case RequestIdTokenStatus::kErrorFetchingWellKnownNoResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The response body is empty when fetching the provider's .well-known "
+          "configuration."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingWellKnownInvalidResponse: {
       resolver->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kInvalidStateError,
           "Provider's .well-known configuration is invalid."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingClientIdMetadataHttpNotFound: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The provider's client metadata endpoint cannot be found."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingClientIdMetadataNoResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The response body is empty when fetching the provider's client "
+          "metadata."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingClientIdMetadataInvalidResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kInvalidStateError,
+          "Provider's client metadata is invalid."));
       return;
     }
     case RequestIdTokenStatus::kErrorFetchingSignin: {
@@ -871,19 +901,55 @@ void OnRequestIdToken(ScriptPromiseResolver* resolver,
     case RequestIdTokenStatus::kErrorInvalidSigninResponse: {
       resolver->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kInvalidStateError,
-          "Provider's sign-in response is invalid"));
+          "Provider's sign-in response is invalid."));
       return;
     }
-    case RequestIdTokenStatus::kErrorInvalidAccountsResponse: {
+    case RequestIdTokenStatus::kErrorFetchingAccountsHttpNotFound: {
       resolver->Reject(MakeGarbageCollected<DOMException>(
-          DOMExceptionCode::kInvalidStateError,
-          "Provider's accounts response is invalid"));
+          DOMExceptionCode::kNetworkError,
+          "The provider's accounts list endpoint cannot be found."));
       return;
     }
-    case RequestIdTokenStatus::kErrorInvalidTokenResponse: {
+    case RequestIdTokenStatus::kErrorFetchingAccountsNoResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The response body is empty when fetching the provider's accounts "
+          "list."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingAccountsInvalidResponse: {
       resolver->Reject(MakeGarbageCollected<DOMException>(
           DOMExceptionCode::kInvalidStateError,
-          "Provider's token response is invalid"));
+          "Provider's accounts list is invalid."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingIdTokenHttpNotFound: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The provider's id token endpoint cannot be found."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingIdTokenNoResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kNetworkError,
+          "The response body is empty when fetching the provider's id token."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingIdTokenInvalidResponse: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kInvalidStateError,
+          "Provider's id token is invalid."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorFetchingIdTokenInvalidRequest: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kInvalidStateError,
+          "The id token fetching request is invalid."));
+      return;
+    }
+    case RequestIdTokenStatus::kErrorCanceled: {
+      resolver->Reject(MakeGarbageCollected<DOMException>(
+          DOMExceptionCode::kAbortError, "The request has been aborted."));
       return;
     }
     case RequestIdTokenStatus::kError: {
@@ -1151,9 +1217,18 @@ ScriptPromise CredentialsContainer::get(
           return promise;
         }
         DCHECK(options->federated()->hasPreferAutoSignIn());
+        if (options->hasSignal()) {
+          if (options->signal()->aborted()) {
+            resolver->Reject(MakeGarbageCollected<DOMException>(
+                DOMExceptionCode::kAbortError, "Request has been aborted."));
+            return promise;
+          }
+          options->signal()->AddAlgorithm(WTF::Bind(
+              &AbortFederatedCredentialRequest, WrapPersistent(script_state)));
+        }
         bool prefer_auto_sign_in = options->federated()->preferAutoSignIn();
         auto* fedcm_get_request =
-            CredentialManagerProxy::From(script_state)->FedCMGetRequest();
+            CredentialManagerProxy::From(script_state)->FedCmGetRequest();
         fedcm_get_request->RequestIdToken(
             provider_url, client_id, nonce,
             ToRequestMode(options->federated()->mode()), prefer_auto_sign_in,

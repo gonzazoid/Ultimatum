@@ -28,8 +28,12 @@ preprocessed_tests = [
   "print_preview_sidebar_test.ts",
   "print_preview_test_utils.ts",
   "restore_state_test.ts",
-  "user_manager_test.js",
+  "user_manager_test.ts",
 ]
+
+if (is_mac || is_win) {
+  preprocessed_tests += [ "system_dialog_browsertest.ts" ]
+}
 
 # Print Preview test files that do not require preprocessing. If adding
 # // <if expr to any file below, move it to the list above.
@@ -59,11 +63,10 @@ non_preprocessed_tests = [
   # "pdf_viewer_test.js",
   # "pdf_zoom_toolbar_test.js",
   "preview_area_test.ts",
-  "scaling_settings_interactive_test.js",
-  "scaling_settings_test.js",
-  "select_behavior_test.js",
-  "settings_select_test.js",
-  "system_dialog_browsertest.js",
+  "scaling_settings_interactive_test.ts",
+  "scaling_settings_test.ts",
+  "select_mixin_test.ts",
+  "settings_select_test.ts",
   "test_plugin_proxy.ts",
 ]
 

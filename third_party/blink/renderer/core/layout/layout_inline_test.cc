@@ -82,30 +82,42 @@ TEST_P(ParameterizedLayoutInlineTest, PhysicalLinesBoundingBox) {
 
 TEST_F(LayoutInlineTest, SimpleContinuation) {
   SetBodyInnerHTML(
-      "<span id='splitInline'><i id='before'></i><h1 id='blockChild'></h1><i "
-      "id='after'></i></span>");
+      "<span id='splitInline'>"
+      "<i id='before'></i>"
+      "<h1 id='blockChild'></h1>"
+      "<i id='after'></i>"
+      "</span>");
 
   auto* split_inline_part1 =
       To<LayoutInline>(GetLayoutObjectByElementId("splitInline"));
   ASSERT_TRUE(split_inline_part1);
   ASSERT_TRUE(split_inline_part1->FirstChild());
-  EXPECT_EQ(split_inline_part1->FirstChild(),
-            GetLayoutObjectByElementId("before"));
-  EXPECT_FALSE(split_inline_part1->FirstChild()->NextSibling());
+  auto* before = GetLayoutObjectByElementId("before");
+  EXPECT_EQ(split_inline_part1->FirstChild(), before);
+  auto* block_child = GetLayoutObjectByElementId("blockChild");
+  auto* after = GetLayoutObjectByElementId("after");
+  if (RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled()) {
+    EXPECT_EQ(split_inline_part1->FirstChild(), before);
+    LayoutObject* anonymous = block_child->Parent();
+    EXPECT_TRUE(anonymous->IsBlockInInline());
+    EXPECT_EQ(before->NextSibling(), anonymous);
+    EXPECT_EQ(anonymous->NextSibling(), after);
+    EXPECT_FALSE(after->NextSibling());
+  } else {
+    EXPECT_FALSE(split_inline_part1->FirstChild()->NextSibling());
+    auto* block = To<LayoutBlockFlow>(split_inline_part1->Continuation());
+    ASSERT_TRUE(block);
+    ASSERT_TRUE(block->FirstChild());
+    EXPECT_EQ(block->FirstChild(), block_child);
+    EXPECT_FALSE(block->FirstChild()->NextSibling());
 
-  auto* block = To<LayoutBlockFlow>(split_inline_part1->Continuation());
-  ASSERT_TRUE(block);
-  ASSERT_TRUE(block->FirstChild());
-  EXPECT_EQ(block->FirstChild(), GetLayoutObjectByElementId("blockChild"));
-  EXPECT_FALSE(block->FirstChild()->NextSibling());
-
-  auto* split_inline_part2 = To<LayoutInline>(block->Continuation());
-  ASSERT_TRUE(split_inline_part2);
-  ASSERT_TRUE(split_inline_part2->FirstChild());
-  EXPECT_EQ(split_inline_part2->FirstChild(),
-            GetLayoutObjectByElementId("after"));
-  EXPECT_FALSE(split_inline_part2->FirstChild()->NextSibling());
-  EXPECT_FALSE(split_inline_part2->Continuation());
+    auto* split_inline_part2 = To<LayoutInline>(block->Continuation());
+    ASSERT_TRUE(split_inline_part2);
+    ASSERT_TRUE(split_inline_part2->FirstChild());
+    EXPECT_EQ(split_inline_part2->FirstChild(), after);
+    EXPECT_FALSE(split_inline_part2->FirstChild()->NextSibling());
+    EXPECT_FALSE(split_inline_part2->Continuation());
+  }
 }
 
 TEST_F(LayoutInlineTest, BlockInInlineRemove) {
@@ -380,7 +392,7 @@ TEST_P(ParameterizedLayoutInlineTest, VisualRectInDocument) {
         font: 20px/20px Ahem;
       }
     </style>
-    <div>
+    <div style="width: 400px">
       <span>xx<br>
         <span id="target">yy
           <div style="width:111px;height:222px;background:yellow"></div>
@@ -391,9 +403,11 @@ TEST_P(ParameterizedLayoutInlineTest, VisualRectInDocument) {
   )HTML");
 
   auto* target = To<LayoutInline>(GetLayoutObjectByElementId("target"));
-  EXPECT_EQ(PhysicalRect(0, 20, 111, 222 + 20 * 2),
+  const int width =
+      RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled() ? 400 : 111;
+  EXPECT_EQ(PhysicalRect(0, 20, width, 222 + 20 * 2),
             target->VisualRectInDocument());
-  EXPECT_EQ(PhysicalRect(0, 20, 111, 222 + 20 * 2),
+  EXPECT_EQ(PhysicalRect(0, 20, width, 222 + 20 * 2),
             target->VisualRectInDocument(kUseGeometryMapper));
 }
 
@@ -417,7 +431,9 @@ TEST_P(ParameterizedLayoutInlineTest, VisualRectInDocumentVerticalRL) {
   )HTML");
 
   auto* target = To<LayoutInline>(GetLayoutObjectByElementId("target"));
-  PhysicalRect expected(400 - 111 - 20 * 3, 0, 111 + 20 * 2, 222);
+  const int height =
+      RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled() ? 400 : 222;
+  PhysicalRect expected(400 - 111 - 20 * 3, 0, 111 + 20 * 2, height);
   EXPECT_EQ(expected, target->VisualRectInDocument());
   EXPECT_EQ(expected, target->VisualRectInDocument(kUseGeometryMapper));
 }
@@ -622,6 +638,7 @@ TEST_P(ParameterizedLayoutInlineTest,
       body {
         margin: 30px 50px;
         font: 20px/20px Ahem;
+        width: 400px;
       }
     </style>
     <br><br>
@@ -654,7 +671,9 @@ TEST_P(ParameterizedLayoutInlineTest,
                 ->AbsoluteBoundingBoxRectHandlingEmptyInline());
   // This rect covers the overflowing images and continuations.
   // 168 = (30 + 4) * 2 + 100. 4 is the descent of the font.
-  EXPECT_EQ(PhysicalRect(50, 170, 100, 168),
+  const int width =
+      RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled() ? 400 : 100;
+  EXPECT_EQ(PhysicalRect(50, 170, width, 168),
             GetLayoutObjectByElementId("target6")
                 ->AbsoluteBoundingBoxRectHandlingEmptyInline());
 }
@@ -700,7 +719,9 @@ TEST_P(ParameterizedLayoutInlineTest,
             GetLayoutObjectByElementId("target5")
                 ->AbsoluteBoundingBoxRectHandlingEmptyInline());
   // This rect covers the overflowing images and continuations.
-  EXPECT_EQ(PhysicalRect(390, 70, 160, 100),
+  const int height =
+      RuntimeEnabledFeatures::LayoutNGBlockInInlineEnabled() ? 400 : 100;
+  EXPECT_EQ(PhysicalRect(390, 70, 160, height),
             GetLayoutObjectByElementId("target6")
                 ->AbsoluteBoundingBoxRectHandlingEmptyInline());
 }

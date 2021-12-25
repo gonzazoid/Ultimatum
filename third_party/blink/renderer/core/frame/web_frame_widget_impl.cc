@@ -158,11 +158,10 @@ const float kIdealPaddingRatio = 0.3f;
 
 // Returns a rect which is offset and scaled accordingly to |base_rect|'s
 // location and size.
-FloatRect NormalizeRect(const gfx::Rect& to_normalize,
-                        const gfx::Rect& base_rect) {
-  FloatRect result(to_normalize);
-  result.set_origin(
-      gfx::PointF(to_normalize.origin() - base_rect.OffsetFromOrigin()));
+gfx::RectF NormalizeRect(const gfx::Rect& to_normalize,
+                         const gfx::Rect& base_rect) {
+  gfx::RectF result(to_normalize);
+  result.Offset(base_rect.OffsetFromOrigin());
   result.Scale(1.0 / base_rect.width(), 1.0 / base_rect.height());
   return result;
 }
@@ -1236,12 +1235,6 @@ void WebFrameWidgetImpl::SetPrefersReducedMotion(bool prefers_reduced_motion) {
       prefers_reduced_motion);
 }
 
-void WebFrameWidgetImpl::RegisterSelection(cc::LayerSelection selection) {
-  if (!View()->does_composite())
-    return;
-  widget_base_->LayerTreeHost()->RegisterSelection(selection);
-}
-
 void WebFrameWidgetImpl::StartPageScaleAnimation(const gfx::Point& destination,
                                                  bool use_anchor,
                                                  float new_page_scale,
@@ -1711,6 +1704,12 @@ void WebFrameWidgetImpl::PointerLockMouseEvent(
     case WebInputEvent::Type::kMouseMove:
       event_type = event_type_names::kMousemove;
       break;
+    case WebInputEvent::Type::kMouseEnter:
+    case WebInputEvent::Type::kMouseLeave:
+    case WebInputEvent::Type::kContextMenu:
+      // These should not be normally dispatched but may be due to timing
+      // because pointer lost messaging happens on separate mojo channel.
+      return;
     default:
       NOTREACHED() << input_event.GetType();
   }
@@ -2068,12 +2067,6 @@ void WebFrameWidgetImpl::BeginMainFrame(base::TimeTicks last_frame_time) {
 void WebFrameWidgetImpl::BeginCommitCompositorFrame() {
   commit_compositor_frame_start_time_.emplace(base::TimeTicks::Now());
   probe::LayerTreePainted(LocalRootImpl()->GetFrame());
-}
-
-void WebFrameWidgetImpl::EndCommitCompositorFrame(
-    base::TimeTicks commit_start_time,
-    base::TimeTicks commit_finish_time) {
-  DCHECK(commit_compositor_frame_start_time_.has_value());
   if (ForTopMostMainFrame()) {
     Document* doc = local_root_->GetFrame()->GetDocument();
     if (doc->GetSettings()->GetViewportMetaEnabled() &&
@@ -2094,7 +2087,12 @@ void WebFrameWidgetImpl::EndCommitCompositorFrame(
       base::debug::DumpWithoutCrashing();
     }
   }
+}
 
+void WebFrameWidgetImpl::EndCommitCompositorFrame(
+    base::TimeTicks commit_start_time,
+    base::TimeTicks commit_finish_time) {
+  DCHECK(commit_compositor_frame_start_time_.has_value());
   LocalRootImpl()
       ->GetFrame()
       ->View()
@@ -3689,27 +3687,37 @@ void WebFrameWidgetImpl::SelectAroundCaret(
     SelectAroundCaretCallback callback) {
   auto* focused_frame = FocusedWebLocalFrameInWidget();
   if (!focused_frame) {
-    std::move(callback).Run(false, 0, 0);
+    std::move(callback).Run(std::move(nullptr));
     return;
   }
 
+  // TODO(crbug.com/1278134): Calculate extended adjustments.
   bool did_select = false;
-  int start_adjust = 0;
-  int end_adjust = 0;
+  int extended_start_adjust = 0;
+  int extended_end_adjust = 0;
   blink::WebRange initial_range = focused_frame->SelectionRange();
   SetHandlingInputEvent(true);
   if (!initial_range.IsNull()) {
     did_select = focused_frame->SelectAroundCaret(
         granularity, should_show_handle, should_show_context_menu);
   }
-  if (did_select) {
-    blink::WebRange adjusted_range = focused_frame->SelectionRange();
-    DCHECK(!adjusted_range.IsNull());
-    start_adjust = adjusted_range.StartOffset() - initial_range.StartOffset();
-    end_adjust = adjusted_range.EndOffset() - initial_range.EndOffset();
+
+  if (!did_select) {
+    std::move(callback).Run(std::move(nullptr));
+    return;
   }
+
+  blink::WebRange adjusted_range = focused_frame->SelectionRange();
+  DCHECK(!adjusted_range.IsNull());
+  extended_start_adjust =
+      adjusted_range.StartOffset() - initial_range.StartOffset();
+  extended_end_adjust = adjusted_range.EndOffset() - initial_range.EndOffset();
+
   SetHandlingInputEvent(false);
-  std::move(callback).Run(did_select, start_adjust, end_adjust);
+  auto result = mojom::blink::SelectAroundCaretResult::New();
+  result->extended_start_adjust = extended_start_adjust;
+  result->extended_end_adjust = extended_end_adjust;
+  std::move(callback).Run(std::move(result));
 }
 #endif
 
@@ -4327,10 +4335,10 @@ WebFrameWidgetImpl::GetScrollParamsForFocusedEditableElement(
   mojom::blink::ScrollIntoViewParamsPtr params =
       ScrollAlignment::CreateScrollIntoViewParams();
   params->zoom_into_rect = View()->ShouldZoomToLegibleScale(element);
-  params->relative_element_bounds = ToGfxRectF(NormalizeRect(
-      IntersectRects(absolute_element_bounds, maximal_rect), maximal_rect));
-  params->relative_caret_bounds = ToGfxRectF(NormalizeRect(
-      IntersectRects(absolute_caret_bounds, maximal_rect), maximal_rect));
+  params->relative_element_bounds = NormalizeRect(
+      IntersectRects(absolute_element_bounds, maximal_rect), maximal_rect);
+  params->relative_caret_bounds = NormalizeRect(
+      IntersectRects(absolute_caret_bounds, maximal_rect), maximal_rect);
   params->behavior = mojom::blink::ScrollBehavior::kInstant;
   out_rect_to_scroll = PhysicalRect(maximal_rect);
   return params;

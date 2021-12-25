@@ -1985,7 +1985,7 @@ PrefService* GetPrimaryUserPrefService() {
 // given list of |desks_names|.
 void VerifyDesksRestoreData(PrefService* user_prefs,
                             const std::vector<std::string>& desks_names) {
-  const base::ListValue* desks_restore_names =
+  const base::Value* desks_restore_names =
       user_prefs->GetList(prefs::kDesksNamesList);
   ASSERT_EQ(desks_names.size(), desks_restore_names->GetList().size());
 
@@ -4973,31 +4973,6 @@ TEST_F(DesksTest, NewDeskButton) {
   CloseDeskFromMiniView(desks_bar_view->mini_views()[0], event_generator);
   EXPECT_TRUE(controller->CanCreateDesks());
   EXPECT_TRUE(new_desk_button->GetEnabled());
-}
-
-TEST_F(DesksTest, AddRemoveSupportedWindows) {
-  auto* controller = DesksController::Get();
-
-  // Create a desk other than the default initial desk.
-  NewDesk();
-
-  Desk* desk_1 = controller->desks()[0].get();
-
-  // Create 3 supported windows on desk_1.
-  auto win0 = CreateAppWindow(gfx::Rect(0, 0, 250, 100));
-  auto win1 = CreateAppWindow(gfx::Rect(50, 50, 200, 200));
-  auto win2 = CreateAppWindow(gfx::Rect(50, 50, 200, 200));
-
-  // Expect `num_supported_windows_` to be 3.
-  EXPECT_EQ(3, desk_1->num_supported_windows());
-
-  // Close the supported windows.
-  win0.reset();
-  win1.reset();
-  win2.reset();
-
-  // Expect `num_supported_windows_` to be 0.
-  EXPECT_EQ(0, desk_1->num_supported_windows());
 }
 
 TEST_F(DesksTest, ZeroStateDeskButtonText) {

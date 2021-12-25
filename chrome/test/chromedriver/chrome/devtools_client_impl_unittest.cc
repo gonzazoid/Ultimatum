@@ -173,11 +173,11 @@ TEST_F(DevToolsClientImplTest, SendCommandAndGetResult) {
   ASSERT_EQ(kOk, client.ConnectIfNecessary().code());
   base::DictionaryValue params;
   params.SetInteger("param", 1);
-  std::unique_ptr<base::DictionaryValue> result;
+  base::Value result;
   Status status = client.SendCommandAndGetResult("method", params, &result);
   ASSERT_EQ(kOk, status.code());
   std::string json;
-  base::JSONWriter::Write(*result, &json);
+  base::JSONWriter::Write(result, &json);
   ASSERT_STREQ("{\"param\":1}", json.c_str());
 }
 
@@ -543,12 +543,12 @@ TEST_F(DevToolsClientImplTest, SendCommandEventBeforeResponse) {
   client.SetParserFuncForTesting(
       base::BindRepeating(&ReturnEventThenResponse, &first));
   base::DictionaryValue params;
-  std::unique_ptr<base::DictionaryValue> result;
+  base::Value result;
   ASSERT_TRUE(client.SendCommandAndGetResult("method", params, &result).IsOk());
-  ASSERT_TRUE(result);
-  int key;
-  ASSERT_TRUE(result->GetInteger("key", &key));
-  ASSERT_EQ(2, key);
+  ASSERT_TRUE(result.is_dict());
+  absl::optional<int> key = result.FindIntKey("key");
+  ASSERT_TRUE(key);
+  ASSERT_EQ(2, key.value());
 }
 
 TEST(ParseInspectorMessage, NonJson) {
@@ -690,6 +690,22 @@ TEST(ParseInspectorError, CdpNotImplementedError) {
   ASSERT_EQ("unknown command: SOME MESSAGE", status.message());
 }
 
+TEST(ParseInspectorError, NoSuchFrameError) {
+  // As the server returns the generic error code: SERVER_ERROR = -32000
+  // we have to rely on the error message content.
+  // A real scenario where this error message occurs is WPT test:
+  // 'cookies/samesite/iframe-reload.https.html'
+  // The error is thrown by InspectorDOMAgent::getFrameOwner
+  // (inspector_dom_agent.cc).
+  const std::string error(
+      "{\"code\":-32000,"
+      "\"message\":\"Frame with the given id was not found.\"}");
+  Status status = internal::ParseInspectorError(error);
+  ASSERT_EQ(kNoSuchFrame, status.code());
+  ASSERT_EQ("no such frame: Frame with the given id was not found.",
+            status.message());
+}
+
 TEST_F(DevToolsClientImplTest, HandleEventsUntil) {
   MockListener listener;
   SyncWebSocketFactory factory =
@@ -763,12 +779,12 @@ TEST_F(DevToolsClientImplTest, NestedCommandsWithOutOfOrderResults) {
       base::BindRepeating(&ReturnOutOfOrderResponses, &recurse_count, &client));
   base::DictionaryValue params;
   params.SetInteger("param", 1);
-  std::unique_ptr<base::DictionaryValue> result;
+  base::Value result;
   ASSERT_TRUE(client.SendCommandAndGetResult("method", params, &result).IsOk());
-  ASSERT_TRUE(result);
-  int key;
-  ASSERT_TRUE(result->GetInteger("key", &key));
-  ASSERT_EQ(2, key);
+  ASSERT_TRUE(result.is_dict());
+  absl::optional<int> key = result.FindIntKey("key");
+  ASSERT_TRUE(key);
+  ASSERT_EQ(2, key.value());
 }
 
 namespace {

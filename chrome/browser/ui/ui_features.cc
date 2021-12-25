@@ -31,7 +31,7 @@ const base::Feature kChromeTipsInMainMenuNewBadge{
 const base::Feature kChromeWhatsNewUI {
   "ChromeWhatsNewUI",
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING) && !defined(ANDROID) && \
-    !BUILDFLAG(IS_CHROMEOS_LACROS)
+    !BUILDFLAG(IS_CHROMEOS_LACROS) && !BUILDFLAG(IS_CHROMEOS_ASH)
       base::FEATURE_ENABLED_BY_DEFAULT
 #else
       base::FEATURE_DISABLED_BY_DEFAULT
@@ -47,6 +47,10 @@ const base::FeatureParam<bool> kChromeWhatsNewUIFeedbackButton{
 const base::Feature kChromeWhatsNewInMainMenuNewBadge{
     "ChromeWhatsNewInMainMenuNewBadge", base::FEATURE_DISABLED_BY_DEFAULT};
 #endif
+
+// Whether to use download bubble instead of download shelf.
+const base::Feature kDownloadBubble{"DownloadBubble",
+                                    base::FEATURE_DISABLED_BY_DEFAULT};
 
 #if !defined(ANDROID)
 // Enables "Access Code Cast" UI.
@@ -175,6 +179,11 @@ const base::FeatureParam<bool> kTabSearchSearchIgnoreLocation{
 
 const base::Feature kTabSearchMediaTabs{"TabSearchMediaTabs",
                                         base::FEATURE_DISABLED_BY_DEFAULT};
+
+// If this feature parameter is enabled, show media tabs in both "Audio & Video"
+// section and "Open Tabs" section.
+const char kTabSearchAlsoShowMediaTabsinOpenTabsSectionParameterName[] =
+    "Also show Media Tabs in Open Tabs Section";
 
 const base::FeatureParam<int> kTabSearchSearchDistance{
     &kTabSearchFuzzySearch, "TabSearchSearchDistance", 200};

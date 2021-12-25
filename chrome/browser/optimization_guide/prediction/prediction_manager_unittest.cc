@@ -69,8 +69,8 @@ proto::PredictionModel CreatePredictionModel(
   model_info->add_supported_host_model_features("host_feat1");
   model_info->set_optimization_target(
       proto::OPTIMIZATION_TARGET_PAINFUL_PAGE_LOAD);
-  model_info->add_supported_model_types(
-      proto::ModelType::MODEL_TYPE_DECISION_TREE);
+  model_info->add_supported_model_engine_versions(
+      proto::ModelEngineVersion::MODEL_ENGINE_VERSION_DECISION_TREE);
   if (output_model_as_download_url) {
     prediction_model.mutable_model()->set_download_url(
         "https://example.com/model");
@@ -255,8 +255,9 @@ class TestPredictionModelFetcher : public PredictionModelFetcherImpl {
   bool ValidateModelsInfoForFetch(
       const std::vector<proto::ModelInfo>& models_request_info) {
     for (const auto& model_info : models_request_info) {
-      if (model_info.supported_model_types_size() == 0 ||
-          !proto::ModelType_IsValid(model_info.supported_model_types(0))) {
+      if (model_info.supported_model_engine_versions_size() == 0 ||
+          !proto::ModelEngineVersion_IsValid(
+              model_info.supported_model_engine_versions(0))) {
         return false;
       }
       if (!model_info.has_optimization_target() ||
@@ -431,7 +432,7 @@ class TestOptimizationGuideStore : public OptimizationGuideStore {
 class TestPredictionManager : public PredictionManager {
  public:
   TestPredictionManager(
-      OptimizationGuideStore* model_and_features_store,
+      base::WeakPtr<OptimizationGuideStore> model_and_features_store,
       scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
       PrefService* pref_service,
       Profile* profile)
@@ -507,7 +508,7 @@ class PredictionManagerTestBase : public ProtoDatabaseProviderTestBase {
 
     model_and_features_store_ = CreateModelAndHostModelFeaturesStore();
     prediction_manager_ = std::make_unique<TestPredictionManager>(
-        model_and_features_store_.get(), url_loader_factory_,
+        model_and_features_store_->AsWeakPtr(), url_loader_factory_,
         pref_service_.get(), &testing_profile_);
     prediction_manager_->SetClockForTesting(task_environment_.GetMockClock());
   }
@@ -563,8 +564,10 @@ class PredictionManagerTestBase : public ProtoDatabaseProviderTestBase {
   }
 
   TestOptimizationGuideStore* models_and_features_store() const {
-    return static_cast<TestOptimizationGuideStore*>(
-        prediction_manager()->model_and_features_store());
+    base::WeakPtr<OptimizationGuideStore> store =
+        prediction_manager()->model_and_features_store();
+    DCHECK(store);
+    return static_cast<TestOptimizationGuideStore*>(store.get());
   }
 
   base::FilePath temp_dir() const { return temp_dir_.GetPath(); }

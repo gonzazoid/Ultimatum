@@ -42,7 +42,6 @@ namespace blink {
 class LayoutQuote;
 class LocalFrameView;
 class NamedPagesMapper;
-class PaintLayerCompositor;
 class ViewFragmentationContext;
 
 // LayoutView is the root of the layout tree and the Document's LayoutObject.
@@ -61,17 +60,13 @@ class ViewFragmentationContext;
 // Because there is one LayoutView per rooted layout tree (or Frame), this class
 // is used to add members shared by this tree (e.g. m_layoutState or
 // m_layoutQuoteHead).
-class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
+class CORE_EXPORT LayoutView : public LayoutBlockFlow {
  public:
-  explicit LayoutView(Document*);
+  explicit LayoutView(ContainerNode* document);
   ~LayoutView() override;
   void Trace(Visitor*) const override;
 
   void WillBeDestroyed() override;
-
-  // Called when the Document is shutdown, to have the compositor clean up
-  // during frame detach, while pointers remain valid.
-  void CleanUpCompositor();
 
   // hitTest() will update layout, style and compositing first while
   // hitTestNoLifecycleUpdate() does not.
@@ -229,8 +224,6 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
     return named_pages_mapper_.get();
   }
 
-  PaintLayerCompositor* Compositor();
-
   PhysicalRect DocumentRect() const;
 
   IntervalArena* GetIntervalArena();
@@ -293,7 +286,7 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
 
   // Returns the viewport size in (CSS pixels) that vh and vw units are
   // calculated from.
-  FloatSize ViewportSizeForViewportUnits() const;
+  gfx::SizeF ViewportSizeForViewportUnits() const;
 
   void PushLayoutState(LayoutState& layout_state) {
     NOT_DESTROYED();
@@ -321,7 +314,7 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
   Vector<gfx::Rect> GetTickmarks() const;
   bool HasTickmarks() const;
 
-  RecalcLayoutOverflowResult RecalcLayoutOverflow() final;
+  RecalcLayoutOverflowResult RecalcLayoutOverflow() override;
 
   // The visible background area, in the local coordinates. The view background
   // will be painted in this rect. It's also the positioning area of fixed-
@@ -349,11 +342,17 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
                           TransformState&,
                           MapCoordinatesFlags) const override;
 
-  bool ShouldUsePrintingLayout() const;
+  static bool ShouldUsePrintingLayout(const Document&);
+  bool ShouldUsePrintingLayout() const {
+    NOT_DESTROYED();
+    return ShouldUsePrintingLayout(GetDocument());
+  }
 
   void MapLocalToAncestor(const LayoutBoxModelObject* ancestor,
                           TransformState&,
                           MapCoordinatesFlags) const override;
+
+  LogicalSize InitialContainingBlockSize() const;
 
  private:
   bool CanHaveChildren() const override;
@@ -392,7 +391,6 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
 
   Member<ViewFragmentationContext> fragmentation_context_;
   std::unique_ptr<NamedPagesMapper> named_pages_mapper_;
-  Member<PaintLayerCompositor> compositor_;
   scoped_refptr<IntervalArena> interval_arena_;
 
   Member<LayoutQuote> layout_quote_head_;

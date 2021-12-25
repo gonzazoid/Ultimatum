@@ -100,7 +100,6 @@
 #include "third_party/blink/renderer/core/paint/background_image_geometry.h"
 #include "third_party/blink/renderer/core/paint/box_paint_invalidator.h"
 #include "third_party/blink/renderer/core/paint/box_painter.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/object_paint_invalidator.h"
 #include "third_party/blink/renderer/core/paint/outline_painter.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
@@ -1225,10 +1224,10 @@ void LayoutBox::AbsoluteQuads(Vector<FloatQuad>& quads,
   quads.push_back(LocalRectToAbsoluteQuad(PhysicalBorderBoxRect(), mode));
 }
 
-FloatRect LayoutBox::LocalBoundingBoxRectForAccessibility() const {
+gfx::RectF LayoutBox::LocalBoundingBoxRectForAccessibility() const {
   NOT_DESTROYED();
-  return FloatRect(0, 0, frame_rect_.Width().ToFloat(),
-                   frame_rect_.Height().ToFloat());
+  return gfx::RectF(0, 0, frame_rect_.Width().ToFloat(),
+                    frame_rect_.Height().ToFloat());
 }
 
 void LayoutBox::UpdateAfterLayout() {
@@ -1966,9 +1965,7 @@ PhysicalRect LayoutBox::ClippingRect(const PhysicalOffset& location) const {
 
 void LayoutBox::ApplyVisibleOverflowToClipRect(PhysicalRect& clip_rect) const {
   const OverflowClipAxes overflow_clip = GetOverflowClipAxes();
-  if (overflow_clip == kOverflowClipBothAxis) {
-    clip_rect.Inflate(StyleRef().OverflowClipMargin());
-  } else {
+  if (overflow_clip != kOverflowClipBothAxis) {
     const LayoutRect infinite_rect(LayoutRect::InfiniteIntRect());
     if ((overflow_clip & kOverflowClipX) == kNoOverflowClip) {
       clip_rect.offset.left = infinite_rect.X();
@@ -1978,6 +1975,8 @@ void LayoutBox::ApplyVisibleOverflowToClipRect(PhysicalRect& clip_rect) const {
       clip_rect.offset.top = infinite_rect.Y();
       clip_rect.size.height = infinite_rect.Height();
     }
+  } else if (ShouldApplyOverflowClipMargin()) {
+    clip_rect.Inflate(StyleRef().OverflowClipMargin());
   }
 }
 
@@ -2149,7 +2148,7 @@ bool LayoutBox::ApplyBoxClips(
     rect.Intersect(clip_rect);
     does_intersect = !rect.IsEmpty();
   }
-  transform_state.SetQuad(FloatQuad(FloatRect(rect)));
+  transform_state.SetQuad(FloatQuad(gfx::RectF(rect)));
 
   return does_intersect;
 }
@@ -3360,8 +3359,15 @@ void LayoutBox::AddLayoutResult(scoped_refptr<const NGLayoutResult> result,
   NOT_DESTROYED();
   DCHECK_EQ(result->Status(), NGLayoutResult::kSuccess);
   if (index != WTF::kNotFound && layout_results_.size() > index) {
-    if (layout_results_.size() > index + 1)
+    if (layout_results_.size() > index + 1) {
+      // Before forgetting any old fragments and their items, we need to clear
+      // associations.
+      if (To<NGPhysicalBoxFragment>(result->PhysicalFragment())
+              .IsInlineFormattingContext())
+        NGFragmentItems::ClearAssociatedFragments(this);
+
       ShrinkLayoutResults(index + 1);
+    }
     ReplaceLayoutResult(std::move(result), index);
     return;
   }
@@ -3453,6 +3459,11 @@ void LayoutBox::ClearLayoutResults() {
     InvalidateItems(*measure_result_);
   measure_result_ = nullptr;
 
+  if (!layout_results_.IsEmpty() &&
+      To<NGPhysicalBoxFragment>(layout_results_[0]->PhysicalFragment())
+          .IsInlineFormattingContext())
+    NGFragmentItems::ClearAssociatedFragments(this);
+
   ShrinkLayoutResults(0);
 }
 
@@ -3462,12 +3473,6 @@ void LayoutBox::ShrinkLayoutResults(wtf_size_t results_to_keep) {
   // Invalidate if inline |DisplayItemClient|s will be destroyed.
   for (wtf_size_t i = results_to_keep; i < layout_results_.size(); i++)
     InvalidateItems(*layout_results_[i]);
-  if (results_to_keep == 0 && !layout_results_.IsEmpty()) {
-    if (To<NGPhysicalBoxFragment>(layout_results_[0]->PhysicalFragment())
-            .HasItems()) {
-      NGFragmentItems::ClearAssociatedFragments(this);
-    }
-  }
   // |layout_results_| is particularly critical when side effects are disabled.
   DCHECK(!NGDisableSideEffectsScope::IsDisabled());
   layout_results_.Shrink(results_to_keep);
@@ -4160,7 +4165,7 @@ void LayoutBox::InflateVisualRectForFilter(
   PhysicalRect rect = PhysicalRect::EnclosingRect(
       transform_state.LastPlanarQuad().BoundingBox());
   transform_state.SetQuad(
-      FloatQuad(FloatRect(Layer()->MapRectForFilter(rect))));
+      FloatQuad(gfx::RectF(Layer()->MapRectForFilter(rect))));
 }
 
 static bool ShouldRecalculateMinMaxWidthsAffectedByAncestor(
@@ -7710,19 +7715,17 @@ LayoutRect LayoutBox::LayoutOverflowRectForPropagation(
   LayoutRect rect = BorderBoxRect();
 
   if (!ShouldApplyLayoutContainment() &&
-      (!ShouldClipOverflowAlongBothAxis() ||
-       StyleRef().OverflowClipMargin() != LayoutUnit())) {
+      (!ShouldClipOverflowAlongBothAxis() || ShouldApplyOverflowClipMargin())) {
     LayoutRect overflow = LayoutOverflowRect();
     if (HasNonVisibleOverflow()) {
       const OverflowClipAxes overflow_clip_axes = GetOverflowClipAxes();
-      const LayoutUnit overflow_clip_margin = StyleRef().OverflowClipMargin();
       LayoutRect clip_rect = rect;
-      if (overflow_clip_margin != LayoutUnit()) {
-        // overflow_clip_margin should only be set if 'overflow' is 'clip' along
-        // both axis.
+      if (ShouldApplyOverflowClipMargin()) {
+        // We should apply overflow clip margin only if we clip overflow on both
+        // axes.
         DCHECK_EQ(overflow_clip_axes, kOverflowClipBothAxis);
         clip_rect.Contract(BorderBoxOutsets());
-        clip_rect.Inflate(overflow_clip_margin);
+        clip_rect.Inflate(StyleRef().OverflowClipMargin());
         overflow.Intersect(clip_rect);
       } else {
         ApplyOverflowClip(overflow_clip_axes, clip_rect, overflow);
@@ -7776,16 +7779,15 @@ LayoutRect LayoutBox::VisualOverflowRect() const {
     return self_visual_overflow_rect;
 
   const OverflowClipAxes overflow_clip_axes = GetOverflowClipAxes();
-  const LayoutUnit overflow_clip_margin = StyleRef().OverflowClipMargin();
-  if (overflow_clip_margin != LayoutUnit()) {
-    // overflow_clip_margin should only be set if 'overflow' is 'clip' along
-    // both axis.
+  if (ShouldApplyOverflowClipMargin()) {
+    // We should apply overflow clip margin only if we clip overflow on both
+    // axis.
     DCHECK_EQ(overflow_clip_axes, kOverflowClipBothAxis);
     const LayoutRect& contents_visual_overflow_rect =
         overflow_->visual_overflow->ContentsVisualOverflowRect();
     if (!contents_visual_overflow_rect.IsEmpty()) {
       LayoutRect result = BorderBoxRect();
-      result.Inflate(overflow_clip_margin);
+      result.Inflate(StyleRef().OverflowClipMargin());
       result.Intersect(contents_visual_overflow_rect);
       result.Unite(self_visual_overflow_rect);
       return result;

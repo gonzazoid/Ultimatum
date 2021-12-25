@@ -8,7 +8,9 @@
 #include <string>
 
 #include "ash/components/phonehub/camera_roll_manager.h"
+#include "ash/components/phonehub/util/histogram_util.h"
 #include "ash/public/cpp/new_window_delegate.h"
+#include "ash/system/phonehub/phone_hub_metrics.h"
 #include "ash/system/phonehub/phone_hub_view_ids.h"
 #include "chromeos/components/multidevice/logging/logging.h"
 #include "ui/base/metadata/metadata_impl_macros.h"
@@ -25,10 +27,14 @@ CameraRollOptInView::CameraRollOptInView(
 CameraRollOptInView::~CameraRollOptInView() = default;
 
 void CameraRollOptInView::SetUpButtonPressed() {
+  LogCameraRollOptInEvent(phone_hub_metrics::InterstitialScreenEvent::kConfirm);
   camera_roll_manager_->EnableCameraRollFeatureInSystemSetting();
+  phonehub::util::LogCameraRollFeatureOptInEntryPoint(
+      phonehub::util::CameraRollOptInEntryPoint::kOnboardingDialog);
 }
 
 void CameraRollOptInView::DismissButtonPressed() {
+  LogCameraRollOptInEvent(phone_hub_metrics::InterstitialScreenEvent::kDismiss);
   camera_roll_manager_->OnCameraRollOnboardingUiDismissed();
 }
 

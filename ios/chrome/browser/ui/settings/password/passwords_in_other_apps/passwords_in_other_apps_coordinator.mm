@@ -34,6 +34,7 @@
   self = [super initWithBaseViewController:navigationController
                                    browser:browser];
   if (self) {
+    DCHECK(browser);
     DCHECK(navigationController);
     _baseNavigationController = navigationController;
   }

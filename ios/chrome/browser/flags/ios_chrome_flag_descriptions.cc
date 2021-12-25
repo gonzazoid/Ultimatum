@@ -106,6 +106,11 @@ const char kDefaultBrowserFullscreenPromoExperimentDescription[] =
     "When enabled, will show a modified default browser fullscreen modal promo "
     "UI.";
 
+const char kAddSettingForDefaultPageModeName[] = "Let user choose default mode";
+const char kAddSettingForDefaultPageModeDescription[] =
+    "When enabled, the user can choose if they want the page in Desktop or "
+    "Mobile mode.";
+
 const char kDefaultWebViewContextMenuName[] =
     "Use the default WebKit context menus";
 const char kDefaultWebViewContextMenuDescription[] =
@@ -219,10 +224,10 @@ const char kEnableShortenedPasswordAutoFillInstructionDescription[] =
     "When enabled, the instructions to turn on Password AutoFill will have "
     "shorter steps and come with a button that links the user to iOS Settings.";
 
-const char kEnableWebChannelsName[] = "Enable Web Channels";
+const char kEnableWebChannelsName[] = "Enable WebChannels";
 const char kEnableWebChannelsDescription[] =
     "Enable folowing content from web and display Following feed on NTP based "
-    "on websites that users followed.";
+    "on web channels that users followed.";
 
 const char kExpandedTabStripName[] = "Enable expanded tabstrip";
 const char kExpandedTabStripDescription[] =
@@ -318,6 +323,12 @@ const char kLogBreadcrumbsName[] = "Log Breadcrumb Events";
 const char kLogBreadcrumbsDescription[] =
     "When enabled, breadcrumb events will be logged.";
 
+const char kMediaPermissionsControlName[] =
+    "Camera and Microphone Access Permissions Control";
+const char kMediaPermissionsControlDescription[] =
+    "Enables user control for camera and/or microphone access for a specific "
+    "site through site settings during its lifespan.";
+
 const char kMetrickitCrashReportName[] = "Metrickit crash reports";
 const char kMetrickitCrashReportDescription[] =
     "Enables sending Metrickit crash reports";
@@ -412,6 +423,11 @@ const char kSafeBrowsingRealTimeLookupDescription[] =
     "When enabled, navigation URLs are checked using real-time queries to Safe "
     "Browsing servers, subject to an opt-in preference.";
 
+const char kSaveSessionTabsToSeparateFilesName[] =
+    "Enable save tabs to separate files";
+const char kSaveSessionTabsToSeparateFilesDescription[] =
+    "When enabled, each Tab is saved in a separate file.";
+
 const char kScreenTimeIntegrationName[] = "Enables ScreenTime Integration";
 const char kScreenTimeIntegrationDescription[] =
     "Enables integration with ScreenTime in iOS 14.0 and above.";
@@ -491,11 +507,6 @@ const char kStartSurfaceDescription[] =
     "Enable showing the Start Surface when launching Chrome via clicking the "
     "icon or the app switcher.";
 
-const char kTabsBulkActionsName[] = "Enable Tab Grid Bulk Actions";
-const char kTabsBulkActionsDescription[] =
-    "Enables the selection mode in the Tab grid where users can perform "
-    "actions on multiple tabs at once for iOS 13 and above.";
-
 const char kTabsSearchName[] = "Enable Tabs Search";
 const char kTabsSearchDescription[] =
     "Enables the search mode in the Tab grid where users can search open tabs "
@@ -522,6 +533,10 @@ const char kUseLensToSearchForImageName[] =
 const char kUseLensToSearchForImageDescription[] =
     "When enabled, use Lens to search for images from the long press context "
     "menu when Google is the selected search engine.";
+
+const char kUseSFSymbolsSamplesName[] = "Replace Image by SFSymbols";
+const char kUseSFSymbolsSamplesDescription[] =
+    "When enabled, some images (toolbar...) are replaced by SFSymbols";
 
 const char kWaitThresholdMillisecondsForCapabilitiesApiName[] =
     "Maximum wait time (in seconds) for a response from the Account "

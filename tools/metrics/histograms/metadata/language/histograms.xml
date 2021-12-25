@@ -90,6 +90,21 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="LanguageSettings.AppLanguagePrompt.IsAccessibilityEnabled"
+    enum="BooleanEnabled" expires_after="2022-06-30">
+  <owner>perrier@chromium.org</owner>
+  <owner>chrome-language@google.com</owner>
+  <summary>
+    Whether or not accessibility features are enabled when the App Language
+    Prompt should be shown. If accessibility features are enabled the prompt
+    will not be shown. This histogram will continue to log &quot;Enabled&quot;
+    for the user until Chrome is started with accessibility features disabled.
+
+    Reported each time all other conditions for showing the App Language Prompt
+    have been met.
+  </summary>
+</histogram>
+
 <histogram name="LanguageSettings.AppLanguagePrompt.IsOnline"
     enum="BooleanYesNo" expires_after="2022-06-30">
   <owner>perrier@chromium.org</owner>
@@ -359,6 +374,22 @@ chromium-metrics-reviews@google.com.
 
     Recorded once at startup when ULP is initialized.
   </summary>
+</histogram>
+
+<histogram name="LanguageUsage.ULP.Initiation.Status{AccountType}"
+    enum="ULPInitiationStatus" expires_after="2022-06-30">
+  <owner>jds@google.com</owner>
+  <owner>chrome-language@google.com</owner>
+  <summary>
+    The result of initializing ULP, including {AccountType}.
+
+    Recorded once at startup when ULP is initialized.
+  </summary>
+  <token key="AccountType">
+    <variant name="" summary="all account types"/>
+    <variant name=".DefaultAccount" summary="only signed-out users"/>
+    <variant name=".SignedIn" summary="only signed-in users"/>
+  </token>
 </histogram>
 
 <histogram name="LanguageUsage.ULP.Initiation.TopAcceptLanguageInULP"

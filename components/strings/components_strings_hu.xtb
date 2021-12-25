@@ -112,6 +112,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="1308113895091915999">Ajánlat áll rendelkezésre</translation>
 <translation id="1312803275555673949">Milyen bizonyíték támasztja alá?</translation>
 <translation id="131405271941274527">A(z) <ph name="URL" /> adatokat akar küldeni, amikor Ön rákoppint telefonjára egy NFC-eszközön</translation>
+<translation id="1314311879718644478">Kiterjesztett valóságot használó tartalmak megtekintése</translation>
 <translation id="1314509827145471431">Kötés a jobb oldalon</translation>
 <translation id="1318023360584041678">Lapcsoportba mentve</translation>
 <translation id="1319245136674974084">Ne legyen több kérdés ennél az alkalmazásnál</translation>
@@ -176,6 +177,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="1472675084647422956">Továbbiak megjelenítése</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">A böngészőverziót keresi? Nyissa meg ezt az oldalt:</translation>
 <translation id="1476595624592550506">Módosítsa jelszavát</translation>
 <translation id="1483493594462132177">Küldés</translation>
 <translation id="1484290072879560759">Szállítási cím kiválasztása</translation>
@@ -214,6 +216,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="1583429793053364125">Valami nem sikerült a weboldal megjelenítése során.</translation>
 <translation id="1586541204584340881">Ön milyen bővítményeket telepített.</translation>
 <translation id="1588438908519853928">Normál</translation>
+<translation id="1589050138437146318">Biztosan telepíti az ARCore platformot?</translation>
 <translation id="1592005682883173041">Helyi adatok elérése</translation>
 <translation id="1594030484168838125">Kiválaszt</translation>
 <translation id="160851722280695521">A Dino Run játék elindítása a Chrome-ban</translation>
@@ -1259,6 +1262,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="4968522289500246572">Ez az alkalmazás mobileszközökre készült, átméretezése nem feltétlenül működik megfelelően. Az alkalmazásnál problémák merülhetnek fel, esetleges újraindítása szükséges.</translation>
 <translation id="4969341057194253438">Felvétel törlése</translation>
 <translation id="4973922308112707173">Két lyuk felül</translation>
+<translation id="4976702386844183910">Utolsó látogatás: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Engedélyezi a mikrofon használatát?</translation>
 <translation id="4984339528288761049">Prc5 (boríték)</translation>
 <translation id="4989163558385430922">Összes megtekintése</translation>
@@ -1344,6 +1348,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="5215116848420601511">A Google Pay szolgáltatásban használt fizetési módok és címek</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">13. tálca</translation>
+<translation id="5216942107514965959">Utolsó látogatás: ma</translation>
 <translation id="5222812217790122047">Az e-mail-cím megadása kötelező</translation>
 <translation id="5230733896359313003">Szállítási cím</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1387,6 +1392,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="5333022057423422993">A Chrome észlelte, hogy a most használt jelszava adatvédelmi incidensben volt érintett. Fiókjai biztonsága érdekében javasoljuk a mentett jelszavak ellenőrzését.</translation>
 <translation id="5334013548165032829">Részletes rendszernaplók</translation>
 <translation id="5334145288572353250">Menti a címet?</translation>
+<translation id="5335920952954443287">Dobogó szív</translation>
 <translation id="5340250774223869109">Alkalmazás letiltva</translation>
 <translation id="534295439873310000">NFC-eszközök</translation>
 <translation id="5344579389779391559">Ez az oldal fizetésre próbálhatja meg rávenni</translation>
@@ -1529,6 +1535,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="5869522115854928033">Mentett jelszavak</translation>
 <translation id="5873013647450402046">Bankja szeretné, ha megerősítené személyazonosságát.</translation>
 <translation id="5887400589839399685">Kártya elmentve</translation>
+<translation id="5887687176710214216">Utolsó látogatás: tegnap</translation>
 <translation id="5895138241574237353">Újraindítás</translation>
 <translation id="5895187275912066135">Kiállítva</translation>
 <translation id="5901630391730855834">Sárga</translation>
@@ -1722,6 +1729,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="6529602333819889595">&amp;Törlés újra</translation>
 <translation id="6545864417968258051">Bluetooth-alapú keresés</translation>
 <translation id="6547208576736763147">Kettő lyuk a bal oldalon</translation>
+<translation id="6554732001434021288">Utolsó látogatás: <ph name="NUM_DAYS" /> napja</translation>
 <translation id="6556866813142980365">Újra</translation>
 <translation id="6569060085658103619">Jelenleg bővítményoldalt tekint meg</translation>
 <translation id="6573200754375280815">Kettő lyuk a jobb oldalon</translation>
@@ -1884,6 +1892,7 @@ Ezt egyéb esetben letiltják az Ön adatvédelmi beállításai. Az engedélyez
 <translation id="7118618213916969306">Vágólapon lévő URL, <ph name="SHORT_URL" /> keresése</translation>
 <translation id="7119414471315195487">Zárja be a többi lapot vagy programot</translation>
 <translation id="7129409597930077180">Erre a címre nem lehetséges a szállítás. Válasszon másik címet.</translation>
+<translation id="7132939140423847331">A rendszergazda nem engedélyezi az adatok másolását.</translation>
 <translation id="7135130955892390533">Állapot megjelenítése</translation>
 <translation id="7138472120740807366">Kézbesítési mód</translation>
 <translation id="7139724024395191329">Emírség</translation>
@@ -2056,6 +2065,7 @@ További részletek:
 <translation id="7654909834015434372">A jelölések szerkesztésekor a dokumentum visszaáll az eredeti tájolásba</translation>
 <translation id="765676359832457558">Speciális beállítások elrejtése...</translation>
 <translation id="7658239707568436148">Mégse</translation>
+<translation id="7659878911471462949">Örömkönnyek</translation>
 <translation id="7662298039739062396">A beállítást bővítmény vezérli</translation>
 <translation id="7663736086183791259"><ph name="CERTIFICATE_VALIDITY" /> tanúsítvány</translation>
 <translation id="7666397036351755929">Nem engedélyezett inkognitó módban</translation>
@@ -2156,7 +2166,6 @@ További részletek:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Hozzáférést kérhet a virtuálisvalóság-eszközökhöz és -adatokhoz</translation>
 <translation id="7984945080620862648">Pillanatnyilag nem tudja felkeresni a(z) <ph name="SITE" /> webhelyet, mivel a webhely olyan titkosított hitelesítő adatokat küldött, amelyeket a Chrome nem tud feldolgozni. A hálózati hibák és támadások rendszerint átmenetiek, ezért az említett oldal később valószínűleg már működni fog.</translation>
-<translation id="79859296434321399">A kiterjesztett valósággal kapcsolatos tartalmak megtekintéséhez telepítse az ARCore-t</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Kötés</translation>
 <translation id="7992044431894087211">Képernyőmegosztás folytatva a(z) <ph name="APPLICATION_TITLE" /> alkalmazással</translation>
@@ -2260,6 +2269,7 @@ További részletek:
 <translation id="830498451218851433">Félbehajtás</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Telepített alkalmazások és a használatuk gyakorisága</translation>
+<translation id="8317207217658302555">Biztosan frissíti az ARCore platformot?</translation>
 <translation id="831997045666694187">Este</translation>
 <translation id="8321476692217554900">értesítések</translation>
 <translation id="8328484624016508118">Az összes inkognitó lap bezárása után a Chrome törli a következőket:
@@ -2330,7 +2340,6 @@ További részletek:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Engedély visszaállítása}other{Engedélyek visszaállítása}}</translation>
 <translation id="8555010941760982128">Adja meg ezt a kódot a fizetésnél:</translation>
 <translation id="8557066899867184262">A CVC-kód a kártya hátulján található.</translation>
-<translation id="8558485628462305855">A kiterjesztett valósággal kapcsolatos tartalmak megtekintéséhez frissítse az ARCore-t</translation>
 <translation id="8559762987265718583">Nem hozható létre privát kapcsolat a következővel: <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, mert az eszköz dátum- és időbeállítása helytelen (<ph name="DATE_AND_TIME" />).</translation>
 <translation id="8564182942834072828">Különálló dokumentumok/Nem szétválogatott másolatok</translation>
 <translation id="8564985650692024650">A Chromium azt javasolja, hogy adjon meg új <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />-jelszót a régi helyett, ha azt más webhelyeken is használta.</translation>
@@ -2443,6 +2452,7 @@ További részletek:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />. Nyomja le a Tab, majd az Enter gombot a Chrome böngészési előzményeinek megtekintéséhez</translation>
 <translation id="8987927404178983737">hónap</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">A rendszerverziót keresi? Nyissa meg ezt az oldalt:</translation>
 <translation id="899688752321268742">A(z) <ph name="URL" /> tudni szeretné, hogy Ön mikor használja aktívan ezt az eszközt</translation>
 <translation id="8996941253935762404">A felkeresni kívánt webhely ártalmas programokat tartalmaz</translation>
 <translation id="8997023839087525404">A szerver olyan tanúsítványt mutatott be, amelyet nem A tanúsítványok átláthatósága keretrendszer segítségével hoztak nyilvánosságra. Ez egyes tanúsítványoknál követelmény annak biztosítása érdekében, hogy az adott tanúsítványok megbízhatók, és védelmet nyújtanak a támadók ellen.</translation>

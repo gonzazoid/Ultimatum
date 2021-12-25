@@ -36,6 +36,7 @@
 <translation id="2313870531055795960">Ստուգում է URL-ները Chromium-ում պահված վտանգավոր կայքերի ցանկի միջոցով։ Եթե կայքը փորձում է գողանալ ձեր գաղտնաբառը, կամ երբ վնասակար ֆայլ եք ներբեռնում, Chromium-ը կարող է ուղարկել URL-ն ու էջի բովանդակությունը՝ անվտանգ դիտարկման միջոցով ստուգելու համար։</translation>
 <translation id="2343156876103232566">Հեռախոսահամարն այստեղից ձեր Android հեռախոսին ուղարկելու համար երկու սարքերի Chromium դիտարկիչներում մտեք հաշիվ։</translation>
 <translation id="2347108572062610441">Այս ընդլայնումը փոխել է Chromium-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
+<translation id="2359808026110333948">Շարունակել</translation>
 <translation id="2396765026452590966">«<ph name="EXTENSION_NAME" />» ընդլայնումը փոխել է Chromium-ի մեկնարկի ժամանակ ցուցադրվող էջը:</translation>
 <translation id="2401032172288869980">Այս կայքի համար Chromium-ին անհրաժեշտ է խոսափողն ու տեսախցիկն օգտագործելու թույլտվություն</translation>
 <translation id="2483889755041906834">Chromium-ի մեջ</translation>
@@ -110,20 +111,22 @@
 <translation id="4271805377592243930">Chromium-ի օգնության էջ</translation>
 <translation id="4285930937574705105">Անհայտ սխալի պատճառով տեղադրումը չհաջողվեց: Եթե Chromium-ը բաց է, փակեք այն և կրկին փորձեք:</translation>
 <translation id="4407044323746248786">Փակե՞լ Chromium-ը։</translation>
+<translation id="4414390922528416758">Կարգավորեք գաղտնիության ամենակարևոր պարամետրերը Chromium-ում։ Այս ուղեցույցում նշված են ոչ բոլոր կարգավորումները։</translation>
 <translation id="4415566066719264597">Թույլատրել Chromium-ին աշխատել ֆոնային ռեժիմում</translation>
 <translation id="4423735387467980091">Հարմարեցնել և վերահսկել Chromium-ը</translation>
+<translation id="4427306783828095590">Լրացուցիչ պաշտպանությունն օգնում է խուսափել ֆիշինգից և արգելափակել վնասաբեր ծրագրերը</translation>
 <translation id="452711251841752011">Բարի գալուստ Chromium․ բացված է դիտարկիչի նոր պատուհան</translation>
 <translation id="4544142686420020088">Անհայտ սխալի պատճառով չհաջողվեց թարմացնել Chromium-ը։ <ph name="BEGIN_LINK" />Շտկել Chromium-ի թարմացման հետ կապված խնդիրները<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">Շարունակե՞լ Chromium-ի նոր պրոֆիլով</translation>
 <translation id="4567424176335768812">Դուք մուտք եք գործել որպես <ph name="USER_EMAIL_ADDRESS" />: Այժմ կարող եք օգտագործել ձեր էջանիշները, պատմությունը և այլ կարգավորումները ձեր բոլոր մուտք գործած սարքերում:</translation>
 <translation id="459535195905078186">Chromium հավելվածներ</translation>
+<translation id="4621240073146040695">Գրեթե պատրաստ է: Վերագործարկեք Chromium-ը՝ թարմացումն ավարտելու համար:</translation>
 <translation id="4665829708273112819">Ուշադրություն․ Chromium-ը չի կարող արգելել ընդլայնումներին գրանցել ձեր այցելությունների պատմությունը։ Ընդլայնումն ինկոգնիտո ռեժիմում անջատելու համար ապանշեք այս պարամետրը։</translation>
 <translation id="4677944499843243528">Կարծես թե պրոֆիլն օգտագործվում է Chromium-ի այլ գործընթացի կողմից (<ph name="PROCESS_ID" />) այլ համակարգչում (<ph name="HOST_NAME" />): Chromium-ը կողպել է պրոֆիլը, որպեսզի այն չվնասվի: Եթե համոզված եք, որ պրոֆիլը չի օգտագործվում այլ գործընթացների կողմից, կարող եք ապակողպել պրոֆիլը և նորից գործարկել Chromium-ը:</translation>
 <translation id="469338717132742108">Chromium OS-ի օգնության էջ</translation>
 <translation id="4708774505295300557">Ինչ-որ մեկն այս համակարգչում <ph name="ACCOUNT_EMAIL_LAST" /> հասցեով մուտք է գործել Chromium: Ստեղծեք Chromium-ի նոր պրոֆիլ` ձեր տվյալներն առանձին պահելու համար:</translation>
 <translation id="4746050847053251315">Փակե՞լ Chromium-ը։</translation>
 <translation id="4748217263233248895">Chromium-ի անվտանգության կարգավորումները հենց նոր թարմացվել են: Վերագործարկեք Chrome-ը, և ձեր ներդիրները կվերականգնվեն:</translation>
-<translation id="4750035648288509542">Գրեթե պատրաստ է։ Թարմացումն ավարտելու համար վերագործարկեք Chromium-ը։ Ինկոգնիտո պատուհանները նորից չեն բացվի։</translation>
 <translation id="4788777615168560705">Chromium-ը չի կարող ստուգել ձեր գաղտնաբառերը։ 24 ժամ հետո նորից փորձեք կամ <ph name="BEGIN_LINK" />ստուգեք ձեր Google հաշվի գաղտնաբառերը<ph name="END_LINK" />։</translation>
 <translation id="479167709087336770">Օգտագործվում է միևնույն ուղղագրիչը, ինչ Google Որոնման մեջ: Դիտարկիչում մուտքագրված տեքստերն ուղարկվում են Google-ին: Սա կարող եք փոխել կարգավորումներում։</translation>
 <translation id="4888717733111232871">Թույլատրել Chromium-ում տվյալների մուտքային հոսքի փոխանցումը mDNS հաղորդակարգով:</translation>
@@ -236,6 +239,7 @@ Chromium-ին չհաջողվեց վերականգնել ձեր կարգավոր�
 <translation id="7561906087460245826">Ջնջել նաև Chromium-ի տվյալները (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Եթե որևէ կարգավորում չտեսնեք այս էջում, փնտրեք այն ձեր <ph name="LINK_BEGIN" />
       Chromium OS-ի կարգավորումներում<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">Դուք ձեր հաշվում միացրել եք բարելավված Ապահով դիտարկումը։ Այժմ միացրեք այն Chromium-ի համար։</translation>
 <translation id="761356813943268536">Chromium-ն օգտագործում է ձեր տեսախցիկն ու խոսափողը:</translation>
 <translation id="7617377681829253106">Chromium-ը կատարելագործվել է</translation>
 <translation id="7686590090926151193">Chromium-ը ձեր կանխադրված դիտարկիչը չէ</translation>
@@ -295,5 +299,6 @@ Chromium-ին չհաջողվեց վերականգնել ձեր կարգավոր�
 <translation id="9214764063801632699">Chromium OS համակարգ</translation>
 <translation id="93478295209880648">Chromium-ը հնարավոր է չաշխատի ինչպես հարկն է, քանի որ այն այլևս չի աջակցվում Windows XP և Windows Vista համակարգերում</translation>
 <translation id="965162752251293939">Ո՞վ է օգտագործում Chromium-ը</translation>
+<translation id="967427899662692980">Ուժեղացրեք Chromium-ի անվտանգությունը</translation>
 <translation id="985602178874221306">Chromium Authors</translation>
 </translationbundle>

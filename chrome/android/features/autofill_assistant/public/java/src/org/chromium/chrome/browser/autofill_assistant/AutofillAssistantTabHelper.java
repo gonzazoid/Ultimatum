@@ -17,8 +17,9 @@ public class AutofillAssistantTabHelper {
      * the tab as observer and connect to its native counterpart in order to fulfill startup
      * requests from either side.
      */
-    public static void createForTab(Tab tab) {
-        Starter starter = new Starter(tab);
+    public static void createForTab(Tab tab, AssistantIsGsaFunction isGsaFunction,
+            AssistantIsMsbbEnabledFunction isMsbbEnabledFunction) {
+        Starter starter = new Starter(tab, isGsaFunction, isMsbbEnabledFunction);
         tab.addObserver(starter);
         tab.getUserDataHost().setUserData(USER_DATA_KEY, starter);
     }

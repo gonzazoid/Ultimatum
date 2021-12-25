@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 
+#include "ash/components/login/auth/auth_status_consumer.h"
+#include "ash/components/login/auth/challenge_response_key.h"
+#include "ash/components/login/auth/user_context.h"
 #include "ash/public/cpp/login_types.h"
 #include "base/callback_forward.h"
 #include "base/memory/ref_counted.h"
@@ -21,13 +24,6 @@
 #include "chrome/browser/ash/login/help_app_launcher.h"
 #include "chrome/browser/ash/login/security_token_pin_dialog_host_login_impl.h"
 #include "chrome/browser/ash/login/ui/login_display.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/authenticator.h"
-#include "chromeos/login/auth/challenge_response_key.h"
-// TODO(https://crbug.com/1164001): move to forward declaration.
-#include "chromeos/login/auth/extended_authenticator.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
 #include "mojo/public/cpp/bindings/receiver.h"
@@ -39,6 +35,9 @@
 class PrefChangeRegistrar;
 
 namespace ash {
+
+class Authenticator;
+class ExtendedAuthenticator;
 class ViewsScreenLocker;
 
 // ScreenLocker displays the lock UI and takes care of authenticating the user
@@ -87,7 +86,7 @@ class ScreenLocker
   void Init();
 
   // AuthStatusConsumer:
-  void OnAuthFailure(const chromeos::AuthFailure& error) override;
+  void OnAuthFailure(const AuthFailure& error) override;
   void OnAuthSuccess(const UserContext& user_context) override;
 
   // Called when an account password (not PIN/quick unlock) has been used to
@@ -141,7 +140,7 @@ class ScreenLocker
 
   // Allow a AuthStatusConsumer to listen for
   // the same login events that ScreenLocker does.
-  void SetLoginStatusConsumer(chromeos::AuthStatusConsumer* consumer);
+  void SetLoginStatusConsumer(AuthStatusConsumer* consumer);
 
   // Initialize or uninitialize the ScreenLocker class. It observes
   // SessionManager so that the screen locker accepts lock requests only after a
@@ -183,7 +182,7 @@ class ScreenLocker
                         bool is_complete,
                         int32_t percent_complete) override;
   void OnAuthScanDone(
-      device::mojom::ScanResult scan_result,
+      const device::mojom::FingerprintMessagePtr msg,
       const base::flat_map<std::string, std::vector<std::string>>& matches)
       override;
   void OnSessionFailed() override;

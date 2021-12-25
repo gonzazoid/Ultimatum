@@ -140,7 +140,6 @@ void AddShimlessRmaStrings(content::WebUIDataSource* html_source) {
       {"rsuChallengeDialogTitleText",
        IDS_SHIMLESS_RMA_RSU_CHALLENGE_DIALOG_TITLE},
       {"rsuCodeLabelText", IDS_SHIMLESS_RMA_RSU_CODE_LABEL},
-      {"rsuCodePlaceHolderText", IDS_SHIMLESS_RMA_RSU_CODE_PLACEHOLDER},
       {"rsuChallengeDialogDoneButtonLabel",
        IDS_SHIMLESS_RMA_RSU_CHALLENGE_DIALOG_DONE_BUTTON},
       // Manual WP disable complete
@@ -187,6 +186,8 @@ void AddShimlessRmaStrings(content::WebUIDataSource* html_source) {
        IDS_SHIMLESS_RMA_PROVISIONING_FAILED_BLOCKING},
       {"provisioningPageFailedNonBlockingText",
        IDS_SHIMLESS_RMA_PROVISIONING_FAILED_NON_BLOCKING},
+      {"provisioningPageFailedRetryButtonLabel",
+       IDS_SHIMLESS_RMA_PROVISIONING_FAILED_RETRY_BUTTON_LABEL},
       // Repair complete page
       {"repairCompletedTitleText", IDS_SHIMLESS_RMA_REPAIR_COMPLETED},
       {"repairCompletedDescriptionText",
@@ -212,15 +213,8 @@ void AddShimlessRmaStrings(content::WebUIDataSource* html_source) {
       {"rmaLogsTitleText", IDS_SHIMLESS_RMA_LOGS_TITLE},
       {"rmaLogsCancelButtonText", IDS_SHIMLESS_RMA_LOGS_CANCEL_BUTTON},
       {"rmaLogsSaveToUsbButtonText", IDS_SHIMLESS_RMA_LOGS_SAVE_BUTTON},
-      {"batteryShutoffTitleText", IDS_SHIMLESS_BATTERY_CUTOFF_TITLE},
-      {"batteryShutoffUnplugMessageText",
-       IDS_SHIMLESS_BATTERY_SHUTOFF_UNPLUG_MESSAGE},
-      {"batteryShutoffShutdownMessageText",
-       IDS_SHIMLESS_BATTERY_SHUTOFF_SHUTDOWN_MESSAGE},
-      {"batteryShutoffCancelButtonText",
-       IDS_SHIMLESS_BATTERY_SHUTOFF_CANCEL_BUTTON},
-      {"batteryShutoffShutdownButtonText",
-       IDS_SHIMLESS_BATTERY_SHUTOFF_SHUTDOWN_BUTTON},
+      {"batteryShutoffTooltipText", IDS_SHIMLESS_BATTERY_SHUTOFF_TOOLTIP_TEXT},
+
       // Manual disable wp page
       {"manuallyDisableWpTitleText",
        IDS_SHIMLESS_RMA_MANUALLY_DISABLE_WP_TITLE},

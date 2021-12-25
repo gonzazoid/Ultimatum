@@ -195,7 +195,7 @@ static bool PseudoElementStylesEqual(const ComputedStyle& old_style,
       !new_style.HasAnyPseudoElementStyles())
     return true;
   for (PseudoId pseudo_id = kFirstPublicPseudoId;
-       pseudo_id < kFirstInternalPseudoId;
+       pseudo_id <= kLastTrackedPublicPseudoId;
        pseudo_id = static_cast<PseudoId>(pseudo_id + 1)) {
     if (!old_style.HasPseudoElementStyle(pseudo_id) &&
         !new_style.HasPseudoElementStyle(pseudo_id))
@@ -1730,22 +1730,11 @@ const AtomicString& ComputedStyle::TextEmphasisMarkString() const {
 
 LineLogicalSide ComputedStyle::GetTextEmphasisLineLogicalSide() const {
   TextEmphasisPosition position = GetTextEmphasisPosition();
-  if (IsHorizontalWritingMode()) {
-    return position == TextEmphasisPosition::kOverRight ||
-                   position == TextEmphasisPosition::kOverLeft
-               ? LineLogicalSide::kOver
-               : LineLogicalSide::kUnder;
-  }
-  if (GetWritingMode() != WritingMode::kSidewaysLr) {
-    return position == TextEmphasisPosition::kOverRight ||
-                   position == TextEmphasisPosition::kUnderRight
-               ? LineLogicalSide::kOver
-               : LineLogicalSide::kUnder;
-  }
-  return position == TextEmphasisPosition::kOverLeft ||
-                 position == TextEmphasisPosition::kUnderLeft
-             ? LineLogicalSide::kOver
-             : LineLogicalSide::kUnder;
+  if (IsHorizontalWritingMode())
+    return IsOver(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
+  if (GetWritingMode() != WritingMode::kSidewaysLr)
+    return IsRight(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
+  return IsLeft(position) ? LineLogicalSide::kOver : LineLogicalSide::kUnder;
 }
 
 CSSAnimationData& ComputedStyle::AccessAnimations() {

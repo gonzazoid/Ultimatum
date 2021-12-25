@@ -16,12 +16,14 @@ namespace chromeos {
 
 namespace {
 
-const char kNetworkMetricsPrefix[] = "Network.";
+const char kNetworkMetricsPrefix[] = "Network.Ash.";
 const char kAllConnectionResultSuffix[] = ".ConnectionResult.All";
 
 const char kWifi[] = "WiFi";
 const char kWifiOpen[] = "WiFi.SecurityOpen";
 const char kWifiPasswordProtected[] = "WiFi.SecurityPasswordProtected";
+
+const char kTether[] = "Tether";
 
 chromeos::NetworkStateHandler* GetNetworkStateHandler() {
   return NetworkHandler::Get()->network_state_handler();
@@ -44,8 +46,19 @@ const std::vector<std::string> GetCellularNetworkTypeHistogams(
 
 const std::vector<std::string> GetEthernetNetworkTypeHistograms(
     const NetworkState* network_state) {
-  // TODO(b/207589664): Determine histogram variant names for Ethernet.
-  return {};
+  const std::string kEthernetPrefix = "Ethernet";
+  const std::string kEapInfix = ".Eap";
+  const std::string kNoEapInfix = ".NoEap";
+
+  std::vector<std::string> ethernet_histograms{kEthernetPrefix};
+  if (GetNetworkStateHandler()->GetEAPForEthernet(network_state->path(),
+                                                  /*connected_only=*/true)) {
+    ethernet_histograms.emplace_back(kEthernetPrefix + kEapInfix);
+  } else {
+    ethernet_histograms.emplace_back(kEthernetPrefix + kNoEapInfix);
+  }
+
+  return ethernet_histograms;
 }
 
 const std::vector<std::string> GetWifiNetworkTypeHistograms(
@@ -64,8 +77,7 @@ const std::vector<std::string> GetWifiNetworkTypeHistograms(
 
 const std::vector<std::string> GetTetherNetworkTypeHistograms(
     const NetworkState* network_state) {
-  // TODO(b/207589664): Determine histogram variant names for Tether.
-  return {};
+  return {kTether};
 }
 
 const std::vector<std::string> GetVpnNetworkTypeHistograms(

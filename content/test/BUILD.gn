@@ -427,6 +427,7 @@ static_library("test_support") {
     "//third_party/blink/public:blink",
     "//third_party/blink/public:test_support",
     "//third_party/blink/public/common:headers",
+    "//third_party/blink/public/strings:accessibility_strings",
     "//third_party/blink/public/strings:strings_grit",
     "//ui/gl:test_support",
   ]
@@ -473,6 +474,7 @@ static_library("test_support") {
     "//services/data_decoder/public/mojom",
     "//services/device/public/mojom",
     "//services/metrics/public/cpp:metrics_cpp",
+    "//storage/browser/quota:mojo_bindings",
 
     # TODO(jam): remove this by adding a public header for the NetworkContext
     # public testing method.
@@ -489,6 +491,7 @@ static_library("test_support") {
     "//storage/common",
     "//testing/gmock",
     "//testing/gtest",
+    "//third_party/blink/public/strings:accessibility_strings",
     "//third_party/blink/public/strings:strings_grit",
     "//third_party/webrtc_overrides:webrtc_component",
     "//ui/accessibility:ax_enums_mojo",
@@ -1213,6 +1216,7 @@ test("content_browsertests") {
     "../browser/prerender/prerender_origin_trial_browsertest.cc",
     "../browser/process_internals/process_internals_browsertest.cc",
     "../browser/quota/quota_change_browsertest.cc",
+    "../browser/quota/quota_internals_browsertest.cc",
     "../browser/renderer_host/ancestor_throttle_browsertest.cc",
     "../browser/renderer_host/back_forward_cache_metrics_browsertest.cc",
     "../browser/renderer_host/blocked_scheme_navigation_browsertest.cc",
@@ -1285,9 +1289,12 @@ test("content_browsertests") {
     "../browser/site_per_process_browsertest.cc",
     "../browser/site_per_process_browsertest.h",
     "../browser/site_per_process_hit_test_browsertest.cc",
+    "../browser/site_per_process_layout_browsertest.cc",
+    "../browser/site_per_process_mixed_content_browsertest.cc",
     "../browser/site_per_process_sad_frame_browsertest.cc",
     "../browser/site_per_process_scroll_browsertest.cc",
     "../browser/site_per_process_unload_browsertest.cc",
+    "../browser/site_per_process_web_bundle_browsertest.cc",
     "../browser/sms/sms_browsertest.cc",
     "../browser/snapshot_browsertest.cc",
     "../browser/storage_partition_impl_browsertest.cc",
@@ -1574,6 +1581,11 @@ test("content_browsertests") {
         [ "../browser/media/media_keys_listener_manager_impl_browsertest.cc" ]
   }
 
+  if (is_chromeos) {
+    sources +=
+        [ "../browser/lock_screen/lock_screen_service_impl_browsertest.cc" ]
+  }
+
   if (is_win) {
     sources += [
       "../browser/accessibility/accessibility_browsertest.cc",
@@ -1593,8 +1605,11 @@ test("content_browsertests") {
 
     deps += [
       "//net:net_resources",
+      "//sandbox",
       "//third_party/blink/public:resources",
       "//third_party/blink/public/strings",
+      "//third_party/blink/public/strings:accessibility_strings",
+      "//third_party/blink/public/strings:accessibility_strings",
       "//third_party/iaccessible2",
       "//third_party/isimpledom",
     ]
@@ -1673,6 +1688,7 @@ test("content_browsertests") {
     sources += [
       "../browser/direct_sockets/direct_sockets_open_browsertest.cc",
       "../browser/direct_sockets/direct_sockets_tcp_browsertest.cc",
+      "../browser/direct_sockets/direct_sockets_udp_browsertest.cc",
       "../browser/file_system_access/file_system_access_capacity_allocation_host_impl_browsertest.cc",
       "../browser/file_system_access/file_system_access_clipboard_browsertest.cc",
       "../browser/file_system_access/file_system_access_drag_drop_browsertest.cc",
@@ -1850,6 +1866,7 @@ test("content_browsertests") {
 
   if (is_fuchsia) {
     additional_manifest_fragments = [
+      "//build/config/fuchsia/test/audio_capabilities.test-cmx",
       "//build/config/fuchsia/test/font_capabilities.test-cmx",
       "//build/config/fuchsia/test/jit_capabilities.test-cmx",
       "//build/config/fuchsia/test/network_capabilities.test-cmx",
@@ -1912,7 +1929,6 @@ test("content_unittests") {
     "../browser/attribution_reporting/attribution_manager_impl_unittest.cc",
     "../browser/attribution_reporting/attribution_network_sender_impl_unittest.cc",
     "../browser/attribution_reporting/attribution_policy_unittest.cc",
-    "../browser/attribution_reporting/attribution_reporter_impl_unittest.cc",
     "../browser/attribution_reporting/attribution_storage_delegate_impl_unittest.cc",
     "../browser/attribution_reporting/attribution_storage_sql_migrations_unittest.cc",
     "../browser/attribution_reporting/attribution_storage_sql_unittest.cc",
@@ -1985,6 +2001,7 @@ test("content_unittests") {
     "../browser/dom_storage/dom_storage_context_wrapper_unittest.cc",
     "../browser/download/download_manager_impl_unittest.cc",
     "../browser/download/save_package_unittest.cc",
+    "../browser/fenced_frame/fenced_frame_unittest.cc",
     "../browser/fenced_frame/fenced_frame_url_mapping_unittest.cc",
     "../browser/file_system/browser_file_system_helper_unittest.cc",
     "../browser/file_system/file_system_operation_runner_unittest.cc",
@@ -2047,6 +2064,7 @@ test("content_unittests") {
     "../browser/loader/navigation_early_hints_manager_unittest.cc",
     "../browser/loader/navigation_url_loader_impl_unittest.cc",
     "../browser/loader/navigation_url_loader_unittest.cc",
+    "../browser/locks/lock_manager_unittest.cc",
     "../browser/manifest/manifest_icon_downloader_unittest.cc",
     "../browser/media/audible_metrics_unittest.cc",
     "../browser/media/audio_input_stream_broker_unittest.cc",
@@ -2316,7 +2334,6 @@ test("content_unittests") {
     "../renderer/media/inspector_media_event_handler_unittest.cc",
     "../renderer/media/renderer_webaudiodevice_impl_unittest.cc",
     "../renderer/render_thread_impl_unittest.cc",
-    "../renderer/service_worker/service_worker_fetch_context_impl_unittest.cc",
     "../renderer/service_worker/service_worker_provider_context_unittest.cc",
     "../renderer/service_worker/service_worker_subresource_loader_unittest.cc",
     "../renderer/skia_benchmarking_extension_unittest.cc",

@@ -42,37 +42,11 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 using content::WebContents;
+using testing::Optional;
 
 namespace media_router {
 
 namespace {
-
-using ::testing::Optional;
-
-// Command line argument to specify receiver,
-const char kReceiver[] = "receiver";
-// The path relative to <chromium src>/out/<build config> for media router
-// browser test resources.
-const base::FilePath::StringPieceType kResourcePath =
-    FILE_PATH_LITERAL("media_router/browser_test_resources/");
-const char kTestSinkName[] = "test-sink-1";
-const char kButterflyVideoFileName[] = "butterfly-853x480.webm";
-// The javascript snippets.
-const char kCheckSessionScript[] = "checkSession();";
-const char kCheckStartFailedScript[] = "checkStartFailed('%s', '%s');";
-const char kStartSessionScript[] = "startSession();";
-const char kTerminateSessionScript[] =
-    "terminateSessionAndWaitForStateChange();";
-const char kCloseSessionScript[] = "closeConnectionAndWaitForStateChange();";
-const char kReconnectSessionScript[] = "reconnectSession('%s');";
-const char kCheckSendMessageFailedScript[] = "checkSendMessageFailed('%s');";
-const char kWaitSinkScript[] = "waitUntilDeviceAvailable();";
-const char kSendMessageAndExpectResponseScript[] =
-    "sendMessageAndExpectResponse('%s');";
-const char kSendMessageAndExpectConnectionCloseOnErrorScript[] =
-    "sendMessageAndExpectConnectionCloseOnError()";
-const char kCheckReconnectSessionFailsScript[] =
-    "checkReconnectSessionFails('%s')";
 
 std::string GetStartedConnectionId(WebContents* web_contents) {
   std::string session_id;
@@ -90,6 +64,23 @@ std::string GetDefaultRequestSessionId(WebContents* web_contents) {
       &session_id));
   return session_id;
 }
+
+// Routes observer that calls a callback once there are no routes.
+class NoRoutesObserver : public MediaRoutesObserver {
+ public:
+  NoRoutesObserver(MediaRouter* router, base::OnceClosure callback)
+      : MediaRoutesObserver(router), callback_(std::move(callback)) {}
+
+  ~NoRoutesObserver() override = default;
+
+  void OnRoutesUpdated(const std::vector<MediaRoute>& routes) override {
+    if (callback_ && routes.empty())
+      std::move(callback_).Run();
+  }
+
+ private:
+  base::OnceClosure callback_;
+};
 
 }  // namespace
 
@@ -180,6 +171,23 @@ void MediaRouterIntegrationBrowserTest::Wait(base::TimeDelta timeout) {
   run_loop.Run();
 }
 
+void MediaRouterIntegrationBrowserTest::WaitUntilNoRoutes(
+    WebContents* web_contents) {
+  if (!test_provider_->HasRoutes())
+    return;
+
+  // FIXME: There can't be a good reason to use the observer API to check for
+  // routes asynchronously, which is fragile.  However, some browser tests rely
+  // on this behavior.  Either add a callback parameter to TerminateRoute, or
+  // add pass callback to the TestProvider to run when all routes are gone.
+  base::RunLoop run_loop;
+  NoRoutesObserver no_routes_observer(
+      MediaRouterFactory::GetApiForBrowserContext(
+          web_contents->GetBrowserContext()),
+      run_loop.QuitClosure());
+  run_loop.Run();
+}
+
 void MediaRouterIntegrationBrowserTest::ExecuteJavaScriptAPI(
     WebContents* web_contents,
     const std::string& script) {
@@ -207,7 +215,7 @@ void MediaRouterIntegrationBrowserTest::StartSessionAndAssertNotFoundError() {
   OpenTestPage(FILE_PATH_LITERAL("basic_test.html"));
   WebContents* web_contents = GetActiveWebContents();
   CHECK(web_contents);
-  ExecuteJavaScriptAPI(web_contents, kStartSessionScript);
+  ExecuteJavaScriptAPI(web_contents, "startSession();");
 
   // Wait to simulate the user waiting for any sinks to be displayed.
   Wait(base::Seconds(1));
@@ -220,8 +228,8 @@ MediaRouterIntegrationBrowserTest::StartSessionWithTestPageAndSink() {
   OpenTestPage(FILE_PATH_LITERAL("basic_test.html"));
   WebContents* web_contents = GetActiveWebContents();
   CHECK(web_contents);
-  ExecuteJavaScriptAPI(web_contents, kWaitSinkScript);
-  ExecuteJavaScriptAPI(web_contents, kStartSessionScript);
+  ExecuteJavaScriptAPI(web_contents, "waitUntilDeviceAvailable();");
+  ExecuteJavaScriptAPI(web_contents, "startSession();");
   test_ui_->WaitForDialogShown();
   return web_contents;
 }
@@ -239,7 +247,7 @@ MediaRouterIntegrationBrowserTest::StartSessionWithTestPageAndChooseSink() {
 
 void MediaRouterIntegrationBrowserTest::OpenDialogAndCastFile() {
   GURL file_url = net::FilePathToFileURL(
-      media::GetTestDataFilePath(kButterflyVideoFileName));
+      media::GetTestDataFilePath("butterfly-853x480.webm"));
   test_ui_->ShowDialog();
   // Mock out file dialog operations, as those can't be simulated.
   test_ui_->SetLocalFile(file_url);
@@ -290,7 +298,7 @@ void MediaRouterIntegrationBrowserTest::CheckStartFailed(
     WebContents* web_contents,
     const std::string& error_name,
     const std::string& error_message_substring) {
-  std::string script(base::StringPrintf(kCheckStartFailedScript,
+  std::string script(base::StringPrintf("checkStartFailed('%s', '%s');",
                                         error_name.c_str(),
                                         error_message_substring.c_str()));
   ExecuteJavaScriptAPI(web_contents, script);
@@ -299,8 +307,8 @@ void MediaRouterIntegrationBrowserTest::CheckStartFailed(
 base::FilePath MediaRouterIntegrationBrowserTest::GetResourceFile(
     base::FilePath::StringPieceType relative_path) const {
   const base::FilePath full_path =
-      base::PathService::CheckedGet(base::DIR_ASSETS)
-          .Append(kResourcePath)
+      base::PathService::CheckedGet(base::DIR_MODULE)
+          .Append(FILE_PATH_LITERAL("media_router/browser_test_resources/"))
           .Append(relative_path);
   {
     // crbug.com/724573
@@ -362,14 +370,14 @@ bool MediaRouterIntegrationBrowserTest::IsRouteClosedOnUI() {
 void MediaRouterIntegrationBrowserTest::ParseCommandLine() {
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
 
-  receiver_ = command_line->GetSwitchValueASCII(kReceiver);
+  receiver_ = command_line->GetSwitchValueASCII("receiver");
   if (receiver_.empty())
-    receiver_ = kTestSinkName;
+    receiver_ = "test-sink-1";
 }
 
 void MediaRouterIntegrationBrowserTest::CheckSessionValidity(
     WebContents* web_contents) {
-  ExecuteJavaScriptAPI(web_contents, kCheckSessionScript);
+  ExecuteJavaScriptAPI(web_contents, "checkSession();");
   std::string session_id(GetStartedConnectionId(web_contents));
   EXPECT_FALSE(session_id.empty());
   std::string default_request_session_id(
@@ -384,26 +392,25 @@ WebContents* MediaRouterIntegrationBrowserTest::GetActiveWebContents() {
 void MediaRouterIntegrationBrowserTest::RunBasicTest() {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
-  ExecuteJavaScriptAPI(web_contents, kTerminateSessionScript);
-  test_ui_->WaitUntilNoRoutes();
+  ExecuteJavaScriptAPI(web_contents,
+                       "terminateSessionAndWaitForStateChange();");
+  WaitUntilNoRoutes(web_contents);
 }
 
 void MediaRouterIntegrationBrowserTest::RunSendMessageTest(
     const std::string& message) {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
-  ExecuteJavaScriptAPI(
-      web_contents,
-      base::StringPrintf(kSendMessageAndExpectResponseScript, message.c_str()));
+  ExecuteJavaScriptAPI(web_contents,
+                       base::StringPrintf("sendMessageAndExpectResponse('%s');",
+                                          message.c_str()));
 }
 
 void MediaRouterIntegrationBrowserTest::RunFailToSendMessageTest() {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
-  ExecuteJavaScriptAPI(web_contents, kCloseSessionScript);
-  ExecuteJavaScriptAPI(
-      web_contents,
-      base::StringPrintf(kCheckSendMessageFailedScript, "closed"));
+  ExecuteJavaScriptAPI(web_contents, "closeConnectionAndWaitForStateChange();");
+  ExecuteJavaScriptAPI(web_contents, "checkSendMessageFailed('closed');");
 }
 
 void MediaRouterIntegrationBrowserTest::RunReconnectSessionTest() {
@@ -416,7 +423,7 @@ void MediaRouterIntegrationBrowserTest::RunReconnectSessionTest() {
   ASSERT_NE(web_contents, new_web_contents);
   ExecuteJavaScriptAPI(
       new_web_contents,
-      base::StringPrintf(kReconnectSessionScript, session_id.c_str()));
+      base::StringPrintf("reconnectSession('%s');", session_id.c_str()));
   std::string reconnected_session_id;
   ASSERT_TRUE(content::ExecuteScriptAndExtractString(
       new_web_contents,
@@ -424,8 +431,9 @@ void MediaRouterIntegrationBrowserTest::RunReconnectSessionTest() {
       &reconnected_session_id));
   ASSERT_EQ(session_id, reconnected_session_id);
 
-  ExecuteJavaScriptAPI(web_contents, kTerminateSessionScript);
-  test_ui_->WaitUntilNoRoutes();
+  ExecuteJavaScriptAPI(web_contents,
+                       "terminateSessionAndWaitForStateChange();");
+  WaitUntilNoRoutes(web_contents);
 }
 
 void MediaRouterIntegrationBrowserTest::RunFailedReconnectSessionTest() {
@@ -439,10 +447,11 @@ void MediaRouterIntegrationBrowserTest::RunFailedReconnectSessionTest() {
   ASSERT_NE(web_contents, new_web_contents);
   test_provider_->set_route_error_message("Unknown route");
   ExecuteJavaScriptAPI(new_web_contents,
-                       base::StringPrintf(kCheckReconnectSessionFailsScript,
+                       base::StringPrintf("checkReconnectSessionFails('%s')",
                                           session_id.c_str()));
-  ExecuteJavaScriptAPI(web_contents, kTerminateSessionScript);
-  test_ui_->WaitUntilNoRoutes();
+  ExecuteJavaScriptAPI(web_contents,
+                       "terminateSessionAndWaitForStateChange();");
+  WaitUntilNoRoutes(web_contents);
 }
 
 void MediaRouterIntegrationBrowserTest::SetEnableMediaRouter(bool enable) {
@@ -458,10 +467,11 @@ void MediaRouterIntegrationBrowserTest::RunReconnectSessionSameTabTest() {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
   std::string session_id(GetStartedConnectionId(web_contents));
-  ExecuteJavaScriptAPI(web_contents, kCloseSessionScript);
+  ExecuteJavaScriptAPI(web_contents, "closeConnectionAndWaitForStateChange();");
 
-  ExecuteJavaScriptAPI(web_contents, base::StringPrintf(kReconnectSessionScript,
-                                                        session_id.c_str()));
+  ExecuteJavaScriptAPI(
+      web_contents,
+      base::StringPrintf("reconnectSession('%s');", session_id.c_str()));
   std::string reconnected_session_id;
   ASSERT_TRUE(content::ExecuteScriptAndExtractString(
       web_contents,
@@ -627,7 +637,7 @@ IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationBrowserTest, CloseOnError) {
   WebContents* web_contents = StartSessionWithTestPageAndChooseSink();
   CheckSessionValidity(web_contents);
   ExecuteJavaScriptAPI(web_contents,
-                       kSendMessageAndExpectConnectionCloseOnErrorScript);
+                       "sendMessageAndExpectConnectionCloseOnError()");
 }
 
 // TODO(crbug.com/1238688): Test is flaky on Windows and Linux.
@@ -693,7 +703,7 @@ IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationIncognitoBrowserTest, Basic) {
   // If we tear down before route observers are notified of route termination,
   // MediaRouter will create another TerminateRoute() request which will have a
   // dangling Mojo callback at shutdown. So we must wait for the update.
-  test_ui_->WaitUntilNoRoutes();
+  WaitUntilNoRoutes(GetActiveWebContents());
 }
 
 IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationIncognitoBrowserTest,
@@ -703,7 +713,7 @@ IN_PROC_BROWSER_TEST_P(MediaRouterIntegrationIncognitoBrowserTest,
   // If we tear down before route observers are notified of route termination,
   // MediaRouter will create another TerminateRoute() request which will have a
   // dangling Mojo callback at shutdown. So we must wait for the update.
-  test_ui_->WaitUntilNoRoutes();
+  WaitUntilNoRoutes(GetActiveWebContents());
 }
 
 INSTANTIATE_MEDIA_ROUTER_INTEGRATION_BROWER_TEST_SUITE(

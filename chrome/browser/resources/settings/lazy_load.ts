@@ -60,6 +60,7 @@ import './languages_page/edit_dictionary_page.js';
 // </if>
 
 export {CrCheckboxElement} from 'chrome://resources/cr_elements/cr_checkbox/cr_checkbox.m.js';
+export {CrDialogElement} from 'chrome://resources/cr_elements/cr_dialog/cr_dialog.m.js';
 export {CrIconButtonElement} from 'chrome://resources/cr_elements/cr_icon_button/cr_icon_button.m.js';
 export {CrInputElement} from 'chrome://resources/cr_elements/cr_input/cr_input.m.js';
 export {CrSliderElement} from 'chrome://resources/cr_elements/cr_slider/cr_slider.js';
@@ -70,7 +71,7 @@ export {CountryDetailManager, CountryDetailManagerImpl, SettingsAddressEditDialo
 export {SettingsAddressRemoveConfirmationDialogElement} from './autofill_page/address_remove_confirmation_dialog.js';
 export {AutofillManagerImpl, AutofillManagerProxy, PersonalDataChangedListener} from './autofill_page/autofill_manager_proxy.js';
 export {SettingsAutofillSectionElement} from './autofill_page/autofill_section.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {BlockingRequestManager} from './autofill_page/blocking_request_manager.js';
 // </if>
 export {SettingsCreditCardEditDialogElement} from './autofill_page/credit_card_edit_dialog.js';
@@ -113,6 +114,9 @@ export {ImportDataBrowserProxyImpl, ImportDataStatus} from './people_page/import
 export {SettingsManageProfileElement} from './people_page/manage_profile.js';
 export {ManageProfileBrowserProxy, ManageProfileBrowserProxyImpl, ProfileShortcutStatus} from './people_page/manage_profile_browser_proxy.js';
 // </if>
+export {SettingsSyncControlsElement} from './people_page/sync_controls.js';
+export {SettingsSyncEncryptionOptionsElement} from './people_page/sync_encryption_options.js';
+export {SettingsSyncPageElement} from './people_page/sync_page.js';
 export {SettingsCollapseRadioButtonElement} from './privacy_page/collapse_radio_button.js';
 export {SettingsCookiesPageElement} from './privacy_page/cookies_page.js';
 export {SettingsDoNotTrackToggleElement} from './privacy_page/do_not_track_toggle.js';

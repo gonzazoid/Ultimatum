@@ -112,6 +112,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="1308113895091915999">Mavjud takliflar</translation>
 <translation id="1312803275555673949">Buning qaysi isboti bor ekan?</translation>
 <translation id="131405271941274527"><ph name="URL" /> sayti NFC orqali axborot almashinishga ruxsat soʻramoqda</translation>
+<translation id="1314311879718644478">Boyitilgan reallik kontentini ochish</translation>
 <translation id="1314509827145471431">Oʻng chekkasini belgilash</translation>
 <translation id="1318023360584041678">Varaqlar guruhiga saqlangan</translation>
 <translation id="1319245136674974084">Bu ilova uchun boshqa soʻralmasin</translation>
@@ -176,6 +177,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="1472675084647422956">Yana</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Brauzer versiyasini qidiryapsizmi? Bu sahifaga kiring</translation>
 <translation id="1476595624592550506">Parolingizni almashtiring</translation>
 <translation id="1483493594462132177">Yuborish</translation>
 <translation id="1484290072879560759">Yetkazib berish manzilini tanlang</translation>
@@ -213,6 +215,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="1583429793053364125">Veb-sahifani ochish vaqtida kutilmagan xatolik yuz berdi.</translation>
 <translation id="1586541204584340881">Oʻrnatilgan kengaytmalar</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">ARCore oʻrnatilsinmi?</translation>
 <translation id="1592005682883173041">Qurilmadagi mahalliy ma’lumotlarga ruxsat</translation>
 <translation id="1594030484168838125">Tanlang</translation>
 <translation id="160851722280695521">Chromeda Dino oʻyinini boshlash</translation>
@@ -1256,6 +1259,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="4968522289500246572">Bu ilova mobil qurilmalar uchun ishlab chiqilgan va oʻlchami bexato oʻzgarmasligi mumkin. Ishlashida xato chiqishi yoki qaytadan ishga tushishi mumkin.</translation>
 <translation id="4969341057194253438">Yozuvni oʻchirish</translation>
 <translation id="4973922308112707173">Yuqoridan 2 ta teshik ochish</translation>
+<translation id="4976702386844183910">Oxirgi tashrif: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Mikrofon ishlatilsinmi?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">Hammasi</translation>
@@ -1341,6 +1345,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="5215116848420601511">Google Pay xizmatidagi bank kartalari va manzillar</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Tarnov 13</translation>
+<translation id="5216942107514965959">Oxirgi tashrif: bugun</translation>
 <translation id="5222812217790122047">E-pochtangizni kiriting</translation>
 <translation id="5230733896359313003">Yetkazib berish manzili</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1384,6 +1389,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="5333022057423422993">Chrome hozirgina oshkor qilingan parol ishlatganini aniqladi. Hisoblaringiz himoyasi uchun saqlangan parollaringizni tekshiring.</translation>
 <translation id="5334013548165032829">Batafsil tizim jurnali qaydlari</translation>
 <translation id="5334145288572353250">Manzil saqlansinmi?</translation>
+<translation id="5335920952954443287">Urayotgan yurak</translation>
 <translation id="5340250774223869109">Ilova bloklandi</translation>
 <translation id="534295439873310000">NFC qurilmalar</translation>
 <translation id="5344579389779391559">Bu sahifa sizdan pul talab qilishi mumkin</translation>
@@ -1526,6 +1532,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="5869522115854928033">Saqlab olingan parollar</translation>
 <translation id="5873013647450402046">Bank shaxsingizni tasdiqlamoqchi.</translation>
 <translation id="5887400589839399685">Karta saqlandi</translation>
+<translation id="5887687176710214216">Oxirgi tashrif: kecha</translation>
 <translation id="5895138241574237353">Qayta ishga tushirish</translation>
 <translation id="5895187275912066135">Berilgan vaqti</translation>
 <translation id="5901630391730855834">Sariq</translation>
@@ -1718,6 +1725,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="6529602333819889595">&amp;O‘chirishni qaytarish</translation>
 <translation id="6545864417968258051">Bluetooth qurilmalarni qidirish</translation>
 <translation id="6547208576736763147">Chapdan 2 ta teshik ochish</translation>
+<translation id="6554732001434021288">Oxirgi tashrif: <ph name="NUM_DAYS" /> kun oldin</translation>
 <translation id="6556866813142980365">Qaytarish</translation>
 <translation id="6569060085658103619">Siz kengaytma sahifasidasiz.</translation>
 <translation id="6573200754375280815">Oʻngdan 2 ta teshik ochish</translation>
@@ -1880,6 +1888,7 @@ Aks holda bu maxfiylik sozlamalaringiz tomonidan bloklanadi. Bunda siz ochgan sa
 <translation id="7118618213916969306">Klipborddagi havolani qidirish, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Boshqa varaq va dasturlarni yoping</translation>
 <translation id="7129409597930077180">Bu manzilga yetkazib bera olmaymiz. Boshqa manzilni tanlang.</translation>
+<translation id="7132939140423847331">Administrator bu maʼlumotlardan nusxa olishni taqiqlagan.</translation>
 <translation id="7135130955892390533">Holat axboroti</translation>
 <translation id="7138472120740807366">Yetkazib berish usuli</translation>
 <translation id="7139724024395191329">Amirlik</translation>
@@ -2052,6 +2061,7 @@ Batafsil axborot:
 <translation id="7654909834015434372">Izohlarni tahrirlash vaqtida bu hujjat asl holatiga qaytadi</translation>
 <translation id="765676359832457558">Qo‘shimcha sozlamalarni yashirish</translation>
 <translation id="7658239707568436148">Bekor qilish</translation>
+<translation id="7659878911471462949">Quvonch koʻz yoshlari</translation>
 <translation id="7662298039739062396">Sozlama kengaytma tomonidan boshqariladi</translation>
 <translation id="7663736086183791259"><ph name="CERTIFICATE_VALIDITY" /> sertifikati</translation>
 <translation id="7666397036351755929">Inkognito rejimida ruxsat berilmagan</translation>
@@ -2152,7 +2162,6 @@ Batafsil axborot:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Virtual reallik qurilmalari va axborotlardan foydalanish uchun ruxsat soʻrashi mumkin</translation>
 <translation id="7984945080620862648"><ph name="SITE" /> saytiga o‘tib bo‘lmadi, chunki veb-sayt shifrlangan hisob ma’lumotlarini yubordi, Chrome ular bilan ishlay olmaydi. Tarmoq xatoligi yoki saytga hujumlar odatda vaqtinchalik bo‘ladi, shu sababli bu sahifa keyinroq ishga tushishi mumkin.</translation>
-<translation id="79859296434321399">Virtual reallik kontentini ochish uchun ARCore ilovasini yuklab oling</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Belgilash</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> ilovasiga ekranni ulashish davom ettirildi</translation>
@@ -2256,6 +2265,7 @@ Batafsil axborot:
 <translation id="830498451218851433">Yarim taxlash</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Oʻrnatilgan ilovalar va ularning qanday ishlatilishi</translation>
+<translation id="8317207217658302555">ARCore yangilansinmi?</translation>
 <translation id="831997045666694187">Kechqurun</translation>
 <translation id="8321476692217554900">bildirishnomalar</translation>
 <translation id="8328484624016508118">Barcha Inkognito varaqlar yopilganidan keyin Chrome quyidagilarni tozalaydi:
@@ -2326,7 +2336,6 @@ Batafsil axborot:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Ruxsatni tiklash}other{Ruxsatlarni tiklash}}</translation>
 <translation id="8555010941760982128">Hisob-kitob vaqtida ushbu kodni kiriting</translation>
 <translation id="8557066899867184262">CVC kod kartangizning orqa tomonida joylashgan.</translation>
-<translation id="8558485628462305855">Virtual reallik kontentini ochish uchun ARCore ilovasini yangilang</translation>
 <translation id="8559762987265718583">Tizimdagi sana va vaqt sozlamalari (<ph name="DATE_AND_TIME" />) noto‘g‘ri bo‘lganligi sababli <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> domeni bilan havfsiz aloqa o‘rnatib bo‘lmadi.</translation>
 <translation id="8564182942834072828">Bir nechta hujjat/Tartibsiz nusxalarda</translation>
 <translation id="8564985650692024650">Parolingizni <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> domenidan tashqaridagi saytda kiritgan bo‘lsangiz, uni zudlik bilan almashtirishingizni tavsiya etamiz.</translation>
@@ -2438,6 +2447,7 @@ Batafsil axborot:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Chrome sozlamalari orqali brauzer tarixini koʻrish uchun avval Tab, keyin Enter tugmasini bosing</translation>
 <translation id="8987927404178983737">Oy</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Tizim versiyasini qidiryapsizmi? Bu sahifaga kiring</translation>
 <translation id="899688752321268742"><ph name="URL" /> qurilmadan foydalanish axborotiga kirmoqchi</translation>
 <translation id="8996941253935762404">Ehtiyot bo‘ling! Zararli DT.</translation>
 <translation id="8997023839087525404">Sertifikatning ishonchlilik belgilari haqidagi ma’lumot server tomonidan taqdim etildi lekin rasmiy qoida asosida tekshirilmadi. Bu ba’zi sertifikatlar uchun ularning ishonchliligini tasdiqlash va hujumlardan himoyalash maqsadlarida talab qilinadi.</translation>

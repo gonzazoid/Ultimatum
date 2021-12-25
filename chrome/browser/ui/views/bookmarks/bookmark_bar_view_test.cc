@@ -731,7 +731,13 @@ class BookmarkBarViewTest3 : public BookmarkBarViewEventTestBase {
   }
 };
 
-VIEW_TEST(BookmarkBarViewTest3, Submenus)
+// TODO(crbug.com/1281365): Flakes on Linux.
+#if defined(OS_LINUX)
+#define MAYBE_Submenus DISABLED_Submenus
+#else
+#define MAYBE_Submenus Submenus
+#endif
+VIEW_TEST(BookmarkBarViewTest3, MAYBE_Submenus)
 
 // Observer that posts a task upon the context menu creation.
 // This is necessary for Linux as the context menu has to check the clipboard,
@@ -822,7 +828,13 @@ class BookmarkBarViewTest4 : public BookmarkBarViewEventTestBase {
   BookmarkContextMenuNotificationObserver observer_;
 };
 
-VIEW_TEST(BookmarkBarViewTest4, ContextMenus)
+// TODO(crbug.com/1281302): Flaky on Linux
+#if defined(OS_LINUX)
+#define MAYBE_ContextMenus DISABLED_ContextMenus
+#else
+#define MAYBE_ContextMenus ContextMenus
+#endif
+VIEW_TEST(BookmarkBarViewTest4, MAYBE_ContextMenus)
 
 // Tests drag and drop within the same menu.
 class BookmarkBarViewTest5 : public BookmarkBarViewDragTestBase {
@@ -1256,7 +1268,14 @@ class BookmarkBarViewTest11 : public BookmarkBarViewEventTestBase {
   BookmarkContextMenuNotificationObserver observer_;
 };
 
-VIEW_TEST(BookmarkBarViewTest11, CloseMenuAfterClosingContextMenu)
+// TODO(https://crbug.com/1281220): Flaky on Linux
+#if defined(OS_LINUX)
+#define MAYBE_CloseMenuAfterClosingContextMenu \
+  DISABLED_CloseMenuAfterClosingContextMenu
+#else
+#define MAYBE_CloseMenuAfterClosingContextMenu CloseMenuAfterClosingContextMenu
+#endif
+VIEW_TEST(BookmarkBarViewTest11, MAYBE_CloseMenuAfterClosingContextMenu)
 
 // Tests showing a modal dialog from a context menu.
 class BookmarkBarViewTest12 : public BookmarkBarViewEventTestBase {
@@ -1465,7 +1484,13 @@ class BookmarkBarViewTest14 : public BookmarkBarViewEventTestBase {
   BookmarkContextMenuNotificationObserver observer_;
 };
 
-VIEW_TEST(BookmarkBarViewTest14, ContextMenus2)
+// TODO(https://crbug.com/1281270): Flaky on Linux.
+#if defined(OS_LINUX)
+#define MAYBE_ContextMenus2 DISABLED_ContextMenus2
+#else
+#define MAYBE_ContextMenus2 ContextMenus2
+#endif
+VIEW_TEST(BookmarkBarViewTest14, MAYBE_ContextMenus2)
 
 // Makes sure deleting from the context menu keeps the bookmark menu showing.
 class BookmarkBarViewTest15 : public BookmarkBarViewEventTestBase {

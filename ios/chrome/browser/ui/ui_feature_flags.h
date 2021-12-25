@@ -83,6 +83,13 @@ extern const base::Feature kRemoveExcessNTPs;
 // Chrome.
 extern const base::Feature kEnableShortenedPasswordAutoFillInstruction;
 
+// Feature flag to show the setting allowing the user to choose the mode
+// (Desktop/Mobile) in which the pages will be requested by default.
+extern const base::Feature kAddSettingForDefaultPageMode;
+
+// Feature flag to switch some images to SFSymbols when enabled.
+extern const base::Feature kUseSFSymbolsSamples;
+
 // Whether the ContextMenuActionsRefresh flag is enabled.
 bool IsContextMenuActionsRefreshEnabled();
 

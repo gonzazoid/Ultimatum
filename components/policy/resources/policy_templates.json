@@ -1310,6 +1310,15 @@
       ],
     },
     {
+      'name': 'Projector',
+      'type': 'group',
+      'caption': '''Projector''',
+      'desc': '''Controls policies for Projector.''',
+      'policies': [
+        'ProjectorEnabled',
+      ]
+    },
+    {
       'name': 'HomepageLocation',
       'owners': ['file://components/policy/resources/OWNERS', 'rsorokin@chromium.org'],
       'type': 'string',
@@ -13023,7 +13032,7 @@
           'type': 'string',
         },
       },
-      'supported_on': ['chrome_os:98-'],
+      'future_on': ['chrome_os'],
       'features': {
         'dynamic_refresh': True,
         'per_profile': False,
@@ -17385,22 +17394,6 @@
       Please note that this policy weakens the protection of local IPs if needed by administrators.''',
     },
     {
-      'name': 'WebRestrictionsAuthority',
-      'owners': ['file://components/policy/resources/OWNERS', 'hendrich@chromium.org'],
-      'id': 341,
-      'type': 'string',
-      'schema' : { 'type': 'string' },
-      'tags': ['filtering', 'admin-sharing'],
-      'future_on': ['webview_android'],
-      'caption': '''Set an external source of URL restrictions''',
-      'desc' : '''When this policy is set to a non-empty string the WebView will read URL restrictions from the content provider with the given authority name.''',
-      'features': {
-        'dynamic_refresh': True,
-        'per_profile': False,
-      },
-      'example_value': 'com.android.chrome.SupervisedUserProvider'
-    },
-    {
       'name': 'ComponentUpdatesEnabled',
       'owners': ['file://components/update_client/OWNERS', 'sorin@chromium.org'],
       'type': 'main',
@@ -18631,6 +18624,37 @@
       If this setting is disabled, users will not be allowed to opt in to Phone Hub.
 
       If this policy is left not set, the default is not allowed for enterprise-managed users and allowed for non-managed users.''',
+    },
+    {
+      'name': 'PhoneHubCameraRollAllowed',
+      'owners': ['jasonsun@google.com', 'jonmann@google.com', 'better-together-dev@google.com'],
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'future_on': ['chrome_os'],
+      'features': {
+        'dynamic_refresh': True,
+        'per_profile': True,
+      },
+      'example_value': True,
+      'default': True,
+      'items': [
+        {
+          'value': True,
+          'caption': 'Allows users who have opted in to Phone Hub to access recent photos and videos taken on their phone',
+        },
+        {
+          'value': False,
+          'caption': 'Disallows users who have opted in to Phone Hub to access recent photos and videos taken on their phone',
+        },
+      ],
+      'id': 936,
+      'caption': '''Allow recent photos and videos taken on the phone to be accessed via Phone Hub.''',
+      'tags': ['local-data-access', 'google-sharing'],
+      'desc': '''If this setting is enabled, users who have already opted in to Phone Hub will be able to view and download recent photos and videos taken on their phone on Chrome OS.
+
+      If this setting is disabled, users will not be allowed to use this feature. If the <ph name="PHONE_HUB_ALLOWED_POLICY_NAME">PhoneHubAllowed</ph> policy is disabled, users also will not be allowed to use this feature.
+
+      If this policy is left not set, the default is allowed for both enterprise-managed users and non-managed users.''',
     },
     {
       'name': 'PhoneHubNotificationsAllowed',
@@ -29089,10 +29113,77 @@ When this policy is set, <ph name="PRODUCT_OS_NAME">$2<ex>Google Chrome OS</ex><
       - changes in M101 from site-keyed to origin-keyed. If this policy
       is enabled or not set, the browser will follow this new default from that
       version on. If this policy is disabled this change is reversed and
-      documents will wihotu Origin-Agent-Csluter: header will be assigned to
-      site-keyed agent clusters. As a consquence, the document.domain accessor
+      documents without Origin-Agent-Cluster: headers will be assigned to
+      site-keyed agent clusters. As a consequence, the document.domain accessor
       remains settable by default. This matches the legacy behaviour.
       '''
+    },
+    {
+      'name': 'DeviceLoginScreenWebUILazyLoading',
+      'owners': ['alemate@chromium.org', 'rsorokin@chromium.org', 'antrim@chromium.org'],
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'future_on': ['chrome_os'],
+      'device_only': True,
+      'features': {
+        'dynamic_refresh': False,
+        'per_profile': False,
+      },
+      'items': [
+        {
+          'value': True,
+          'caption': 'Enable Lazy Login WebUI loading.',
+        },
+        {
+          'value': False,
+          'caption': 'Disable Lazy Login WebUI loading.',
+        },
+      ],
+      'default': False,
+      'example_value': True,
+      'id': 934,
+      'caption': '''Load Login WebUI only when needed.''',
+      'tags': [],
+      'desc': '''This policy controls whether the WebUI part of the sign-in screen will be always loaded at start or only before showing it. This policy applies to the sign-in screen.
+
+      If this policy is enabled, the WebUI part of the sign-in UI will be loaded only before showing it. This speeds up the login process.
+
+      If this policy is disabled, the WebUI part of the sign-in screen will always be loaded on boot (legacy behavior).
+
+      If unset, behavior will be controlled by kEnableLazyLoginWebUILoading feature.
+
+      This policy should be removed after kEnableLazyLoginWebUILoading is fully rolled out.''',
+    },
+    {
+      'name': 'ProjectorEnabled',
+      'owners': ['llin@google.com', 'cros-projector@google.com'],
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'supported_on': ['chrome_os:99-'],
+      'tags' : ['google-sharing'],
+      'features': {
+        'dynamic_refresh': True,
+        'per_profile': True,
+      },
+      'items': [
+        {
+          'value': True,
+          'caption': 'Enable Projector',
+        },
+        {
+          'value': False,
+          'caption': 'Disable Projector',
+        },
+      ],
+      'example_value': True,
+      'default': False,
+      'id': 935,
+      'caption': '''Enable Projector''',
+      'desc': '''This policy gives Projector permission to create and transcribe screen recording and upload to Drive.
+
+      If the policy is enabled, Projector will be enabled.
+      If the policy is disabled, Projector will be disabled.
+      If the policy is not set, Projector will by default disabled.''',
     }
   ],
   'messages': {
@@ -29555,9 +29646,10 @@ The recommended way to configure policy on Windows is via GPO, although provisio
     'DevicePciPeripheralDataAccessEnabled': 'device_pci_peripheral_data_access_enabled_v2.enabled',
     'DeviceRestrictedManagedGuestSessionEnabled': 'device_restricted_managed_guest_session_enabled.enabled',
     'DeviceLoginScreenPromptOnMultipleMatchingCertificates': 'login_screen_prompt_on_multiple_matching_certificates.value',
-    'KioskCRXManifestUpdateURLIgnored': 'kiosk_crx_manifest_update_url_ignored',
+    'KioskCRXManifestUpdateURLIgnored': 'kiosk_crx_manifest_update_url_ignored.value',
     'DeviceI18nShortcutsEnabled': 'device_i18n_shortcuts_enabled.enabled',
     'ChromadToCloudMigrationEnabled': 'chromad_to_cloud_migration_enabled.value',
+    'DeviceLoginScreenWebUILazyLoading': 'login_web_ui_lazy_loading.enabled',
   },
   'policy_atomic_group_definitions': [
     {
@@ -30065,8 +30157,8 @@ The recommended way to configure policy on Windows is via GPO, although provisio
     },
   ],
   'placeholders': [],
-  'deleted_policy_ids': [114, 115, 204, 205, 206, 412, 476, 544, 546, 562, 569, 578, 583, 585, 586, 587, 588, 589, 590, 591, 600, 668, 669, 872],
+  'deleted_policy_ids': [114, 115, 204, 205, 206, 341, 412, 476, 544, 546, 562, 569, 578, 583, 585, 586, 587, 588, 589, 590, 591, 600, 668, 669, 872],
   'deleted_atomic_policy_group_ids': [19],
-  'highest_id_currently_used': 933,
+  'highest_id_currently_used': 936,
   'highest_atomic_group_id_currently_used': 41
 }

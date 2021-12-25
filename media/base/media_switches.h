@@ -196,6 +196,7 @@ MEDIA_EXPORT extern const base::Feature kVaapiEnforceVideoMinMaxResolution;
 MEDIA_EXPORT extern const base::Feature kVaapiVideoMinResolutionForPerformance;
 MEDIA_EXPORT extern const base::Feature kVaapiVP8Encoder;
 MEDIA_EXPORT extern const base::Feature kVaapiVP9Encoder;
+MEDIA_EXPORT extern const base::Feature kGlobalVaapiLock;
 #if defined(ARCH_CPU_X86_FAMILY) && BUILDFLAG(IS_CHROMEOS_ASH)
 MEDIA_EXPORT extern const base::Feature kVaapiH264TemporalLayerHWEncoding;
 MEDIA_EXPORT extern const base::Feature kVaapiVp9kSVCHWEncoding;
@@ -222,11 +223,13 @@ MEDIA_EXPORT extern const base::Feature kUsePooledSharedImageVideoProvider;
 MEDIA_EXPORT extern const base::Feature kUseRealColorSpaceForAndroidVideo;
 #endif  // defined(OS_ANDROID)
 
-#if defined(OS_CHROMEOS) && BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+#if BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 MEDIA_EXPORT extern const base::Feature kUseChromeOSDirectVideoDecoder;
 
+#if defined(OS_CHROMEOS)
 MEDIA_EXPORT extern const base::Feature kUseAlternateVideoDecoderImplementation;
-#endif  // defined(OS_CHROMEOS) && BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
+#endif  // defined(OS_CHROMEOS)
+#endif  // BUILDFLAG(USE_CHROMEOS_MEDIA_ACCELERATION)
 
 #if defined(OS_MAC)
 MEDIA_EXPORT extern const base::Feature kMultiPlaneVideoToolboxSharedImages;

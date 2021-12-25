@@ -10545,6 +10545,41 @@
       }
     ]
   },
+  "PhoneHubCameraRollAllowed": {
+    "os": [
+      "chromeos_ash"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "policies": {},
+        "prefs": {
+          "phone_hub_camera_roll.allowed": {
+            "default_value": true
+          }
+        }
+      },
+      {
+        "policies": {
+          "PhoneHubCameraRollAllowed": false
+        },
+        "prefs": {
+          "phone_hub_camera_roll.allowed": {
+            "value": false
+          }
+        }
+      },
+      {
+        "policies": {
+          "PhoneHubCameraRollAllowed": true
+        },
+        "prefs": {
+          "phone_hub_camera_roll.allowed": {
+            "value": true
+          }
+        }
+      }
+    ]
+  },
   "PhoneHubNotificationsAllowed": {
     "os": [
       "chromeos_ash"
@@ -12094,9 +12129,6 @@
   },
   "SystemTimezoneAutomaticDetection": {
     "reason_for_missing_test": "Maps into CrosSettings"
-  },
-  "WebRestrictionsAuthority": {
-    "reason_for_missing_test": "TODO(crbug.com/1213429) add test case"
   },
   "TaskManagerEndProcessEnabled": {
     "os": [
@@ -17500,6 +17532,79 @@
           "origin_agent_cluster_default_enabled": {
             "value": true,
             "location": "user_profile"
+          }
+        }
+      }
+    ]
+  },
+  "DeviceLoginScreenWebUILazyLoading": {
+    "os": [
+      "chromeos_ash"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "policies": {},
+        "prefs": {
+          "ash.login.LoginScreenWebUILazyLoading": {
+            "default_value": false,
+            "location": "local_state"
+          }
+        }
+      },
+      {
+        "policies": {
+          "DeviceLoginScreenWebUILazyLoading": false
+        },
+        "prefs": {
+          "ash.login.LoginScreenWebUILazyLoading": {
+            "value": false,
+            "location": "local_state"
+          }
+        }
+      },
+      {
+        "policies": {
+          "DeviceLoginScreenWebUILazyLoading": true
+        },
+        "prefs": {
+          "ash.login.LoginScreenWebUILazyLoading": {
+            "value": true,
+            "location": "local_state"
+          }
+        }
+      }
+    ]
+  },
+  "ProjectorEnabled": {
+    "os": [
+      "chromeos_ash"
+    ],
+    "policy_pref_mapping_tests": [
+      {
+        "policies": {},
+        "prefs": {
+          "ash.projector.allow_by_policy": {
+            "default_value": false
+          }
+        }
+      },
+      {
+        "policies": {
+          "ProjectorEnabled": false
+        },
+        "prefs": {
+          "ash.projector.allow_by_policy": {
+            "value": false
+          }
+        }
+      },
+      {
+        "policies": {
+          "ProjectorEnabled": true
+        },
+        "prefs": {
+          "ash.projector.allow_by_policy": {
+            "value": true
           }
         }
       }

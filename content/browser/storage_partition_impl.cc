@@ -23,6 +23,7 @@
 #include "base/memory/raw_ptr.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_functions.h"
+#include "base/no_destructor.h"
 #include "base/run_loop.h"
 #include "base/task/sequenced_task_runner.h"
 #include "base/task/single_thread_task_runner.h"
@@ -1180,23 +1181,14 @@ void StoragePartitionImpl::Initialize(
   StorageNotificationService* storage_notification_service =
       browser_context_->GetStorageNotificationService();
   if (storage_notification_service) {
-    // base::Unretained is safe to use because the BrowserContext is guaranteed
-    // to outlive QuotaManager. This is because BrowserContext outlives this
-    // StoragePartitionImpl, which destroys the QuotaManager on teardown.
-    base::RepeatingCallback<void(const blink::StorageKey)>
-        send_notification_function = base::BindRepeating(
-            [](StorageNotificationService* service,
-               const blink::StorageKey storage_key) {
-              GetUIThreadTaskRunner({})->PostTask(
-                  FROM_HERE,
-                  base::BindOnce(&StorageNotificationService::
-                                     MaybeShowStoragePressureNotification,
-                                 base::Unretained(service),
-                                 std::move(storage_key.origin())));
-            },
-            base::Unretained(storage_notification_service));
-
-    quota_manager_->SetStoragePressureCallback(send_notification_function);
+    // The weak ptr associated with the pressure notification callback will be
+    // created and evaluated by a task runner on the UI thread, as confirmed by
+    // the DCHECK's above, ensuring that the task runner does not attempt to run
+    // the callback in the case that the storage notification service is already
+    // destructed.
+    quota_manager_->SetStoragePressureCallback(
+        storage_notification_service
+            ->CreateThreadSafePressureNotificationCallback());
   }
 
   // Each consumer is responsible for registering its QuotaClient during
@@ -1945,9 +1937,8 @@ void StoragePartitionImpl::OnDataUseUpdate(
   // It can pass empty GlobalRenderFrameHostId() when the context type is
   // `kNavigationRequestContext`.
   GetContentClient()->browser()->OnNetworkServiceDataUseUpdate(
-      context.render_frame_host_id().child_id,
-      context.render_frame_host_id().frame_routing_id,
-      network_traffic_annotation_id_hash, recv_bytes, sent_bytes);
+      context.render_frame_host_id(), network_traffic_annotation_id_hash,
+      recv_bytes, sent_bytes);
 }
 
 void StoragePartitionImpl::Clone(

@@ -16,6 +16,7 @@
 #include "ash/wm/desks/desk_preview_view.h"
 #include "ash/wm/desks/desks_bar_view.h"
 #include "ash/wm/desks/desks_util.h"
+#include "ash/wm/haptics_util.h"
 #include "ash/wm/overview/overview_constants.h"
 #include "ash/wm/overview/overview_controller.h"
 #include "ash/wm/overview/overview_grid.h"
@@ -37,6 +38,7 @@
 #include "ui/aura/window_observer.h"
 #include "ui/compositor/layer.h"
 #include "ui/display/display.h"
+#include "ui/events/devices/haptic_touchpad_effects.h"
 #include "ui/wm/core/coordinate_conversion.h"
 
 namespace ash {

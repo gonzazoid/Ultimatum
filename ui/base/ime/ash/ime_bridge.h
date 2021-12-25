@@ -26,13 +26,8 @@ class COMPONENT_EXPORT(UI_BASE_IME_ASH) IMEBridge {
   IMEBridge& operator=(const IMEBridge&) = delete;
   ~IMEBridge();
 
-  // Allocates the global instance. Must be called before any calls to Get().
-  static void Initialize();
-
-  // Releases the global instance.
-  static void Shutdown();
-
-  // Returns IMEBridge global instance. Initialize() must be called first.
+  // Constructs the global singleton (if not available yet) then returns it.
+  // TODO(crbug/1279743): Use dependency injection instead of global singleton.
   static IMEBridge* Get();
 
   // Returns current InputContextHandler. This function returns nullptr if input

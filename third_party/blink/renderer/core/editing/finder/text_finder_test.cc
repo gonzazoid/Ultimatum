@@ -10,7 +10,6 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_testing.h"
-#include "third_party/blink/renderer/core/display_lock/display_lock_document_state.h"
 #include "third_party/blink/renderer/core/dom/comment.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node_list.h"
@@ -33,6 +32,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/testing/testing_platform_support.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 
 namespace blink {
 
@@ -92,7 +92,7 @@ gfx::RectF TextFinderTest::FindInPageRect(Node* start_container,
   const Position start_position(start_container, start_offset);
   const Position end_position(end_container, end_offset);
   const EphemeralRange range(start_position, end_position);
-  return ToGfxRectF(FindInPageRectFromRange(range));
+  return FindInPageRectFromRange(range);
 }
 
 TEST_F(TextFinderTest, FindTextSimple) {
@@ -641,6 +641,7 @@ TEST_F(TextFinderTest, BeforeMatchEvent) {
 
       const foo = document.createElement('div');
       foo.textContent = 'foo';
+      foo.setAttribute('hidden', 'until-found');
       document.body.appendChild(foo);
       window.beforematchFiredOnFoo = false;
       foo.addEventListener('beforematch', () => {
@@ -649,6 +650,7 @@ TEST_F(TextFinderTest, BeforeMatchEvent) {
 
       const bar = document.createElement('div');
       bar.textContent = 'bar';
+      bar.setAttribute('hidden', 'until-found');
       document.body.appendChild(bar);
       window.beforematchFiredOnBar = false;
       bar.addEventListener('beforematch', () => {
@@ -694,6 +696,7 @@ TEST_F(TextFinderTest, BeforeMatchEventRemoveElement) {
       document.body.appendChild(spacer);
 
       const foo = document.createElement('div');
+      foo.setAttribute('hidden', 'until-found');
       foo.textContent = 'foo';
       document.body.appendChild(foo);
       window.beforematchFiredOnFoo = false;
@@ -728,33 +731,14 @@ TEST_F(TextFinderSimTest, BeforeMatchEventAsyncExpandHighlight) {
   LoadURL("https://example.com/test.html");
   request.Complete(R"HTML(
     <!DOCTYPE html>
-    <style>
-      .hidden {
-        content-visibility: hidden-matchable;
-      }
-    </style>
-
-    <div id=hiddenid class=hidden>hidden</div>
-
-    <script>
-      hiddenid.addEventListener('beforematch', () => {
-        requestAnimationFrame(() => {
-          hiddenid.classList.remove('hidden');
-        }, 0);
-      });
-    </script>
+    <div id=hiddenid hidden=until-found>hidden</div>
   )HTML");
   Compositor().BeginFrame();
 
-  auto forced_activatable_locks = GetDocument()
-                                      .GetDisplayLockDocumentState()
-                                      .GetScopedForceActivatableLocks();
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kFindInPage);
   GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
-  Compositor().BeginFrame();
   Compositor().BeginFrame();
 
   HeapVector<Member<DocumentMarker>> markers =
@@ -769,21 +753,7 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkm) {
   LoadURL("https://example.com/test.html");
   request.Complete(R"HTML(
     <!DOCTYPE html>
-    <style>
-      .hidden {
-        content-visibility: hidden-matchable;
-      }
-    </style>
-
-    <div id=hiddenid class=hidden>hidden</div>
-
-    <script>
-      hiddenid.addEventListener('beforematch', () => {
-        requestAnimationFrame(() => {
-          hiddenid.classList.remove('hidden');
-        }, 0);
-      });
-    </script>
+    <div id=hiddenid hidden=until-found>hidden</div>
   )HTML");
   Compositor().BeginFrame();
 
@@ -792,57 +762,23 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkm) {
       static_cast<ukm::TestUkmRecorder*>(GetDocument().UkmRecorder());
   EXPECT_EQ(recorder->entries_count(), 0u);
 
-  auto forced_activatable_locks = GetDocument()
-                                      .GetDisplayLockDocumentState()
-                                      .GetScopedForceActivatableLocks();
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kFindInPage);
   GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
   Compositor().BeginFrame();
-  Compositor().BeginFrame();
 
   auto entries = recorder->GetEntriesByName("Blink.FindInPage");
-  ASSERT_EQ(entries.size(), 1u);
+  // There are two entries because
+  // DisplayLockUtilities::ActivateFindInPageMatchRangeIfNeeded followed by
+  // DisplayLockContext::CommitForActivationWithSignal sets a
+  // "HasFindInPageContentVisibilityActiveMatch" UKM.
+  ASSERT_EQ(entries.size(), 2u);
 
-  EXPECT_TRUE(ukm::TestUkmRecorder::EntryHasMetric(
+  EXPECT_FALSE(ukm::TestUkmRecorder::EntryHasMetric(
       entries[0], "BeforematchExpandedHiddenMatchable"));
-}
-
-TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUkmNoHandler) {
-  SimRequest request("https://example.com/test.html", "text/html");
-  LoadURL("https://example.com/test.html");
-  request.Complete(R"HTML(
-    <!DOCTYPE html>
-    <style>
-      .hidden {
-        content-visibility: hidden-matchable;
-      }
-    </style>
-
-    <div id=hiddenid class=hidden>hidden</div>
-  )HTML");
-  Compositor().BeginFrame();
-
-  GetDocument().ukm_recorder_ = std::make_unique<ukm::TestUkmRecorder>();
-  auto* recorder =
-      static_cast<ukm::TestUkmRecorder*>(GetDocument().UkmRecorder());
-  EXPECT_EQ(recorder->entries_count(), 0u);
-
-  auto forced_activatable_locks = GetDocument()
-                                      .GetDisplayLockDocumentState()
-                                      .GetScopedForceActivatableLocks();
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kFindInPage);
-  GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
-                       *mojom::blink::FindOptions::New(),
-                       /*wrap_within_frame=*/false);
-
-  Compositor().BeginFrame();
-  Compositor().BeginFrame();
-
-  auto entries = recorder->GetEntriesByName("Blink.FindInPage");
-  EXPECT_EQ(entries.size(), 0u);
+  EXPECT_TRUE(ukm::TestUkmRecorder::EntryHasMetric(
+      entries[1], "BeforematchExpandedHiddenMatchable"));
 }
 
 TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUseCounter) {
@@ -850,33 +786,14 @@ TEST_F(TextFinderSimTest, BeforeMatchExpandedHiddenMatchableUseCounter) {
   LoadURL("https://example.com/test.html");
   request.Complete(R"HTML(
     <!DOCTYPE html>
-    <style>
-      .hidden {
-        content-visibility: hidden-matchable;
-      }
-    </style>
-
-    <div id=hiddenid class=hidden>hidden</div>
-
-    <script>
-      hiddenid.addEventListener('beforematch', () => {
-        requestAnimationFrame(() => {
-          hiddenid.classList.remove('hidden');
-        }, 0);
-      });
-    </script>
+    <div id=hiddenid hidden=until-found>hidden</div>
   )HTML");
   Compositor().BeginFrame();
 
-  auto forced_activatable_locks = GetDocument()
-                                      .GetDisplayLockDocumentState()
-                                      .GetScopedForceActivatableLocks();
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kFindInPage);
   GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
-  Compositor().BeginFrame();
   Compositor().BeginFrame();
 
   EXPECT_TRUE(GetDocument().IsUseCounted(
@@ -889,25 +806,14 @@ TEST_F(TextFinderSimTest,
   LoadURL("https://example.com/test.html");
   request.Complete(R"HTML(
     <!DOCTYPE html>
-    <style>
-      .hidden {
-        content-visibility: hidden-matchable;
-      }
-    </style>
-
-    <div id=hiddenid class=hidden>hidden</div>
+    <div id=hiddenid>hidden</div>
   )HTML");
   Compositor().BeginFrame();
 
-  auto forced_activatable_locks = GetDocument()
-                                      .GetDisplayLockDocumentState()
-                                      .GetScopedForceActivatableLocks();
-  GetDocument().UpdateStyleAndLayout(DocumentUpdateReason::kFindInPage);
   GetTextFinder().Find(/*identifier=*/0, WebString(String("hidden")),
                        *mojom::blink::FindOptions::New(),
                        /*wrap_within_frame=*/false);
 
-  Compositor().BeginFrame();
   Compositor().BeginFrame();
 
   EXPECT_FALSE(GetDocument().IsUseCounted(

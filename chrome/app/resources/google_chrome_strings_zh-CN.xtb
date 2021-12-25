@@ -56,6 +56,7 @@
 <translation id="2348335408836342058">Chrome 需要获得相应权限，才能允许此网站使用您的摄像头和麦克风</translation>
 <translation id="234869673307233423">Chrome 无法检查您的密码。请稍后重试。</translation>
 <translation id="235650106824528204">在使用此工作资料（例如创建书签、历史记录、密码和其他设置）时生成的任何 Chrome 数据都可由工作资料管理员移除。<ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">继续</translation>
 <translation id="2429317896000329049">由于您的网域停用了同步功能，Google Chrome无法同步您的数据。</translation>
 <translation id="2467438592969358367">Google Chrome 想导出您的密码。请输入您的 Windows 密码以允许此操作。</translation>
 <translation id="2485422356828889247">卸载</translation>
@@ -140,6 +141,7 @@
 <translation id="4343195214584226067">“<ph name="EXTENSION_NAME" />”已添加到 Chrome</translation>
 <translation id="4384570495110188418">Chrome 无法检查您的密码，因为您未登录</translation>
 <translation id="4407807842708586359">Google Chrome 操作系统</translation>
+<translation id="4427306783828095590">“增强型保护”选项在防范网上诱骗和恶意软件方面更高一筹</translation>
 <translation id="4450664632294415862">Chrome - 网络登录 - <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">Google Chrome 正在执行另一项操作，请稍后重试。</translation>
 <translation id="4480040274068703980">登录时出现错误，Chrome操作系统无法同步您的数据。</translation>
@@ -168,7 +170,6 @@
 <translation id="5193136243808726294">Google Chrome 操作系统无法打开此网页。</translation>
 <translation id="521447420733633466">如果您是与亲朋好友共用一部设备，他们将能够使用单独的帐号进行浏览，并可随心所欲地设置 Chrome</translation>
 <translation id="5251420635869119124">访客使用Chrome不会留下任何痕迹。</translation>
-<translation id="5251679006894510177">离最新版本只有一步之遥了！重新启动 Chrome 即可完成更新。无痕式窗口不会自动重新打开。</translation>
 <translation id="5334487786912937552">Chrome 需要获得存储空间使用权限才能下载文件</translation>
 <translation id="5386244825306882791">它还能够控制您启动Chrome后或通过多功能框进行搜索时系统显示的页面。</translation>
 <translation id="5394833366792865639">共享 Chrome 标签页</translation>
@@ -239,6 +240,7 @@
 <translation id="7398801000654795464">您之前登录 Chrome 时使用的帐号为 <ph name="USER_EMAIL_ADDRESS" />，请使用同一帐号再次登录。</translation>
 <translation id="7408085963519505752">Chrome操作系统条款</translation>
 <translation id="7419046106786626209">由于您的网域停用了同步功能，Chrome操作系统无法同步您的数据。</translation>
+<translation id="7481213027396403996">获享 Chrome 的最强安全保护</translation>
 <translation id="7486227612705979895">Chrome 将访问您的云端硬盘，以在地址栏提供建议</translation>
 <translation id="7535429826459677826">Google Chrome 开发者版</translation>
 <translation id="7573289029918943991">若想确认您设备上的操作系统是否是最新版本，请前往 <ph name="LINK_BEGIN" />Chrome 操作系统设置<ph name="LINK_END" /></translation>
@@ -297,6 +299,8 @@
 <translation id="8862326446509486874">您的权限不足，无法进行系统级安装。请尝试以管理员身份再次运行安装程序。</translation>
 <translation id="8914504000324227558">重启 Chrome</translation>
 <translation id="8922193594870374009">若要从 <ph name="ORIGIN" /> 向您的 Android 手机发送电话号码，请在这两部设备上分别登录 Chrome。</translation>
+<translation id="8927704157641862988">自定义 Chrome 认为最重要的隐私权选项。本指南并未涵盖所有设置和选项。</translation>
+<translation id="8983720963221508955">您已在自己的帐号中开启了“增强型安全浏览”功能。现在，为 Chrome 启用该功能吧。</translation>
 <translation id="8986207147630327271">您将要向此浏览器添加工作资料并允许您的管理员仅控制此工作资料。</translation>
 <translation id="8999208279178790196">{0,plural, =0{有一项可用的 Chrome 更新}=1{有一项可用的 Chrome 更新}other{有一项可用的 Chrome 更新（已发布 # 天）}}</translation>
 <translation id="9026991721384951619">您的帐号登录详细信息已过期，Chrome操作系统无法同步您的数据。</translation>

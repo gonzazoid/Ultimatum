@@ -9,6 +9,7 @@
 #include "ash/projector/projector_metadata_controller.h"
 #include "ash/projector/projector_ui_controller.h"
 #include "ash/public/cpp/projector/projector_client.h"
+#include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
 #include "ash/public/cpp/projector/projector_session.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
@@ -62,14 +63,18 @@ std::string GetScreencastName() {
 
 ProjectorControllerImpl::ProjectorControllerImpl()
     : projector_session_(std::make_unique<ash::ProjectorSessionImpl>()),
-      ui_controller_(std::make_unique<ash::ProjectorUiController>(this)),
       metadata_controller_(
           std::make_unique<ash::ProjectorMetadataController>()) {
+  if (features::IsProjectorAnnotatorEnabled())
+    ui_controller_ = std::make_unique<ash::ProjectorUiController>(this);
+
   projector_session_->AddObserver(this);
+  CrasAudioHandler::Get()->AddAudioObserver(this);
 }
 
 ProjectorControllerImpl::~ProjectorControllerImpl() {
   projector_session_->RemoveObserver(this);
+  CrasAudioHandler::Get()->RemoveAudioObserver(this);
 }
 
 // static
@@ -79,7 +84,8 @@ ProjectorControllerImpl* ProjectorControllerImpl::Get() {
 
 void ProjectorControllerImpl::StartProjectorSession(
     const std::string& storage_dir) {
-  DCHECK(CanStartNewSession());
+  DCHECK_EQ(GetNewScreencastPrecondition().state,
+            NewScreencastPreconditionState::kEnabled);
 
   auto* controller = CaptureModeController::Get();
   if (!controller->is_recording_in_progress()) {
@@ -134,11 +140,6 @@ void ProjectorControllerImpl::OnSpeechRecognitionAvailabilityChanged(
 
 void ProjectorControllerImpl::OnTranscription(
     const media::SpeechRecognitionResult& result) {
-  // Render transcription.
-  if (is_caption_on_) {
-    ui_controller_->OnTranscription(result.transcription, result.is_final);
-  }
-
   if (result.is_final && result.timing_information.has_value()) {
     // Records final transcript.
     metadata_controller_->RecordTranscription(result);
@@ -156,11 +157,68 @@ bool ProjectorControllerImpl::IsEligible() const {
          ProjectorController::AreExtendedProjectorFeaturesDisabled();
 }
 
-bool ProjectorControllerImpl::CanStartNewSession() const {
-  // TODO(crbug.com/1165435) Add other pre-conditions to starting a new
-  // projector session.
-  return IsEligible() && !projector_session_->is_active() &&
-         client_->IsDriveFsMounted();
+NewScreencastPrecondition
+ProjectorControllerImpl::GetNewScreencastPrecondition() const {
+  NewScreencastPrecondition result;
+
+  // For development purposes on the x11 simulator, on-device speech recognition
+  // and DriveFS are not supported.
+  if (!ProjectorController::AreExtendedProjectorFeaturesDisabled()) {
+    switch (speech_recognition_availability_) {
+      case SpeechRecognitionAvailability::
+          kOnDeviceSpeechRecognitionNotSupported:
+        result.state = NewScreencastPreconditionState::kDisabled;
+        result.reasons = {NewScreencastPreconditionReason::
+                              kOnDeviceSpeechRecognitionNotSupported};
+        return result;
+      case SpeechRecognitionAvailability::kUserLanguageNotSupported:
+        result.state = NewScreencastPreconditionState::kDisabled;
+        result.reasons = {
+            NewScreencastPreconditionReason::kUserLocaleNotSupported};
+        return result;
+
+      // We will attempt to install SODA.
+      case SpeechRecognitionAvailability::kSodaNotInstalled:
+      case SpeechRecognitionAvailability::kSodaInstalling:
+        result.state = NewScreencastPreconditionState::kDisabled;
+        result.reasons = {
+            NewScreencastPreconditionReason::kSodaDownloadInProgress};
+        return result;
+      case SpeechRecognitionAvailability::kAvailable:
+        break;
+    }
+
+    if (!client_->IsDriveFsMounted()) {
+      result.state = NewScreencastPreconditionState::kDisabled;
+      result.reasons = {NewScreencastPreconditionReason::kOthers};
+      return result;
+    }
+
+    // TODO(crbug.com/1165435) Disable New Screencast button when out of disk
+    // space or drive quota.
+  }
+
+  if (projector_session_->is_active()) {
+    result.state = NewScreencastPreconditionState::kDisabled;
+    result.reasons = {NewScreencastPreconditionReason::kInProjectorSession};
+    return result;
+  }
+
+  if (CaptureModeController::Get()->is_recording_in_progress()) {
+    result.state = NewScreencastPreconditionState::kDisabled;
+    result.reasons = {
+        NewScreencastPreconditionReason::kScreenRecordingInProgress};
+    return result;
+  }
+
+  if (!IsInputDeviceAvailable()) {
+    result.state = NewScreencastPreconditionState::kDisabled;
+    result.reasons = {NewScreencastPreconditionReason::kNoMic};
+    return result;
+  }
+
+  result.state = NewScreencastPreconditionState::kEnabled;
+  return result;
 }
 
 void ProjectorControllerImpl::OnToolSet(const AnnotatorTool& tool) {
@@ -175,37 +233,35 @@ void ProjectorControllerImpl::OnUndoRedoAvailabilityChanged(
   // Projector toolbar.
 }
 
-void ProjectorControllerImpl::SetCaptionBubbleState(bool is_on) {
-  ui_controller_->SetCaptionBubbleState(is_on);
-}
+void ProjectorControllerImpl::OnRecordingStarted(bool is_in_projector_mode) {
+  if (!is_in_projector_mode) {
+    OnNewScreencastPreconditionChanged();
+    return;
+  }
+  if (ui_controller_)
+    ui_controller_->ShowToolbar();
 
-void ProjectorControllerImpl::OnCaptionBubbleModelStateChanged(bool is_on) {
-  is_caption_on_ = is_on;
-}
-
-void ProjectorControllerImpl::MarkKeyIdea() {
-  metadata_controller_->RecordKeyIdea();
-  ui_controller_->OnKeyIdeaMarked();
-}
-
-void ProjectorControllerImpl::OnRecordingStarted() {
-  ui_controller_->ShowToolbar();
   StartSpeechRecognition();
-  ui_controller_->OnRecordingStateChanged(true /* started */);
   metadata_controller_->OnRecordingStarted();
 }
 
-void ProjectorControllerImpl::OnRecordingEnded() {
+void ProjectorControllerImpl::OnRecordingEnded(bool is_in_projector_mode) {
+  if (!is_in_projector_mode) {
+    OnNewScreencastPreconditionChanged();
+    return;
+  }
+
   DCHECK(projector_session_->is_active());
 
   StopSpeechRecognition();
-  ui_controller_->OnRecordingStateChanged(false /* started */);
 
   // TODO(b/197152209): move closing selfie cam to ProjectorUiController.
   if (client_->IsSelfieCamVisible())
     client_->CloseSelfieCam();
-  // Close Projector toolbar.
-  ui_controller_->CloseToolbar();
+
+  // Close Projector toolbar if ui controller is present.
+  if (ui_controller_)
+    ui_controller_->CloseToolbar();
 
   if (projector_session_->screencast_container_path()) {
     // Finish saving the screencast if the container is available. The container
@@ -236,45 +292,30 @@ void ProjectorControllerImpl::OnRecordingStartAborted() {
 }
 
 void ProjectorControllerImpl::OnLaserPointerPressed() {
+  DCHECK(ui_controller_);
   ui_controller_->OnLaserPointerPressed();
 }
 
 void ProjectorControllerImpl::OnMarkerPressed() {
+  DCHECK(ui_controller_);
   ui_controller_->OnMarkerPressed();
 }
 
-void ProjectorControllerImpl::OnClearAllMarkersPressed() {
-  ui_controller_->OnClearAllMarkersPressed();
+void ProjectorControllerImpl::ResetTools() {
+  if (ui_controller_)
+    ui_controller_->ResetTools();
 }
 
-void ProjectorControllerImpl::OnUndoPressed() {
-  ui_controller_->OnUndoPressed();
+bool ProjectorControllerImpl::IsLaserPointerEnabled() {
+  return ui_controller_ && ui_controller_->IsLaserPointerEnabled();
 }
 
-void ProjectorControllerImpl::OnSelfieCamPressed(bool enabled) {
-  ui_controller_->OnSelfieCamPressed(enabled);
-
-  DCHECK_NE(client_, nullptr);
-  if (enabled == client_->IsSelfieCamVisible())
-    return;
-
-  if (enabled) {
-    client_->ShowSelfieCam();
-    return;
-  }
-  client_->CloseSelfieCam();
-}
-
-void ProjectorControllerImpl::OnMagnifierButtonPressed(bool enabled) {
-  ui_controller_->OnMagnifierButtonPressed(enabled);
-}
-
-void ProjectorControllerImpl::OnChangeMarkerColorPressed(SkColor new_color) {
-  ui_controller_->OnChangeMarkerColorPressed(new_color);
+bool ProjectorControllerImpl::IsAnnotatorEnabled() {
+  return ui_controller_ && ui_controller_->is_annotator_enabled();
 }
 
 void ProjectorControllerImpl::OnNewScreencastPreconditionChanged() {
-  client_->OnNewScreencastPreconditionChanged(CanStartNewSession());
+  client_->OnNewScreencastPreconditionChanged(GetNewScreencastPrecondition());
 }
 
 void ProjectorControllerImpl::SetProjectorUiControllerForTest(
@@ -287,9 +328,20 @@ void ProjectorControllerImpl::SetProjectorMetadataControllerForTest(
   metadata_controller_ = std::move(metadata_controller);
 }
 
+void ProjectorControllerImpl::OnAudioNodesChanged() {
+  OnNewScreencastPreconditionChanged();
+}
+
 void ProjectorControllerImpl::OnProjectorSessionActiveStateChanged(
     bool active) {
   OnNewScreencastPreconditionChanged();
+}
+
+bool ProjectorControllerImpl::IsInputDeviceAvailable() const {
+  uint64_t input_id = CrasAudioHandler::Get()->GetPrimaryActiveInputNode();
+  const AudioDevice* input_device =
+      CrasAudioHandler::Get()->GetDeviceFromId(input_id);
+  return input_device != nullptr;
 }
 
 void ProjectorControllerImpl::StartSpeechRecognition() {

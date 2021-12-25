@@ -778,7 +778,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
       const std::string& mime_type,
       network::mojom::RequestDestination request_destination,
       bool include_credentials) override;
-  void DomOperationResponse(const std::string& json_string) override;
+  void DomOperationResponse(RenderFrameHost* render_frame_host,
+                            const std::string& json_string) override;
   void SavableResourceLinksResponse(
       RenderFrameHostImpl* source,
       const std::vector<GURL>& resources_list,
@@ -986,6 +987,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void CancelModalDialogsForRenderManager() override;
   void NotifySwappedFromRenderManager(RenderFrameHostImpl* old_frame,
                                       RenderFrameHostImpl* new_frame) override;
+  void NotifySwappedFromRenderManagerWithoutFallbackContent(
+      RenderFrameHostImpl* new_frame) override;
   void NotifyMainFrameSwappedFromRenderManager(
       RenderFrameHostImpl* old_frame,
       RenderFrameHostImpl* new_frame) override;

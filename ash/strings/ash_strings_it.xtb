@@ -25,7 +25,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="1104084341931202936">Mostra impostazioni di accessibilità</translation>
 <translation id="1104621072296271835">I tuoi dispositivi funzionano ancora meglio insieme</translation>
 <translation id="1111781754511998498">Proiettore</translation>
-<translation id="1119348796022671382">La modalità colore A tema usa i colori estratti dallo sfondo per colorare leggermente l'interfaccia.</translation>
 <translation id="112308213915226829">Nascondi automaticamente barra delle app</translation>
 <translation id="1142002900084379065">Foto recenti</translation>
 <translation id="1148499908455722006">Apri la finestra di dialogo delle informazioni per <ph name="USER_NAME" /></translation>
@@ -114,7 +113,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="1632985212731562677">È possibile disattivare Switch Access in Impostazioni &gt; Accessibilità.</translation>
 <translation id="1637505162081889933"><ph name="NUM_DEVICES" /> dispositivi</translation>
 <translation id="1654477262762802994">Avvia una query vocale</translation>
-<translation id="1667964833127753507">La modalità colore Neutra non usa i colori estratti dallo sfondo, che sostituisce con un insieme di tonalità neutre chiare o scure.</translation>
 <translation id="1677472565718498478"><ph name="TIME" /> rimanenti</translation>
 <translation id="1677507110654891115">La funzionalità <ph name="FEATURE_NAME" /> non è connessa.</translation>
 <translation id="1698080062160024910">Timer: <ph name="TOTAL_TIME" /> · <ph name="LABEL" /></translation>
@@ -133,6 +131,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="1768366657309696705">La scorciatoia da tastiera <ph name="LAUNCHER_KEY_NAME" /> + Punto è cambiata. Per usare il tasto Ins, premi il tasto <ph name="LAUNCHER_KEY_NAME" /> + Maiusc + Backspace.</translation>
 <translation id="1770726142253415363">Spostata alla riga <ph name="ROW_NUMBER" />, colonna <ph name="COLUMN_NUMBER" />.</translation>
 <translation id="1771761307086386028">Scorri a destra</translation>
+<translation id="1774796056689732716">Calendario, <ph name="CURRENT_MONTH_YEAR" />, è attualmente selezionata la data <ph name="DATE" />.</translation>
 <translation id="1787955149152357925">Off</translation>
 <translation id="1804572139604454141">Registrazione terminata a causa dello spazio su disco in esaurimento</translation>
 <translation id="181103072419391116">Intensità del segnale <ph name="SIGNAL_STRENGTH" />, gestita dall'amministratore</translation>
@@ -192,6 +191,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="2222841058024245321">Scrivania 7</translation>
 <translation id="2224075387478458881">La funzionalità Registrazione dello schermo non è consentita se sono visibili contenuti protetti</translation>
 <translation id="225680501294068881">Ricerca dispositivi in corso...</translation>
+<translation id="2257486738914982088">Si è verificato un errore durante il download del file <ph name="FILENAME" /></translation>
 <translation id="2268130516524549846">Bluetooth disattivato</translation>
 <translation id="2268813581635650749">Disconnetti tutti</translation>
 <translation id="2269016722240250274">Un'applicazione sta utilizzando il microfono</translation>
@@ -474,7 +474,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="412298498316631026">finestra</translation>
 <translation id="4129129681837227511">Se vuoi vedere le notifiche nella schermata di blocco, sblocca il dispositivo per cambiare l'impostazione</translation>
 <translation id="4146833061457621061">Fammi ascoltare musica</translation>
-<translation id="4157822100366708405">Impostazioni Tema scuro</translation>
 <translation id="4173958948577803258">G</translation>
 <translation id="4177913004758410636">{0,plural, =1{Aggiorna il dispositivo entro 1 giorno}one{Aggiorna il dispositivo entro # giorno}other{Aggiorna il dispositivo entro # giorni}}</translation>
 <translation id="4181841719683918333">Lingue</translation>
@@ -588,6 +587,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="4831034276697007977">Vuoi disattivare i clic automatici?</translation>
 <translation id="4849058404725798627">Evidenzia oggetto con stato attivo della tastiera</translation>
 <translation id="485592688953820832">Nessuna azione (pausa)</translation>
+<translation id="4860284199500934869">Controlla la tua connessione a Internet per scaricare il file <ph name="FILENAME" /></translation>
 <translation id="486056901304535126">Verrà effettuato un tentativo di download in un secondo tempo. Ciò che dici verrà inviato a Google per l'elaborazione fino al completamento del download.</translation>
 <translation id="4868492592575313542">attivato</translation>
 <translation id="4872237917498892622">Alt+tasto per la ricerca o Maiusc</translation>
@@ -622,6 +622,8 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="5075554201838155866">Avvia sottotitoli</translation>
 <translation id="5078796286268621944">PIN errato</translation>
 <translation id="5083553833479578423">Sblocca altre funzioni dell'assistente.</translation>
+<translation id="5090752371472782287">Trasmetti a un dispositivo <ph name="MANAGER" /></translation>
+<translation id="5106223312672646208">Personalizza</translation>
 <translation id="5117590920725113268">Mostra mese successivo</translation>
 <translation id="5136175204352732067">Tastiera diversa collegata</translation>
 <translation id="5147567197700016471">Sbloccato</translation>
@@ -630,6 +632,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="5168181903108465623">Dispositivi di trasmissione disponibili</translation>
 <translation id="5170568018924773124">Mostra nella cartella</translation>
 <translation id="5176318573511391780">Registra schermo parziale</translation>
+<translation id="5198413532174090167"><ph name="DATE" />, <ph name="NUMBER" /> eventi</translation>
 <translation id="5198715732953550718"><ph name="MOVED_APP_NAME" /> combinata con <ph name="IN_PLACE_APP" /> per creare una nuova cartella.</translation>
 <translation id="5206028654245650022"><ph name="APP_NAME" />, <ph name="NOTIFICATION_TITLE" />: <ph name="MESSAGE" />, <ph name="PHONE_NAME" /></translation>
 <translation id="5206057955438543357">{NUM_NOTIFICATIONS,plural, =1{1 altra notifica}one{altre # notifiche}other{altre # notifiche}}</translation>
@@ -666,6 +669,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="5426063383988017631">Menu Impostazioni chiuso</translation>
 <translation id="5428899915242071344">Inizia la selezione</translation>
 <translation id="5430931332414098647">Tethering istantaneo</translation>
+<translation id="5431318178759467895">A colori</translation>
 <translation id="5431825016875453137">OpenVPN/L2TP</translation>
 <translation id="5433020815079095860">Ingresso audio</translation>
 <translation id="544691375626129091">A questa sessione sono già stati aggiunti tutti gli utenti disponibili.</translation>
@@ -713,6 +717,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="5769373120130404283">Schermata sulla privacy</translation>
 <translation id="5777841717266010279">Interrompere la condivisione dello schermo?</translation>
 <translation id="5779721926447984944">File bloccati</translation>
+<translation id="5788127256798019331">File Google Play</translation>
 <translation id="5790085346892983794">Completato</translation>
 <translation id="5805809050170488595">Fai clic per attivare <ph name="NETWORK_NAME" /></translation>
 <translation id="5820394555380036790">Chromium OS</translation>
@@ -801,9 +806,11 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="643147933154517414">Operazioni completate</translation>
 <translation id="6431865393913628856">Registrazione dello schermo</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> su <ph name="RECEIVER_NAME" /></translation>
+<translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> evento</translation>
 <translation id="6452181791372256707">Rifiuto</translation>
 <translation id="6453179446719226835">La lingua è stata modificata</translation>
 <translation id="6459472438155181876">Estensione dello schermo su <ph name="DISPLAY_NAME" /></translation>
+<translation id="6477681113376365978">Impossibile scaricare il file</translation>
 <translation id="6482559668224714696">Lente d'ingrandimento a schermo intero</translation>
 <translation id="6490471652906364588">Dispositivo USB-C (porta a destra)</translation>
 <translation id="6491071886865974820"><ph name="MANAGER" /> richiede l'aggiornamento di <ph name="DEVICE_TYPE" /> entro il termine ultimo</translation>
@@ -815,7 +822,10 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="6528179044667508675">Non disturbare</translation>
 <translation id="65320610082834431">Emoji</translation>
 <translation id="6537924328260219877">Intensità del segnale <ph name="SIGNAL_STRENGTH" />, batteria del telefono <ph name="BATTERY_STATUS" /></translation>
+<translation id="6539852571005954999">Scansione del file <ph name="FILENAME" /> per il download in corso…</translation>
 <translation id="6542521951477560771">Trasmissione di contenuti a <ph name="RECEIVER_NAME" /> in corso</translation>
+<translation id="655633303491376835"><ph name="APP_NAME" />
+Nuova installazione</translation>
 <translation id="6559976592393364813">Rivolgiti all'amministratore</translation>
 <translation id="6565007273808762236">Connessione eSIM non disponibile</translation>
 <translation id="6570831796530454248">{0,plural, =1{Aggiorna il dispositivo entro 1 ora}one{Aggiorna il dispositivo entro # ora}other{Aggiorna il dispositivo entro # ore}}</translation>
@@ -847,6 +857,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="6723839937902243910">Alimentazione</translation>
 <translation id="6727969043791803658">Dispositivo connesso. Livello batteria: <ph name="BATTERY_PERCENTAGE" />%</translation>
 <translation id="6732800389263199929">+<ph name="COUNT" /></translation>
+<translation id="6739144137573853180">VAI A IMPOSTAZIONI</translation>
 <translation id="6751052314767925245">Applicata dall'amministratore</translation>
 <translation id="6751826523481687655">La traccia delle prestazioni è attiva</translation>
 <translation id="6752912906630585008">Scrivania <ph name="REMOVED_DESK" /> rimossa e unita alla scrivania <ph name="RECEIVE_DESK" /></translation>
@@ -859,6 +870,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="6811454077060061666">Google Drive per desktop non è disponibile</translation>
 <translation id="6818242057446442178">Indietro per parola</translation>
 <translation id="6820676911989879663">Fai una pausa!</translation>
+<translation id="6827049576281411231">Chiudi il riquadro degli eventi</translation>
 <translation id="6836499262298959512">File pericoloso</translation>
 <translation id="6837064795450991317">Nascondi deskbar</translation>
 <translation id="6852052252232534364">Fai clic per attivare</translation>
@@ -866,6 +878,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="685782768769951078">{NUM_DIGITS,plural, =1{Manca una cifra}one{Mancano # cifre}other{Mancano # cifre}}</translation>
 <translation id="6867938213751067702">Download di <ph name="FILENAME" /> sospeso</translation>
 <translation id="6878400149835617132">Scorciatoia disattivata</translation>
+<translation id="6884665277231944629">Torna a oggi</translation>
 <translation id="6886172995547742638">Il tuo <ph name="DEVICE_TYPE" /> potrebbe offrire prestazioni inferiori. Usa un alimentatore USB-C certificato da almeno <ph name="PREFERRED_MINIMUM_POWER" /> W.</translation>
 <translation id="688631446150864480">Premi il tasto Freccia giù per cambiare finestra</translation>
 <translation id="6896758677409633944">Copia</translation>
@@ -952,6 +965,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="7497767806359279797">Scegli la lingua e la tastiera</translation>
 <translation id="7509246181739783082">Verifica la tua identità</translation>
 <translation id="7513622367902644023">Modalità screenshot selezionata</translation>
+<translation id="7513922695575567867">Calendario, settimana del <ph name="DATE" />, è attualmente selezionata la data <ph name="SELECTED_DATE" />.</translation>
 <translation id="7514365320538308">Scarica</translation>
 <translation id="7526573455193969409">La rete potrebbe essere monitorata</translation>
 <translation id="7536035074519304529">Indirizzo IP: <ph name="ADDRESS" /></translation>
@@ -961,6 +975,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="7564874036684306347">Lo spostamento delle finestre su un altro desktop potrebbe causare comportamenti imprevisti. Le finestre, le notifiche e le finestre di dialogo successive potrebbero essere divise tra i desktop.</translation>
 <translation id="7569509451529460200">Braille e ChromeVox attivati</translation>
 <translation id="7569983096843329377">Nero</translation>
+<translation id="757941033127302446">Accesso effettuato</translation>
 <translation id="7579778809502851308">Acquisizione schermo</translation>
 <translation id="7590883480672980941">Impostazioni di immissione</translation>
 <translation id="7593891976182323525">Tasto per la ricerca o Maiusc</translation>
@@ -968,7 +983,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="7600875258240007829">Visualizza tutte le notifiche</translation>
 <translation id="7607002721634913082">In pausa</translation>
 <translation id="7610198039767537854">Visualizza le foto recenti del rullino del telefono su <ph name="DEVICE_TYPE" /></translation>
-<translation id="7618774594543487847">Neutra</translation>
 <translation id="7624117708979618027"><ph name="TEMPERATURE_F" /> °F</translation>
 <translation id="7631906263969450674">Evidenziatore</translation>
 <translation id="7633755430369750696">Mostra impostazioni di Condivisione nelle vicinanze.</translation>
@@ -982,6 +996,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="7662283695561029522">Tocca per configurare</translation>
 <translation id="7705524343798198388">VPN</translation>
 <translation id="7714767791242455379">Aggiungi una nuova rete mobile</translation>
+<translation id="7720410380936703141">RIPROVA</translation>
 <translation id="7723389094756330927">{NUM_NOTIFICATIONS,plural, =1{1 notifica}one{# notifications}other{# notifiche}}</translation>
 <translation id="7724603315864178912">Taglia</translation>
 <translation id="7745560842763881396">Mostra app nella barra delle app</translation>
@@ -1034,6 +1049,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="8035152190676905274">Penna</translation>
 <translation id="8036504271468642248">Frase precedente</translation>
 <translation id="8042893070933512245">Apri il menu Impostazioni di accessibilità</translation>
+<translation id="8042925093898452104">Chiudi le informazioni dettagliate</translation>
 <translation id="8048123526339889627">Impostazioni Bluetooth</translation>
 <translation id="8051716679295756675">Esiste già un modello con il nome <ph name="DESK_TEMPLATE_NAME" /></translation>
 <translation id="8052898407431791827">Copiato negli appunti</translation>
@@ -1103,6 +1119,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="8513108775083588393">Rotazione aut.</translation>
 <translation id="851458219935658693">Mostra finestre della scrivania corrente, pulsante di opzione selezionato</translation>
 <translation id="8517041960877371778">Il tuo dispositivo <ph name="DEVICE_TYPE" /> potrebbe non caricarsi mentre è acceso.</translation>
+<translation id="8551588720239073785">Impostazioni di data e ora</translation>
 <translation id="8553395910833293175">Finestra già assegnata a tutte le scrivanie.</translation>
 <translation id="856298576161209842"><ph name="MANAGER" /> ti consiglia di aggiornare <ph name="DEVICE_TYPE" /></translation>
 <translation id="8563862697512465947">Impostazioni di notifica</translation>
@@ -1122,7 +1139,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="8660331759611631213">Radice quadrata di 71</translation>
 <translation id="8663756353922886599"><ph name="CONNECTION_STATUS" />, intensità del segnale <ph name="SIGNAL_STRENGTH" /></translation>
 <translation id="8664753092453405566">Mostra elenco di reti. <ph name="STATE_TEXT" />.</translation>
-<translation id="8668052347555487755">Modalità colore</translation>
 <translation id="8676770494376880701">Caricabatterie a basso consumo collegato</translation>
 <translation id="8683506306463609433">Traccia delle prestazioni attiva</translation>
 <translation id="8685326675965865247">Cerca sul dispositivo, nelle app, nelle impostazioni e sul Web. Usa i tasti freccia per esplorare le tue app.</translation>
@@ -1156,7 +1172,6 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="8896630965521842259">Il modello <ph name="DESK_TEMPLATE_NAME" /> verrà eliminato definitivamente</translation>
 <translation id="890616557918890486">Cambia origine</translation>
 <translation id="8909138438987180327">Livello batteria: <ph name="PERCENTAGE" />%.</translation>
-<translation id="8913384980486163186">A tema (predefinita)</translation>
 <translation id="8921554779039049422">H+</translation>
 <translation id="8921624153894383499">L'Assistente Google non parla questa lingua.</translation>
 <translation id="8926951137623668982">Barra delle app sempre nascosta</translation>
@@ -1168,6 +1183,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="8983038754672563810">HSPA</translation>
 <translation id="8990809378771970590">In uso: <ph name="IME_NAME" /></translation>
 <translation id="899350903320462459">Sblocca il dispositivo con l'account <ph name="LOGIN_ID" /> per eseguire l'azione di notifica</translation>
+<translation id="9000771174482730261">GESTISCI SPAZIO DI ARCHIVIAZIONE</translation>
 <translation id="9017320285115481645">Inserisci il codice accesso genitori di Family Link.</translation>
 <translation id="9024331582947483881">schermo intero</translation>
 <translation id="9047624247355796468">Apri Impostazioni per <ph name="NETWORK_NAME" /></translation>
@@ -1213,6 +1229,7 @@ Ecco alcune cose che puoi provare per iniziare.</translation>
 <translation id="938963181863597773">Cosa è segnato sul mio calendario?</translation>
 <translation id="945522503751344254">Invia feedback</translation>
 <translation id="951991426597076286">Rifiuta</translation>
+<translation id="954052413789300507">Spazio disponibile insufficiente per il file <ph name="FILENAME" />. Libera spazio.</translation>
 <translation id="974545358917229949">Visualizzazione di <ph name="RESULT_COUNT" /> risultati per <ph name="QUERY" /></translation>
 <translation id="98515147261107953">Orizzontale</translation>
 <translation id="990277280839877440">Finestra <ph name="WINDOW_TITILE" /> chiusa.</translation>

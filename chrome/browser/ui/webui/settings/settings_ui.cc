@@ -103,9 +103,12 @@
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 #include "ash/components/account_manager/account_manager_factory.h"
 #include "ash/components/arc/arc_util.h"
+#include "ash/components/login/auth/password_visibility_utils.h"
 #include "ash/components/phonehub/phone_hub_manager.h"
 #include "ash/constants/ash_features.h"
 #include "ash/webui/eche_app_ui/eche_app_manager.h"
+#include "chrome/browser/ash/account_manager/account_apps_availability.h"
+#include "chrome/browser/ash/account_manager/account_apps_availability_factory.h"
 #include "chrome/browser/ash/account_manager/account_manager_util.h"
 #include "chrome/browser/ash/android_sms/android_sms_app_manager.h"
 #include "chrome/browser/ash/android_sms/android_sms_service_factory.h"
@@ -120,7 +123,6 @@
 #include "chrome/browser/ui/webui/settings/chromeos/multidevice_handler.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/grit/browser_resources.h"
-#include "chromeos/login/auth/password_visibility_utils.h"
 #include "components/account_manager_core/chromeos/account_manager.h"
 #include "components/account_manager_core/chromeos/account_manager_facade_factory.h"
 #include "components/user_manager/user.h"
@@ -292,12 +294,10 @@ SettingsUI::SettingsUI(content::WebUI* web_ui)
       chromeos::features::IsSyncSettingsCategorizationEnabled());
   html_source->AddBoolean("syncConsentOptionalEnabled",
                           chromeos::features::IsSyncConsentOptionalEnabled());
-  html_source->AddBoolean("useBrowserSyncConsent",
-                          chromeos::features::ShouldUseBrowserSyncConsent());
 
   html_source->AddBoolean(
       "userCannotManuallyEnterPassword",
-      !chromeos::password_visibility::AccountHasUserFacingPassword(
+      !ash::password_visibility::AccountHasUserFacingPassword(
           chromeos::ProfileHelper::Get()
               ->GetUserByProfile(profile)
               ->GetAccountId()));
@@ -392,7 +392,8 @@ void SettingsUI::InitBrowserSettingsWebUIHandlers() {
     web_ui()->AddMessageHandler(
         std::make_unique<chromeos::settings::AccountManagerUIHandler>(
             account_manager, account_manager_facade,
-            IdentityManagerFactory::GetForProfile(profile)));
+            IdentityManagerFactory::GetForProfile(profile),
+            ash::AccountAppsAvailabilityFactory::GetForProfile(profile)));
   }
 
   // MultideviceHandler is required in browser settings to show a special note
@@ -418,7 +419,9 @@ void SettingsUI::InitBrowserSettingsWebUIHandlers() {
             : nullptr,
         android_sms_service ? android_sms_service->android_sms_app_manager()
                             : nullptr,
-        eche_app_manager ? eche_app_manager->GetAppsAccessManager() : nullptr));
+        eche_app_manager ? eche_app_manager->GetAppsAccessManager() : nullptr,
+        phone_hub_manager ? phone_hub_manager->GetCameraRollManager()
+                          : nullptr));
   }
 }
 #else   // BUILDFLAG(IS_CHROMEOS_ASH)

@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">適用優惠</translation>
 <translation id="1312803275555673949">有何證據可證明資訊屬實？</translation>
 <translation id="131405271941274527"><ph name="URL" /> 要求在你將手機貼近 NFC 裝置時傳送及接收資訊</translation>
+<translation id="1314311879718644478">查看擴增實境內容</translation>
 <translation id="1314509827145471431">裝訂 (右側)</translation>
 <translation id="1318023360584041678">已儲存至分頁群組</translation>
 <translation id="1319245136674974084">不要再詢問是否允許調整這個應用程式的大小</translation>
@@ -215,6 +216,7 @@
 <translation id="1583429793053364125">顯示這個網頁時發生錯誤。</translation>
 <translation id="1586541204584340881">你安裝的擴充功能</translation>
 <translation id="1588438908519853928">一般</translation>
+<translation id="1589050138437146318">要安裝 ARCore 嗎？</translation>
 <translation id="1592005682883173041">本機資料存取權</translation>
 <translation id="1594030484168838125">選擇</translation>
 <translation id="160851722280695521">暢玩 Chrome 恐龍遊戲</translation>
@@ -1253,6 +1255,7 @@
 <translation id="4968522289500246572">這是專為行動裝置設計的應用程式，大小可能未妥善調整。此應用程式可能會發生問題，或是重新啟動。</translation>
 <translation id="4969341057194253438">刪除錄製內容</translation>
 <translation id="4973922308112707173">雙孔 (頂端)</translation>
+<translation id="4976702386844183910">上次造訪日期：<ph name="DATE" /></translation>
 <translation id="4984088539114770594">要使用麥克風嗎？</translation>
 <translation id="4984339528288761049">Prc5 (信封)</translation>
 <translation id="4989163558385430922">查看全部</translation>
@@ -1338,6 +1341,7 @@
 <translation id="5215116848420601511">儲存在 Google Pay 的付款方式和地址資訊</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">紙匣 13</translation>
+<translation id="5216942107514965959">上次造訪日期：今天</translation>
 <translation id="5222812217790122047">請輸入電子郵件地址</translation>
 <translation id="5230733896359313003">運送地址</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1381,6 +1385,7 @@
 <translation id="5333022057423422993">Chrome 發現你剛才使用的密碼因為資料侵害事件而遭到外洩。如要確保帳戶安全，建議你檢查已儲存的密碼。</translation>
 <translation id="5334013548165032829">詳細系統記錄</translation>
 <translation id="5334145288572353250">要儲存地址嗎？</translation>
+<translation id="5335920952954443287">跳動的心</translation>
 <translation id="5340250774223869109">應用程式已遭封鎖</translation>
 <translation id="534295439873310000">NFC 裝置</translation>
 <translation id="5344579389779391559">進入接下來的頁面後，系統可能會向您收費</translation>
@@ -1523,6 +1528,7 @@
 <translation id="5869522115854928033">已儲存的密碼</translation>
 <translation id="5873013647450402046">銀行希望確認你的身分。</translation>
 <translation id="5887400589839399685">已儲存卡片</translation>
+<translation id="5887687176710214216">上次造訪日期：昨天</translation>
 <translation id="5895138241574237353">重新啟動</translation>
 <translation id="5895187275912066135">發行日期</translation>
 <translation id="5901630391730855834">黃色</translation>
@@ -1716,6 +1722,7 @@
 <translation id="6529602333819889595">重做刪除(&amp;R)</translation>
 <translation id="6545864417968258051">藍牙掃描</translation>
 <translation id="6547208576736763147">雙孔 (左側)</translation>
+<translation id="6554732001434021288">上次造訪日期：<ph name="NUM_DAYS" /> 天前</translation>
 <translation id="6556866813142980365">重做</translation>
 <translation id="6569060085658103619">目前顯示的是擴充功能頁面</translation>
 <translation id="6573200754375280815">雙孔 (右側)</translation>
@@ -2051,6 +2058,7 @@
 <translation id="7654909834015434372">這份文件會在你編輯註解時重設為原始顯示方向</translation>
 <translation id="765676359832457558">隱藏進階設定...</translation>
 <translation id="7658239707568436148">取消</translation>
+<translation id="7659878911471462949">喜極而泣</translation>
 <translation id="7662298039739062396">由擴充功能控制的設定</translation>
 <translation id="7663736086183791259">憑證 <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">禁止用於無痕模式</translation>
@@ -2151,7 +2159,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">可以要求使用虛擬實境裝置和資料</translation>
 <translation id="7984945080620862648">你目前無法造訪 <ph name="SITE" />，因為這個網站傳送的憑證經過編碼，導致 Chrome 無法處理。網路錯誤和攻擊行為通常是暫時性的，所以這個網頁可能稍後就能正常使用。</translation>
-<translation id="79859296434321399">如要查看擴增實境內容，請安裝 ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">裝訂</translation>
 <translation id="7992044431894087211">已重新啟用與「<ph name="APPLICATION_TITLE" />」分享螢幕畫面的功能</translation>
@@ -2255,6 +2262,7 @@
 <translation id="830498451218851433">對折</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">已安裝的應用程式以及使用頻率</translation>
+<translation id="8317207217658302555">要更新 ARCore 嗎？</translation>
 <translation id="831997045666694187">傍晚</translation>
 <translation id="8321476692217554900">通知</translation>
 <translation id="8328484624016508118">關閉所有無痕分頁後，Chrome 就會從這部裝置上清除下列資料：
@@ -2325,7 +2333,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{重設權限}other{重設權限}}</translation>
 <translation id="8555010941760982128">結帳時請使用這個促銷代碼</translation>
 <translation id="8557066899867184262">信用卡驗證碼位於信用卡背面。</translation>
-<translation id="8558485628462305855">如要查看擴增實境內容，請更新 ARCore</translation>
 <translation id="8559762987265718583">你裝置的日期和時間 (<ph name="DATE_AND_TIME" />) 不正確，因此無法與 <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> 建立私人連線。</translation>
 <translation id="8564182942834072828">個別文件/未自動分頁的副本</translation>
 <translation id="8564985650692024650">如果你在其他網站上重複使用過你的 <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> 密碼，Chromium 會建議你重設密碼。</translation>

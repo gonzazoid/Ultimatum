@@ -31,7 +31,7 @@ const base::Feature kBetterTelemetryAcrossReports{
     base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kClientSideDetectionDocumentScanning{
-    "ClientSideDetectionDocumentScanning", base::FEATURE_DISABLED_BY_DEFAULT};
+    "ClientSideDetectionDocumentScanning", base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kClientSideDetectionForAndroid{
     "ClientSideDetectionModelOnAndroid", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -119,7 +119,7 @@ const base::Feature kRealTimeUrlLookupReferrerChainForEnterprise{
     base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kSafeBrowsingPageLoadToken{
-    "SafeBrowsingPageLoadToken", base::FEATURE_DISABLED_BY_DEFAULT};
+    "SafeBrowsingPageLoadToken", base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature
     kSafeBrowsingPasswordCheckIntegrationForSavedPasswordsAndroid{
@@ -128,6 +128,10 @@ const base::Feature
 
 const base::Feature kSafeBrowsingRemoveCookiesInAuthRequests{
     "SafeBrowsingRemoveCookiesInAuthRequests",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kSendSampledPingsForProtegoAllowlistDomains{
+    "SafeBrowsingSendSampledPingsForProtegoAllowlistDomains",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
 constexpr base::FeatureParam<bool> kShouldFillOldPhishGuardProto{
@@ -177,6 +181,7 @@ constexpr struct {
     {&kSafeBrowsingPageLoadToken, true},
     {&kSafeBrowsingPasswordCheckIntegrationForSavedPasswordsAndroid, true},
     {&kSafeBrowsingRemoveCookiesInAuthRequests, true},
+    {&kSendSampledPingsForProtegoAllowlistDomains, true},
     {&kSuspiciousSiteTriggerQuotaFeature, true},
     {&kThreatDomDetailsTagAndAttributeFeature, false},
     {&kTriggerThrottlerDailyQuotaFeature, false},

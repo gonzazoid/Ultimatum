@@ -31,7 +31,6 @@
 <translation id="2478931088402984578">[<ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" />] を選択する</translation>
 <translation id="2567507405773541360">シンプル、安全で、さらに高速になった Chromium をご活用ください</translation>
 <translation id="2590893390871230428">Chromium のデータを同期する</translation>
-<translation id="259094968798709429">パスワードは<ph name="BEGIN_LINK" />パスワード マネージャー<ph name="END_LINK" />に保存され、どのデバイスからでも使用できます。</translation>
 <translation id="2650312721222849884">どのデバイスからでも Chromium で自分のタブにアクセスするには、同期をオンにしてください</translation>
 <translation id="2684230048001240293">Chromium を既定に設定すると、タブ、パスワード、お支払い情報をすべてのデバイスで同期できるようになります</translation>
 <translation id="2730884209570016437">カメラは別のアプリが使用中のため、Chromium では使用できません</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">このアカウントと保存されていないデータは Chromium から削除されます。</translation>
 <translation id="894437814105052438">ログアウトすると、Chromium で新しいデータが Google アカウントと同期されなくなります。これまでに同期されたデータはアカウントに残ります。</translation>
 <translation id="9022552996538154597">Chromium にログイン</translation>
+<translation id="9059693977935746710">このパスワードを覚えておく必要はありません。パスワードは、<ph name="EMAIL" /> のパスワード マネージャーに保存されます</translation>
 <translation id="9089354809943900324">Chromium は古いバージョンです</translation>
 <translation id="9110075932708282655">Chromium をデフォルトに設定</translation>
 <translation id="921174536258924340">Chromium ですべてのパスワードを確認できませんでした。明日もう一度お試しいただくか、<ph name="BEGIN_LINK" />Google アカウント内のパスワードをご確認ください<ph name="END_LINK" />。</translation>

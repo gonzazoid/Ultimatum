@@ -23,7 +23,6 @@
 #include "base/json/json_reader.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/strcat.h"
 #include "base/task/post_task.h"
@@ -346,9 +345,9 @@ const char* PreinstalledWebAppManager::kHistogramUninstallAndReplaceCount =
 const char*
     PreinstalledWebAppManager::kHistogramAppToReplaceStillInstalledCount =
         "WebApp.Preinstalled.AppToReplaceStillInstalledCount";
-const char*
-    PreinstalledWebAppManager::kHistogramAppToReplaceStillSyncInstalledCount =
-        "WebApp.Preinstalled.AppToReplaceStillSyncInstalledCount";
+const char* PreinstalledWebAppManager::
+    kHistogramAppToReplaceStillDefaultInstalledCount =
+        "WebApp.Preinstalled.AppToReplaceStillDefaultInstalledCount";
 const char* PreinstalledWebAppManager::
     kHistogramAppToReplaceStillInstalledInShelfCount =
         "WebApp.Preinstalled.AppToReplaceStillInstalledInShelfCount";
@@ -602,7 +601,7 @@ void PreinstalledWebAppManager::Synchronize(
     std::vector<ExternalInstallOptions> desired_apps_install_options) {
   DCHECK(externally_managed_app_manager_);
 
-  std::map<GURL, std::vector<AppId>> desired_uninstalls;
+  std::map<InstallUrl, std::vector<AppId>> desired_uninstalls;
   for (const auto& entry : desired_apps_install_options) {
     if (!entry.uninstall_and_replace.empty())
       desired_uninstalls.emplace(entry.install_url,
@@ -618,9 +617,10 @@ void PreinstalledWebAppManager::Synchronize(
 
 void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
     ExternallyManagedAppManager::SynchronizeCallback callback,
-    std::map<GURL, std::vector<AppId>> desired_uninstalls,
-    std::map<GURL, ExternallyManagedAppManager::InstallResult> install_results,
-    std::map<GURL, bool> uninstall_results) {
+    std::map<InstallUrl, std::vector<AppId>> desired_uninstalls,
+    std::map<InstallUrl, ExternallyManagedAppManager::InstallResult>
+        install_results,
+    std::map<InstallUrl, bool> uninstall_results) {
   // Note that we are storing the Chrome version (milestone number) instead of a
   // "has synchronised" bool in order to do version update specific logic.
   profile_->GetPrefs()->SetString(
@@ -633,7 +633,7 @@ void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
 
   size_t uninstall_and_replace_count = 0;
   size_t app_to_replace_still_installed_count = 0;
-  size_t app_to_replace_still_sync_installed_count = 0;
+  size_t app_to_replace_still_default_installed_count = 0;
   size_t app_to_replace_still_installed_in_shelf_count = 0;
 
   for (const auto& url_and_result : install_results) {
@@ -653,7 +653,7 @@ void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
     if (iter == desired_uninstalls.end())
       continue;
 
-    for (const auto& replace_id : iter->second) {
+    for (const AppId& replace_id : iter->second) {
       // We mark the app as migrated to a web app as long as the
       // installation was successful, even if the previous app was not
       // installed. This ensures we properly re-install apps if the
@@ -676,7 +676,7 @@ void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
         ++app_to_replace_still_installed_count;
 
         if (!extensions::IsExtensionDefaultInstalled(profile_, replace_id))
-          ++app_to_replace_still_sync_installed_count;
+          ++app_to_replace_still_default_installed_count;
 
         if (ui_manager_->CanAddAppToQuickLaunchBar()) {
           if (ui_manager_->IsAppInQuickLaunchBar(result.app_id.value()))
@@ -690,8 +690,8 @@ void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
 
   base::UmaHistogramCounts100(kHistogramAppToReplaceStillInstalledCount,
                               app_to_replace_still_installed_count);
-  base::UmaHistogramCounts100(kHistogramAppToReplaceStillSyncInstalledCount,
-                              app_to_replace_still_sync_installed_count);
+  base::UmaHistogramCounts100(kHistogramAppToReplaceStillDefaultInstalledCount,
+                              app_to_replace_still_default_installed_count);
   base::UmaHistogramCounts100(kHistogramAppToReplaceStillInstalledInShelfCount,
                               app_to_replace_still_installed_in_shelf_count);
 
@@ -715,8 +715,9 @@ void PreinstalledWebAppManager::OnExternalWebAppsSynchronized(
 }
 
 void PreinstalledWebAppManager::OnStartUpTaskCompleted(
-    std::map<GURL, ExternallyManagedAppManager::InstallResult> install_results,
-    std::map<GURL, bool> uninstall_results) {
+    std::map<InstallUrl, ExternallyManagedAppManager::InstallResult>
+        install_results,
+    std::map<InstallUrl, bool> uninstall_results) {
   if (debug_info_) {
     debug_info_->is_start_up_task_complete = true;
     debug_info_->install_results = std::move(install_results);

@@ -169,6 +169,7 @@
 <translation id="2600682495497606169">ລຶບລ້າງຄຸກກີ້ເວັບໄຊ</translation>
 <translation id="2625189173221582860">ສຳເນົາລະຫັດຜ່ານແລ້ວ</translation>
 <translation id="2626236249646841566">ກະລຸນາກວດສອບການເຊື່ອມຕໍ່ຂອງທ່ານແລ້ວລອງເຂົ້າສູ່ລະບົບອີກເທື່ອໜຶ່ງ.</translation>
+<translation id="2637313651144986786">ຊອກຫາແຖບ...</translation>
 <translation id="2647269890314209800">ຄຸກກີ້ທີ່ໃຊ້ຢູ່</translation>
 <translation id="2648803196158606475">ລຶບລາຍການທີ່ອ່ານແລ້ວ</translation>
 <translation id="2653659639078652383">ສົ່ງ</translation>
@@ -234,6 +235,7 @@
 <translation id="3157387275655328056">ເພີ່ມໃສ່ລາຍການທີ່ຈະອ່ານ</translation>
 <translation id="3157684681743766797">ໝາຍທັງໝົດ…</translation>
 <translation id="3169472444629675720">ຄົ້ນຫາ</translation>
+<translation id="3174662312949010067">ທ່ານສາມາດໃຊ້ລະຫັດຜ່ານທີ່ບັນທຶກໄວ້ຢູ່ອຸປະກອນອື່ນຂອງທ່ານໄດ້ນຳ.</translation>
 <translation id="3175081911749765310">ການ​ບໍ​ລິ​ການ​ເວັບ</translation>
 <translation id="3178650076442119961">ນຳໃຊ້ມື້ນີ້</translation>
 <translation id="3181825792072797598">ເປີດ Sync</translation>
@@ -327,6 +329,7 @@
 <translation id="4042870976416480368">ຊອກຫາໃນໜ້າ</translation>
 <translation id="4049507953662678203">ກະລຸນາກວດສອບວ່າທ່ານມີການເຊື່ອມຕໍ່ເຄືອຂ່າຍ ແລ້ວລອງອີກຄັ້ງ.</translation>
 <translation id="408404951701638773">ດຽວນີ້ເຂົ້າຫາແຖບຊອກຫາໄດ້ງ່າຍກວ່າ</translation>
+<translation id="4108314971463891922">ຕິດຕາມ</translation>
 <translation id="411254640334432676">ດາວ​ໂຫລດ​ບໍ່​ສໍາ​ເລັດ​.</translation>
 <translation id="4112644173421521737">ຊອກຫາ</translation>
 <translation id="4113030288477039509">ຈັດການໂດຍຜູ້ຄວບຄຸມຂອງທ່ານ</translation>
@@ -344,6 +347,7 @@
 <translation id="4272631900155121838">ເພື່ອສະແກນລະຫັດ QR, ໃຫ້ເປີດນຳໃຊ້ກ້ອງຖ່າຍຮູບຈາກການຕັ້ງຄ່າ</translation>
 <translation id="4277990410970811858">Safe Browsing</translation>
 <translation id="4281844954008187215">ຂໍ້ກໍານົດການບໍລິການ</translation>
+<translation id="4304713468139749426">ຕົວຈັດການລະຫັດຜ່ານ</translation>
 <translation id="430793432425771671">ຊິງຄ໌ທຸກຢ່າງ</translation>
 <translation id="4309403553630140242">ແຕະສອງເທື່ອສຳລັບຂໍ້ມູນເພີ່ມເຕີມ</translation>
 <translation id="430967081421617822">ຕະຫຼອດເວລາ</translation>
@@ -355,6 +359,7 @@
 <translation id="4389019817280890563">ແຕະເພື່ອປ່ຽນພາສາ.</translation>
 <translation id="4442550905108052454">ເປີດ <ph name="BEGIN_BOLD" />ການຕັ້ງຄ່າ<ph name="END_BOLD" /></translation>
 <translation id="4454246407045105932">ເພີ່ມພາສາ</translation>
+<translation id="4462491365653392320">ຕິດຕາມລາຄາຢູ່ແຖບຕ່າງໆ</translation>
 <translation id="4469418912670346607">ສືບຕໍ່ການຕັ້ງຄ່າ</translation>
 <translation id="4474494258097106883">ສ້າງມາສຳລັບ iPhone ຂອງທ່ານ</translation>
 <translation id="4476574785019001431">ການຕັ້ງຄ່າ</translation>
@@ -418,6 +423,7 @@
 <translation id="4944543191714094452">ຊອກຫາໃນໜ້າ…</translation>
 <translation id="4945756290001680296">ເຂົ້າເຖິງການຕັ້ງຄ່າລະຫັດຜ່ານ</translation>
 <translation id="4979397965658815378">ເຂົ້າສູ່ລະບົບດ້ວຍບັນຊີ Google ຂອງທ່ານເພື່ອໃຊ້ບຸກມາກ, ລະຫັດຜ່ານ, ປະຫວັດ ແລະ ການຕັ້ງຄ່າອື່ນຢູ່ໃນທຸກອຸປະກອນຂອງທ່ານ</translation>
+<translation id="4986678885919050584">ລຶບອອກຈາກອຸປະກອນນີ້</translation>
 <translation id="5005498671520578047">ອັດ​ສຳ​ເນົາ​ລະ​ຫັດ​ຜ່ານ</translation>
 <translation id="5017828934289857214">ແຈ້ງເຕືອນຂ້ອຍພາຍຫຼັງ</translation>
 <translation id="5037676449506322593">ເລືອກ​ທັງ​ຫມົດ</translation>
@@ -519,6 +525,7 @@ Handoff ຍັງ​ຕ້ອງ​ໄດ້​ເປີດ​ໃຊ້​ງາ
 <translation id="5979837087407522202">ຊອກຫາລະຫັດຜ່ານ</translation>
 <translation id="5982717868370722439">ເພີ່ມຂໍ້ມູນທີ່ມີຢູ່ໃສ່ <ph name="USER_EMAIL" />.</translation>
 <translation id="5984222099446776634">ເຂົ້າເບິ່ງບໍ່​ດົນ​ມາ​ນີ້</translation>
+<translation id="5988097621740394599">ເບິ່ງການຫຼຸດລາຄາຢູ່ແຖບຂອງທ່ານ.</translation>
 <translation id="5988851877894965432">ເປີດ URL ໃນ Chrome</translation>
 <translation id="6012140227487808125">ກຳລັງເຂົ້າລະຫັດ...</translation>
 <translation id="6021332621416007159">ເປີດ​ຢູ່​ໃນ...</translation>
@@ -539,6 +546,7 @@ Handoff ຍັງ​ຕ້ອງ​ໄດ້​ເປີດ​ໃຊ້​ງາ
 <translation id="6127379762771434464">ລຶບລາຍການອອກແລ້ວ</translation>
 <translation id="6136914049981179737">ວິ​ນາ​ທີ​ກ່ອນ​​ນີ້</translation>
 <translation id="6144589619057374135">ເປີດ ${url} ໃນໂໝດທີ່ບໍ່ເປີດເຜີຍຕົວຕົນ</translation>
+<translation id="6149061208933997199">ໃຊ້​ລະ​ຫັດ​ຜ່ານ</translation>
 <translation id="6159839020698489198">ບໍ່ບັງຄັບ</translation>
 <translation id="6177442314419606057">ຊອກຫາໃນ Chrome</translation>
 <translation id="6184086493125982861">ສະ​ແດງ​ແຖບ</translation>
@@ -724,7 +732,6 @@ Handoff ຍັງ​ຕ້ອງ​ໄດ້​ເປີດ​ໃຊ້​ງາ
 <translation id="7741325291586284254">ໜ້າແຖບບໍ່ເປີດເຜີຍຕົວຕົນໃໝ່</translation>
 <translation id="7765158879357617694">ຍ້າຍ</translation>
 <translation id="7772032839648071052">ຢືນ​ຢັນວະລີຜ່ານ</translation>
-<translation id="7778472311864276518">ລຶບບັນຊີອອກຈາກອຸປະກອນນີ້</translation>
 <translation id="7781011649027948662">ແປໜ້າບໍ?</translation>
 <translation id="7781069478569868053">ໜ້າແຖບໃໝ່</translation>
 <translation id="7781829728241885113">ມື້​ວານ​ນີ້</translation>
@@ -764,6 +771,7 @@ Handoff ຍັງ​ຕ້ອງ​ໄດ້​ເປີດ​ໃຊ້​ງາ
 <translation id="8076014560081431679">ການຕັ້ງຄ່າເວັບໄຊທີ່ບັນທຶກໄວ້ຈະບໍ່ຖືກລຶບ ແລະ ອາດຈະສະທ້ອນເຖິງນິໄສການທ່ອງເວັບຂອງທ່ານ. <ph name="BEGIN_LINK" />ສຶກສາເພີ່ມເຕີມ<ph name="END_LINK" /></translation>
 <translation id="8079602123447022758">ການຕັ້ງຄ່ານີ້ໄດ້ຮັບການຈັດການ, ແຕະສອງຄັ້ງສຳລັບຂໍ້ມູນເພີ່ມເຕີມ</translation>
 <translation id="8080028325999236607">ປິດ​ທຸກແຖບ</translation>
+<translation id="8101409298456377967">ສ້າງ, ບັນທຶກ ແລະ ຈັດການລະຫັດຜ່ານຂອງທ່ານເພື່ອໃຫ້ທ່ານສາມາດເຂົ້າສູ່ລະບົບຫາເວັບໄຊ ແລະ ແອັບໄດ້ຢ່າງງ່າຍດາຍ. <ph name="BEGIN_LINK" />ສຶກສາເພີ່ມເຕີມ<ph name="END_LINK" /></translation>
 <translation id="8105368624971345109">ປິດ</translation>
 <translation id="8114753159095730575">ການດາວໂຫຼດໄຟລ໌ບໍ່ສາມາດໃຊ້ໄດ້. ມີຕົວເລືອກຕ່າງໆຢູ່ໃກ້ສ່ວນລຸ່ມຂອງໜ້າຈໍ.</translation>
 <translation id="8132598642024322408">ຕອນນີ້ <ph name="PRICE" /> ກ່ອນໜ້ານີ້ <ph name="PREVIOUS_PRICE" />.</translation>
@@ -790,6 +798,7 @@ Handoff ຍັງ​ຕ້ອງ​ໄດ້​ເປີດ​ໃຊ້​ງາ
 <translation id="842017693807136194">ເຂົ້າສູ່ລະບົບດ້ວຍ</translation>
 <translation id="8428045167754449968">ເມືອງ</translation>
 <translation id="8428213095426709021">ການ​ຕັ້ງຄ່າ</translation>
+<translation id="8428634594422941299">ເຂົ້າໃຈແລ້ວ</translation>
 <translation id="8446884382197647889">ຮຽນ​ຮູ້​ເພີ່ມ​ເຕີມ</translation>
 <translation id="8458397775385147834">1 ລາຍ​ການ​ຖືກ​ລຶບ​ໄປ​ແລ້ວ</translation>
 <translation id="8459333855531264009">ບໍ່ປອດໄພ</translation>

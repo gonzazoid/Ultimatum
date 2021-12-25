@@ -20,6 +20,7 @@
 #include "content/browser/attribution_reporting/storable_source.h"
 #include "content/browser/attribution_reporting/storable_trigger.h"
 #include "sql/database.h"
+#include "sql/meta_table.h"
 #include "sql/test/scoped_error_expecter.h"
 #include "sql/test/test_helpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -32,8 +33,8 @@ using CreateReportStatus =
     ::content::AttributionStorage::CreateReportResult::Status;
 
 using ::testing::ElementsAre;
-using ::testing::Field;
 using ::testing::IsEmpty;
+using ::testing::Property;
 using ::testing::SizeIs;
 
 class AttributionStorageSqlTest : public testing::Test {
@@ -185,6 +186,29 @@ TEST_F(AttributionStorageSqlTest, CorruptDatabase_RecoveredOnOpen) {
   EXPECT_THAT(storage()->GetAttributionsToReport(clock()->Now()), SizeIs(1));
 
   EXPECT_TRUE(expecter.SawExpectedErrors());
+}
+
+TEST_F(AttributionStorageSqlTest, VersionTooNew_RazesDB) {
+  OpenDatabase();
+  AddReportToStorage();
+  ASSERT_THAT(storage()->GetAttributionsToReport(clock()->Now()), SizeIs(1));
+  CloseDatabase();
+
+  {
+    sql::Database raw_db;
+    EXPECT_TRUE(raw_db.Open(db_path()));
+
+    sql::MetaTable meta;
+    // The values here are irrelevant, as the meta table already exists.
+    ASSERT_TRUE(meta.Init(&raw_db, /*version=*/1, /*compatible_version=*/1));
+
+    meta.SetVersionNumber(meta.GetVersionNumber() + 1);
+    meta.SetCompatibleVersionNumber(meta.GetCompatibleVersionNumber() + 1);
+  }
+
+  // The DB should be razed because the version is too new.
+  ASSERT_NO_FATAL_FAILURE(OpenDatabase());
+  ASSERT_THAT(storage()->GetAttributionsToReport(clock()->Now()), IsEmpty());
 }
 
 //  Create an impression with two conversions (C1 and C2). Craft a query that
@@ -518,8 +542,9 @@ TEST_F(AttributionStorageSqlTest, MaxUint64StorageSucceeds) {
               .SetReportingOrigin(impression.reporting_origin())
               .Build()));
 
-  EXPECT_THAT(storage()->GetAttributionsToReport(clock()->Now()),
-              ElementsAre(Field(&AttributionReport::trigger_data, kMaxUint64)));
+  EXPECT_THAT(
+      storage()->GetAttributionsToReport(clock()->Now()),
+      ElementsAre(Property(&AttributionReport::trigger_data, kMaxUint64)));
 }
 
 TEST_F(AttributionStorageSqlTest, ImpressionNotExpired_NotDeleted) {
@@ -618,7 +643,7 @@ TEST_F(AttributionStorageSqlTest, ExpiredImpressionWithSentConversion_Deleted) {
   std::vector<AttributionReport> reports =
       storage()->GetAttributionsToReport(clock()->Now());
   EXPECT_THAT(reports, SizeIs(1));
-  EXPECT_TRUE(storage()->DeleteReport(*reports[0].conversion_id));
+  EXPECT_TRUE(storage()->DeleteReport(*reports[0].report_id()));
   // Store another impression to trigger the expiry logic.
   storage()->StoreSource(
       SourceBuilder(clock()->Now()).SetExpiry(base::Milliseconds(3)).Build());

@@ -11,7 +11,6 @@
 #include "third_party/blink/renderer/core/layout/layout_video.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/paint/clip_path_clipper.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_box_fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/object_paint_properties.h"
 #include "third_party/blink/renderer/core/paint/paint_info.h"
@@ -21,7 +20,6 @@
 #include "third_party/blink/renderer/core/paint/paint_timing_detector.h"
 #include "third_party/blink/renderer/core/paint/scrollable_area_painter.h"
 #include "third_party/blink/renderer/platform/geometry/float_point_3d.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scoped_display_item_fragment.h"
@@ -38,8 +36,7 @@ void PaintLayerPainter::Paint(GraphicsContext& context,
                               PaintLayerFlags paint_flags) {
   PaintLayerPaintingInfo painting_info(&paint_layer_, cull_rect,
                                        global_paint_flags, PhysicalOffset());
-  if (!paint_layer_.PaintsIntoOwnOrGroupedBacking(global_paint_flags))
-    Paint(context, painting_info, paint_flags);
+  Paint(context, painting_info, paint_flags);
 }
 
 static ShouldRespectOverflowClipType ShouldRespectOverflowClip(
@@ -83,7 +80,7 @@ PhysicalRect PaintLayerPainter::ContentsVisualRect(const FragmentData& fragment,
           ? fragment.PaintProperties()->ReplacedContentTransform()
           : nullptr;
   if (replaced_transform) {
-    FloatRect float_contents_visual_rect(contents_visual_rect);
+    gfx::RectF float_contents_visual_rect(contents_visual_rect);
     GeometryMapper::SourceToDestinationRect(*replaced_transform->Parent(),
                                             *replaced_transform,
                                             float_contents_visual_rect);
@@ -154,15 +151,6 @@ static bool ShouldCreateSubsequence(
   // with normal painting.
   if (painting_info.GetGlobalPaintFlags() &
       kGlobalPaintFlattenCompositingLayers)
-    return false;
-
-  // Don't create subsequence for a composited layer because if it can be
-  // cached, we can skip the whole painting in GraphicsLayer::paint() with
-  // CachedDisplayItemList.  This also avoids conflict of
-  // PaintLayer::previousXXX() when paintLayer is composited scrolling and is
-  // painted twice for GraphicsLayers of container and scrolling contents.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-      (paint_layer.GetCompositingState() == kPaintsIntoOwnBacking))
     return false;
 
   return true;
@@ -436,14 +424,6 @@ PaintResult PaintLayerPainter::PaintLayerContents(
       is_self_painting_layer && !is_painting_overlay_overflow_controls &&
       is_painting_composited_decoration && object.StyleRef().HasOutline();
 
-  PhysicalOffset subpixel_accumulation =
-      (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-       !(painting_info.GetGlobalPaintFlags() &
-         kGlobalPaintFlattenCompositingLayers) &&
-       paint_layer_.GetCompositingState() == kPaintsIntoOwnBacking)
-          ? paint_layer_.SubpixelAccumulation()
-          : painting_info.sub_pixel_accumulation;
-
   ShouldRespectOverflowClipType respect_overflow_clip =
       ShouldRespectOverflowClip(paint_flags, object);
 
@@ -460,7 +440,7 @@ PaintResult PaintLayerPainter::PaintLayerContents(
   PhysicalOffset offset_from_root = object.FirstFragment().PaintOffset();
   if (const PaintLayer* root = painting_info.root_layer)
     offset_from_root -= root->GetLayoutObject().FirstFragment().PaintOffset();
-  offset_from_root += subpixel_accumulation;
+  offset_from_root += painting_info.sub_pixel_accumulation;
 
   if (RuntimeEnabledFeatures::CullRectUpdateEnabled()) {
     if (object.FirstFragment().NextFragment() ||
@@ -506,7 +486,6 @@ PaintResult PaintLayerPainter::PaintLayerContents(
   }
 
   PaintLayerPaintingInfo local_painting_info(painting_info);
-  local_painting_info.sub_pixel_accumulation = subpixel_accumulation;
 
   PaintLayerFragments layer_fragments;
   ClearCollectionScope<PaintLayerFragments> scope(&layer_fragments);
@@ -657,7 +636,8 @@ PaintResult PaintLayerPainter::PaintLayerContents(
         PhysicalOffset visual_offset_from_root =
             paint_layer_.EnclosingPaginationLayer()
                 ? paint_layer_.VisualOffsetFromAncestor(
-                      local_painting_info.root_layer, subpixel_accumulation)
+                      local_painting_info.root_layer,
+                      local_painting_info.sub_pixel_accumulation)
                 : offset_from_root;
         ClipPathClipper::PaintClipPathAsMaskImage(context, object, object,
                                                   visual_offset_from_root);
@@ -719,13 +699,6 @@ PaintResult PaintLayerPainter::PaintChildren(
 
   PaintLayerPaintOrderIterator iterator(&paint_layer_, children_to_visit);
   while (PaintLayer* child = iterator.Next()) {
-    // If this Layer should paint into its own backing or a grouped backing,
-    // that will be done via CompositedLayerMapping::PaintContents() and
-    // CompositedLayerMapping::DoPaintTask().
-    if (child->PaintsIntoOwnOrGroupedBacking(
-            painting_info.GetGlobalPaintFlags()))
-      continue;
-
     if (child->IsReplacedNormalFlowStacking())
       continue;
 

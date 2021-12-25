@@ -92,8 +92,7 @@ class CastDeviceCache : public media_router::MediaRoutesObserver,
   void OnSinksReceived(const MediaSinks& sinks) override;
 
   // media_router::MediaRoutesObserver:
-  void OnRoutesUpdated(const MediaRoutes& routes,
-                       const MediaRouteIds& unused_joinable_route_ids) override;
+  void OnRoutesUpdated(const MediaRoutes& routes) override;
 
   MediaSinks sinks_;
   MediaRoutes routes_;
@@ -138,9 +137,7 @@ void CastDeviceCache::OnSinksReceived(const MediaSinks& sinks) {
   update_devices_callback_.Run();
 }
 
-void CastDeviceCache::OnRoutesUpdated(
-    const MediaRoutes& routes,
-    const MediaRouteIds& unused_joinable_route_ids) {
+void CastDeviceCache::OnRoutesUpdated(const MediaRoutes& routes) {
   routes_ = routes;
   update_devices_callback_.Run();
 }
@@ -224,9 +221,6 @@ void CastConfigControllerMediaRouter::RequestDeviceRefresh() {
   }
 
   for (const media_router::MediaRoute& route : device_cache()->routes()) {
-    if (!route.for_display())
-      continue;
-
     for (ash::SinkAndRoute& device : devices_) {
       if (device.sink.id == route.media_sink_id()) {
         device.route.id = route.media_route_id();

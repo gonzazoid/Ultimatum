@@ -6,6 +6,7 @@
 
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
+#include "ash/style/ash_color_provider.h"
 #include "ash/wm/desks/templates/desks_templates_grid_view.h"
 #include "ash/wm/desks/templates/desks_templates_icon_container.h"
 #include "ash/wm/desks/templates/desks_templates_item_view.h"
@@ -58,11 +59,16 @@ class DesksTemplatesDialog : public views::DialogDelegateView {
             views::DISTANCE_RELATED_CONTROL_VERTICAL)));
 
     // Add the description for the dialog.
-    AddChildView(views::Builder<views::Label>()
-                     .CopyAddressTo(&description_label_)
-                     .SetMultiLine(true)
-                     .SetHorizontalAlignment(gfx::ALIGN_LEFT)
-                     .Build());
+    AddChildView(
+        views::Builder<views::Label>()
+            .CopyAddressTo(&description_label_)
+            .SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
+                                       gfx::Font::Weight::NORMAL))
+            .SetEnabledColor(AshColorProvider::Get()->GetContentLayerColor(
+                AshColorProvider::ContentLayerType::kTextColorPrimary))
+            .SetMultiLine(true)
+            .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+            .Build());
   }
   DesksTemplatesDialog(const DesksTemplatesDialog&) = delete;
   DesksTemplatesDialog& operator=(const DesksTemplatesDialog&) = delete;
@@ -81,6 +87,11 @@ class DesksTemplatesDialog : public views::DialogDelegateView {
     description_label_->SetText(text);
   }
 
+  void SetDescriptionAccessibleName(const std::u16string& accessible_name) {
+    DCHECK(description_label_);
+    description_label_->SetAccessibleName(accessible_name);
+  }
+
  private:
   views::Label* description_label_ = nullptr;
 };
@@ -91,6 +102,7 @@ BEGIN_VIEW_BUILDER(/* no export */,
 VIEW_BUILDER_PROPERTY(int, TitleText)
 VIEW_BUILDER_PROPERTY(int, ConfirmButtonText)
 VIEW_BUILDER_PROPERTY(std::u16string, DescriptionText)
+VIEW_BUILDER_PROPERTY(std::u16string, DescriptionAccessibleName)
 END_VIEW_BUILDER
 
 BEGIN_METADATA(DesksTemplatesDialog, views::DialogDelegateView)
@@ -159,6 +171,12 @@ void DesksTemplatesDialogController::ShowUnsupportedAppsDialog(
           .AddChildren(
               views::Builder<views::Label>()
                   .SetHorizontalAlignment(gfx::ALIGN_LEFT)
+                  .SetFontList(gfx::FontList({"Roboto"}, gfx::Font::NORMAL, 14,
+                                             gfx::Font::Weight::MEDIUM))
+                  .SetEnabledColor(
+                      AshColorProvider::Get()->GetContentLayerColor(
+                          AshColorProvider::ContentLayerType::
+                              kTextColorPrimary))
                   .SetText(l10n_util::GetStringUTF16(
                       IDS_ASH_DESKS_TEMPLATES_UNSUPPORTED_APPS_DIALOG_HEADER)),
               views::Builder<DesksTemplatesIconContainer>().CopyAddressTo(
@@ -178,6 +196,9 @@ void DesksTemplatesDialogController::ShowReplaceDialog(
                     .SetDescriptionText(l10n_util::GetStringFUTF16(
                         IDS_ASH_DESKS_TEMPLATES_REPLACE_DIALOG_DESCRIPTION,
                         GetStringWithQuotes(template_name)))
+                    .SetDescriptionAccessibleName(l10n_util::GetStringFUTF16(
+                        IDS_ASH_DESKS_TEMPLATES_REPLACE_DIALOG_DESCRIPTION,
+                        template_name))
                     .Build();
   CreateDialogWidget(std::move(dialog), root_window);
 }
@@ -196,6 +217,8 @@ void DesksTemplatesDialogController::ShowDeleteDialog(
           .SetDescriptionText(l10n_util::GetStringFUTF16(
               IDS_ASH_DESKS_TEMPLATES_DELETE_DIALOG_DESCRIPTION,
               GetStringWithQuotes(template_name)))
+          .SetDescriptionAccessibleName(l10n_util::GetStringFUTF16(
+              IDS_ASH_DESKS_TEMPLATES_DELETE_DIALOG_DESCRIPTION, template_name))
           .SetAcceptCallback(std::move(on_accept_callback))
           .Build();
 

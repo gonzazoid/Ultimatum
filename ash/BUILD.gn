@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//ash/ambient/resources/resources.gni")
 import("//build/config/chromeos/ui_mode.gni")
 import("//build/config/features.gni")
 import("//build/config/ui.gni")
@@ -156,11 +157,16 @@ component("ash") {
     "ambient/autotest_ambient_api.cc",
     "ambient/model/ambient_animation_photo_config.cc",
     "ambient/model/ambient_animation_photo_config.h",
+    "ambient/model/ambient_animation_photo_provider.cc",
+    "ambient/model/ambient_animation_photo_provider.h",
     "ambient/model/ambient_backend_model.cc",
     "ambient/model/ambient_backend_model.h",
     "ambient/model/ambient_backend_model_observer.h",
+    "ambient/model/ambient_photo_config.cc",
     "ambient/model/ambient_photo_config.h",
+    "ambient/model/ambient_slideshow_photo_config.cc",
     "ambient/model/ambient_slideshow_photo_config.h",
+    "ambient/resources/ambient_animation_static_resources.h",
     "ambient/ui/ambient_background_image_view.cc",
     "ambient/ui/ambient_background_image_view.h",
     "ambient/ui/ambient_container_view.cc",
@@ -212,6 +218,7 @@ component("ash") {
     "autotest_private_api_utils.cc",
     "bluetooth_devices_observer.cc",
     "bluetooth_devices_observer.h",
+    "bubble/bubble_constants.h",
     "bubble/bubble_utils.cc",
     "bubble/bubble_utils.h",
     "bubble/simple_grid_layout.cc",
@@ -540,6 +547,8 @@ component("ash") {
     "ime/mode_indicator_observer.h",
     "in_session_auth/auth_dialog_contents_view.cc",
     "in_session_auth/auth_dialog_contents_view.h",
+    "in_session_auth/authentication_dialog.cc",
+    "in_session_auth/authentication_dialog.h",
     "in_session_auth/in_session_auth_dialog.cc",
     "in_session_auth/in_session_auth_dialog.h",
     "in_session_auth/in_session_auth_dialog_controller_impl.cc",
@@ -706,14 +715,10 @@ component("ash") {
     "power/hid_battery_util.h",
     "projector/model/projector_session_impl.cc",
     "projector/model/projector_session_impl.h",
-    "projector/model/projector_ui_model.cc",
-    "projector/model/projector_ui_model.h",
     "projector/projector_annotation_tray.cc",
     "projector/projector_annotation_tray.h",
     "projector/projector_controller_impl.cc",
     "projector/projector_controller_impl.h",
-    "projector/projector_feature_pod_controller.cc",
-    "projector/projector_feature_pod_controller.h",
     "projector/projector_metadata_controller.cc",
     "projector/projector_metadata_controller.h",
     "projector/projector_metadata_model.cc",
@@ -722,14 +727,10 @@ component("ash") {
     "projector/projector_metrics.h",
     "projector/projector_ui_controller.cc",
     "projector/projector_ui_controller.h",
-    "projector/ui/projector_bar_view.cc",
-    "projector/ui/projector_bar_view.h",
     "projector/ui/projector_button.cc",
     "projector/ui/projector_button.h",
     "projector/ui/projector_color_button.cc",
     "projector/ui/projector_color_button.h",
-    "projector/ui/projector_image_button.cc",
-    "projector/ui/projector_image_button.h",
 
     # These headers declare functions that are implemented inside of //ash, so
     # they cannot live in //ash/public/cpp/BUILD.gn. The "test api" files are
@@ -1046,10 +1047,6 @@ component("ash") {
     "system/cast/tray_cast.h",
     "system/cast/unified_cast_detailed_view_controller.cc",
     "system/cast/unified_cast_detailed_view_controller.h",
-    "system/dark_mode/dark_mode_detailed_view.cc",
-    "system/dark_mode/dark_mode_detailed_view.h",
-    "system/dark_mode/dark_mode_detailed_view_controller.cc",
-    "system/dark_mode/dark_mode_detailed_view_controller.h",
     "system/dark_mode/dark_mode_feature_pod_controller.cc",
     "system/dark_mode/dark_mode_feature_pod_controller.h",
     "system/enterprise/enterprise_domain_observer.h",
@@ -1071,8 +1068,8 @@ component("ash") {
     "system/holding_space/holding_space_item_view.h",
     "system/holding_space/holding_space_item_views_section.cc",
     "system/holding_space/holding_space_item_views_section.h",
-    "system/holding_space/holding_space_progress_ring.cc",
-    "system/holding_space/holding_space_progress_ring.h",
+    "system/holding_space/holding_space_progress_indicator.cc",
+    "system/holding_space/holding_space_progress_indicator.h",
     "system/holding_space/holding_space_progress_ring_animation.cc",
     "system/holding_space/holding_space_progress_ring_animation.h",
     "system/holding_space/holding_space_progress_ring_indeterminate_animation.cc",
@@ -1372,6 +1369,8 @@ component("ash") {
     "system/power/battery_notification.h",
     "system/power/dual_role_notification.cc",
     "system/power/dual_role_notification.h",
+    "system/power/hps_sense_controller.cc",
+    "system/power/hps_sense_controller.h",
     "system/power/peripheral_battery_listener.cc",
     "system/power/peripheral_battery_listener.h",
     "system/power/peripheral_battery_notifier.cc",
@@ -1412,6 +1411,8 @@ component("ash") {
     "system/privacy_screen/privacy_screen_toast_view.h",
     "system/rotation/rotation_lock_feature_pod_controller.cc",
     "system/rotation/rotation_lock_feature_pod_controller.h",
+    "system/scheduled_feature/scheduled_feature.cc",
+    "system/scheduled_feature/scheduled_feature.h",
     "system/screen_layout_observer.cc",
     "system/screen_layout_observer.h",
     "system/screen_security/screen_capture_observer.h",
@@ -1577,6 +1578,8 @@ component("ash") {
     "system/unified/user_chooser_view.h",
     "system/update/update_notification_controller.cc",
     "system/update/update_notification_controller.h",
+    "system/usb_peripheral/usb_peripheral_notification_controller.cc",
+    "system/usb_peripheral/usb_peripheral_notification_controller.h",
     "system/user/login_status.cc",
     "system/user/login_status.h",
     "system/virtual_keyboard/virtual_keyboard_observer.h",
@@ -2025,6 +2028,7 @@ component("ash") {
     "//ash/quick_pair/pairing",
     "//ash/quick_pair/repository",
     "//ash/quick_pair/ui",
+    "//ash/services/nearby/public/cpp",
     "//ash/services/quick_pair",
     "//ash/services/quick_pair/public/cpp",
     "//ash/services/quick_pair/public/mojom",
@@ -2073,7 +2077,6 @@ component("ash") {
     "//chromeos/services/libassistant/public/cpp:structs",
     "//chromeos/services/libassistant/public/mojom",
     "//chromeos/services/multidevice_setup/public/mojom",
-    "//chromeos/services/nearby/public/cpp",
     "//chromeos/services/network_config/public/cpp",
     "//chromeos/services/network_config/public/mojom",
     "//chromeos/strings",
@@ -2096,7 +2099,6 @@ component("ash") {
     "//components/media_message_center",
     "//components/onc",
     "//components/password_manager/core/browser:hash_password_manager",
-    "//components/policy/core/browser",
     "//components/pref_registry",
     "//components/prefs",
     "//components/quirks",
@@ -2107,7 +2109,6 @@ component("ash") {
     "//components/soda:constants",
     "//components/strings",
     "//components/sync",
-    "//components/url_matcher",
     "//components/user_manager",
     "//components/vector_icons",
     "//components/viz/host",
@@ -2175,7 +2176,6 @@ component("ash") {
     # on it. TODO(stevenjb): Assert on //chromeos/dbus/cryptohome_client once it
     # is extracted from //chromeos/dbus. https://crbug.com/647367.
     "//chromeos/cryptohome",
-    "//chromeos/login/auth",
     "//chromeos/tpm",
 
     # Ash should not depend upon content at all.
@@ -2201,6 +2201,15 @@ component("ash") {
     ]
 
     deps += [ "//chromeos/assistant/internal/ambient" ]
+  }
+
+  if (include_ash_ambient_animation_resources) {
+    sources +=
+        [ "ambient/resources/ambient_animation_static_resources_impl.cc" ]
+    deps += [ "//ash/ambient/resources:lottie_resources" ]
+  } else {
+    sources +=
+        [ "ambient/resources/ambient_animation_static_resources_stub.cc" ]
   }
 }
 
@@ -2263,6 +2272,7 @@ test("ash_unittests") {
     "ambient/ambient_photo_controller_unittest.cc",
     "ambient/autotest_ambient_api_unittest.cc",
     "ambient/model/ambient_animation_photo_config_unittest.cc",
+    "ambient/model/ambient_animation_photo_provider_unittest.cc",
     "ambient/model/ambient_backend_model_unittest.cc",
     "ambient/ui/ambient_container_view_unittest.cc",
     "ambient/ui/media_string_view_unittest.cc",
@@ -2356,6 +2366,7 @@ test("ash_unittests") {
     "highlighter/highlighter_gesture_util_unittest.cc",
     "host/ash_window_tree_host_platform_unittest.cc",
     "ime/ime_controller_impl_unittest.cc",
+    "in_session_auth/authentication_dialog_unittest.cc",
     "in_session_auth/in_session_auth_dialog_controller_impl_unittest.cc",
     "in_session_auth/mock_in_session_auth_dialog_client.cc",
     "in_session_auth/mock_in_session_auth_dialog_client.h",
@@ -2420,7 +2431,6 @@ test("ash_unittests") {
     "rotator/screen_rotation_animation_unittest.cc",
     "rotator/screen_rotation_animator_unittest.cc",
     "screen_util_unittest.cc",
-    "session/fullscreen_controller_unittest.cc",
     "session/fullscreen_notification_bubble_unittest.cc",
     "session/session_controller_impl_unittest.cc",
     "shelf/assistant_overlay_unittest.cc",
@@ -2527,6 +2537,7 @@ test("ash_unittests") {
     "system/network/sms_observer_unittest.cc",
     "system/network/vpn_list_unittest.cc",
     "system/network/wifi_toggle_notification_controller_unittest.cc",
+    "system/night_light/night_light_controller_unittest.cc",
     "system/overview/overview_button_tray_unittest.cc",
     "system/palette/mock_palette_tool_delegate.cc",
     "system/palette/mock_palette_tool_delegate.h",
@@ -2546,6 +2557,7 @@ test("ash_unittests") {
     "system/phonehub/silence_phone_quick_action_controller_unittest.cc",
     "system/phonehub/task_continuation_view_unittest.cc",
     "system/power/backlights_forced_off_setter_unittest.cc",
+    "system/power/hps_sense_controller_unittest.cc",
     "system/power/peripheral_battery_listener_unittest.cc",
     "system/power/peripheral_battery_notifier_listener_integration_test.cc",
     "system/power/peripheral_battery_notifier_unittest.cc",
@@ -2557,6 +2569,7 @@ test("ash_unittests") {
     "system/power/power_status_unittest.cc",
     "system/power/video_activity_notifier_unittest.cc",
     "system/rotation/rotation_lock_feature_pod_controller_unittest.cc",
+    "system/scheduled_feature/scheduled_feature_unittest.cc",
     "system/screen_layout_observer_unittest.cc",
     "system/screen_security/screen_security_notification_controller_unittest.cc",
     "system/session/logout_button_tray_unittest.cc",
@@ -2592,6 +2605,7 @@ test("ash_unittests") {
     "system/unified/unified_system_tray_unittest.cc",
     "system/unified/user_chooser_detailed_view_controller_unittest.cc",
     "system/update/update_notification_controller_unittest.cc",
+    "system/usb_peripheral/usb_peripheral_notification_controller_unittest.cc",
     "system/virtual_keyboard/virtual_keyboard_tray_unittest.cc",
     "test/ash_test_helper_unittest.cc",
     "test/ash_unittests.cc",
@@ -2729,6 +2743,7 @@ test("ash_unittests") {
     "//ash/quick_pair:unit_tests",
     "//ash/resources/vector_icons",
     "//ash/services:unit_tests",
+    "//ash/services/nearby/public/cpp",
     "//ash/services/recording:test_support",
     "//ash/shortcut_viewer:unit_tests",
     "//ash/strings",
@@ -2743,6 +2758,7 @@ test("ash_unittests") {
     "//chromeos/components/sensors:sensors",
     "//chromeos/components/sensors:test_support",
     "//chromeos/components/sensors/mojom",
+    "//chromeos/constants",
     "//chromeos/dbus:test_support",
     "//chromeos/dbus/audio",
     "//chromeos/dbus/hammerd",
@@ -2760,7 +2776,6 @@ test("ash_unittests") {
     "//chromeos/services/bluetooth_config:test_support",
     "//chromeos/services/multidevice_setup/public/cpp:test_support",
     "//chromeos/services/multidevice_setup/public/mojom",
-    "//chromeos/services/nearby/public/cpp",
     "//chromeos/services/network_config/public/mojom",
     "//chromeos/strings:strings_grit",
     "//chromeos/system",
@@ -2868,6 +2883,12 @@ test("ash_unittests") {
     "//content/public/browser",
     "//content/public/common",
   ]
+
+  if (include_ash_ambient_animation_resources) {
+    sources += [
+      "ambient/resources/ambient_animation_static_resources_impl_unittest.cc",
+    ]
+  }
 }
 
 # TODO(oshima): Remove or migrate to new ash_ui_perftests
@@ -2907,6 +2928,8 @@ static_library("test_support") {
     "ambient/test/ambient_ash_test_helper.h",
     "ambient/test/ambient_test_util.cc",
     "ambient/test/ambient_test_util.h",
+    "ambient/test/fake_ambient_animation_static_resources.cc",
+    "ambient/test/fake_ambient_animation_static_resources.h",
     "ambient/test/test_ambient_client.cc",
     "ambient/test/test_ambient_client.h",
     "app_list/app_list_test_api.cc",
@@ -3124,6 +3147,7 @@ static_library("test_support") {
     "//chromeos/system",
     "//chromeos/ui/frame",
     "//components/account_id",
+    "//components/exo/wayland:weston_test_stub",
     "//components/prefs:test_support",
     "//components/user_manager:user_manager",
     "//components/viz/test:test_support",

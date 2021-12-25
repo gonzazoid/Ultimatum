@@ -145,9 +145,10 @@ void MockAttributionManager::NotifySourceDeactivated(
     observer.OnSourceDeactivated(source);
 }
 
-void MockAttributionManager::NotifyReportSent(const SentReport& info) {
+void MockAttributionManager::NotifyReportSent(const AttributionReport& report,
+                                              const SendResult& info) {
   for (Observer& observer : observers_)
-    observer.OnReportSent(info);
+    observer.OnReportSent(report, info);
 }
 
 void MockAttributionManager::NotifyReportDropped(
@@ -343,17 +344,18 @@ bool operator==(const StorableSource& a, const StorableSource& b) {
 // sqlite db and should not be tested.
 bool operator==(const AttributionReport& a, const AttributionReport& b) {
   const auto tie = [](const AttributionReport& conversion) {
-    return std::make_tuple(conversion.impression, conversion.trigger_data,
-                           conversion.conversion_time, conversion.report_time,
-                           conversion.priority, conversion.external_report_id,
-                           conversion.failed_send_attempts);
+    return std::make_tuple(conversion.source(), conversion.trigger_data(),
+                           conversion.conversion_time(),
+                           conversion.report_time(), conversion.priority(),
+                           conversion.external_report_id(),
+                           conversion.failed_send_attempts());
   };
   return tie(a) == tie(b);
 }
 
-bool operator==(const SentReport& a, const SentReport& b) {
-  const auto tie = [](const SentReport& info) {
-    return std::make_tuple(info.report, info.status, info.http_response_code);
+bool operator==(const SendResult& a, const SendResult& b) {
+  const auto tie = [](const SendResult& info) {
+    return std::make_tuple(info.status, info.http_response_code);
   };
   return tie(a) == tie(b);
 }
@@ -495,45 +497,39 @@ std::ostream& operator<<(std::ostream& out, const StorableSource& impression) {
 }
 
 std::ostream& operator<<(std::ostream& out, const AttributionReport& report) {
-  return out << "{impression=" << report.impression
-             << ",trigger_data=" << report.trigger_data
-             << ",conversion_time=" << report.conversion_time
-             << ",report_time=" << report.report_time
-             << ",priority=" << report.priority
-             << ",external_report_id=" << report.external_report_id
+  return out << "{source=" << report.source()
+             << ",trigger_data=" << report.trigger_data()
+             << ",conversion_time=" << report.conversion_time()
+             << ",report_time=" << report.report_time()
+             << ",priority=" << report.priority()
+             << ",external_report_id=" << report.external_report_id()
              << ",conversion_id="
-             << (report.conversion_id
-                     ? base::NumberToString(**report.conversion_id)
-                     : "null")
-             << ",failed_send_attempts=" << report.failed_send_attempts << "}";
+             << (report.report_id() ? base::NumberToString(**report.report_id())
+                                    : "null")
+             << ",failed_send_attempts=" << report.failed_send_attempts()
+             << "}";
 }
 
-std::ostream& operator<<(std::ostream& out, SentReport::Status status) {
+std::ostream& operator<<(std::ostream& out, SendResult::Status status) {
   switch (status) {
-    case SentReport::Status::kSent:
+    case SendResult::Status::kSent:
       out << "kSent";
       break;
-    case SentReport::Status::kTransientFailure:
+    case SendResult::Status::kTransientFailure:
       out << "kTransientFailure";
       break;
-    case SentReport::Status::kFailure:
+    case SendResult::Status::kFailure:
       out << "kFailure";
       break;
-    case SentReport::Status::kDropped:
+    case SendResult::Status::kDropped:
       out << "kDropped";
-      break;
-    case SentReport::Status::kOffline:
-      out << "kOffline";
-      break;
-    case SentReport::Status::kRemovedFromQueue:
-      out << "kRemovedFromQueue";
       break;
   }
   return out;
 }
 
-std::ostream& operator<<(std::ostream& out, const SentReport& info) {
-  return out << "{report=" << info.report << ",status=" << info.status
+std::ostream& operator<<(std::ostream& out, const SendResult& info) {
+  return out << "{status=" << info.status
              << ",http_response_code=" << info.http_response_code << "}";
 }
 

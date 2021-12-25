@@ -83,6 +83,7 @@
 <translation id="1414981605391750300">Contactando con Google. É posible que esta acción tarde un minuto…</translation>
 <translation id="1416550906796893042">Versión da aplicación</translation>
 <translation id="1430915738399379752">Imprimir</translation>
+<translation id="1436784010935106834">Eliminados</translation>
 <translation id="1448440926884431741">Organiza os produtos dos que fagas un seguimento en Marcadores</translation>
 <translation id="1450753235335490080">Non se puido compartir este contido: <ph name="CONTENT_TYPE" /></translation>
 <translation id="1466383950273130737">Escolle o idioma de Chrome</translation>
@@ -104,6 +105,7 @@
 <translation id="1571304935088121812">Copia o nome de usuario</translation>
 <translation id="1592864538817356322">Protección estándar:</translation>
 <translation id="1628019612362412531">{NUM_SELECTED,plural, =1{Quitar 1 elemento seleccionado}other{Quitar # elementos seleccionados}}</translation>
+<translation id="1633659023549081553">Descubre novo contido na páxina de inicio de Chrome</translation>
 <translation id="1641113438599504367">Navegación segura</translation>
 <translation id="164269334534774161">Estás vendo unha copia sen conexión desta páxina creada o <ph name="CREATION_TIME" /></translation>
 <translation id="1644574205037202324">Historial</translation>
@@ -202,7 +204,6 @@ Toca calquera palabra para buscala. Mantena premida para seleccionar máis ou me
 <translation id="2172905120685242547">Queres pechar a ventá?</translation>
 <translation id="2175927920773552910">Código QR</translation>
 <translation id="218608176142494674">Uso compartido</translation>
-<translation id="2195339740518523951">Goza da máxima seguranza de Chrome</translation>
 <translation id="2200113223741723867">Xestionar uso compartido dos datos de uso</translation>
 <translation id="2218567645332692482">Usa HTTPS cando navegas e mostra unha advertencia antes de cargar sitios que non o admiten</translation>
 <translation id="2227444325776770048">Continuar como <ph name="USER_FULL_NAME" /></translation>
@@ -220,6 +221,7 @@ Toca calquera palabra para buscala. Mantena premida para seleccionar máis ou me
 <translation id="2321958826496381788">Arrastra o control desprazable ata que poidas ler con comodidade. O texto debe ter polo menos este tamaño despois de facer dobre clic nun parágrafo.</translation>
 <translation id="2323763861024343754">Almacenamento do sitio</translation>
 <translation id="2328985652426384049">Non se puido iniciar sesión</translation>
+<translation id="2342601525305963189">Consellos de Chrome:</translation>
 <translation id="234265804618409743">Non se puido abrir a cámara. Produciuse un erro.</translation>
 <translation id="2345671828921229300">Para realizar buscas, mantén premida unha palabra</translation>
 <translation id="2349710944427398404">Datos totais usados por Chrome, incluídas as contas, os marcadores e a configuración gardada</translation>
@@ -263,6 +265,7 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="2534582914273493287">Os URL que visitas envíanselle a Google</translation>
 <translation id="2536728043171574184">Visualización dunha copia sen conexión desta páxina</translation>
 <translation id="2546283357679194313">Cookies e datos dos sitios</translation>
+<translation id="2558692642259318568">Se queres navegar sen que se garde a actividade no dispositivo, proba o modo de incógnito</translation>
 <translation id="2561519700418191927">Vistas previas de vídeos</translation>
 <translation id="2567385386134582609">IMAXE</translation>
 <translation id="2567545343356994513">Unha protección máis rápida e proactiva contra sitios web, descargas e extensións perigosos</translation>
@@ -274,6 +277,7 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="2612676031748830579">Número da tarxeta</translation>
 <translation id="2625189173221582860">Copiouse o contrasinal</translation>
 <translation id="2631006050119455616">Gardados</translation>
+<translation id="2634905176438867146">Descubre como configurar Chrome como navegador predeterminado</translation>
 <translation id="2645657967708199252">A túa conexión (<ph name="CONNECTION_TYPE" />) podería reducir a velocidade da descarga</translation>
 <translation id="2647434099613338025">Engadir idioma</translation>
 <translation id="2649068648233607930"><ph name="DOMAIN" /> xestiona o teu navegador</translation>
@@ -358,6 +362,7 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="3037177537145227281">Estase facendo un seguimento do prezo</translation>
 <translation id="3037517125981011456">Mostra solicitudes para iniciar sesión en Chrome</translation>
 <translation id="3046945242843292318">Accede a este sitio de forma máis rápida a próxima vez</translation>
+<translation id="3055259925215945098">Moveuse o marcador</translation>
 <translation id="305593374596241526">A localización está desactivada. Actívaa na <ph name="BEGIN_LINK" />configuración de Android<ph name="END_LINK" />.</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> marcador}other{<ph name="BOOKMARKS_COUNT_MANY" /> marcadores}}</translation>
 <translation id="3062802207422175757">Artigos sobre os teus intereses en Chrome</translation>
@@ -386,6 +391,7 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="3234978181857588512">Gardar no dispositivo</translation>
 <translation id="3236059992281584593">Queda 1 minuto</translation>
 <translation id="3237087289225714896">Precarga estándar:</translation>
+<translation id="3237433641417325993">Desprázate cara abaixo para ver artigos suxeridos</translation>
 <translation id="3244271242291266297">MM</translation>
 <translation id="3245429137663807393">Se, ademais, compartes os informes de uso de Chrome, neles inclúense os URL que visitas</translation>
 <translation id="3250563604907490871">As descricións das imaxes retomaranse cando te conectes á wifi</translation>
@@ -537,7 +543,6 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="4170011742729630528">O servizo non está dispoñible. Téntao de novo máis tarde.</translation>
 <translation id="4179980317383591987">Datos usados: <ph name="AMOUNT" /></translation>
 <translation id="4181841719683918333">Idiomas</translation>
-<translation id="4183868528246477015">Buscar con Google Lens <ph name="BEGIN_NEW" />Novo<ph name="END_NEW" /></translation>
 <translation id="4195643157523330669">Abrir en pestana nova</translation>
 <translation id="4196597275619698563">Crear tarxeta</translation>
 <translation id="4198423547019359126">Non hai localizacións de descarga dispoñibles</translation>
@@ -571,7 +576,6 @@ Mantén premida calquera palabra para buscala. Se queres refinar a busca, selecc
 <translation id="4411535500181276704">Modo básico</translation>
 <translation id="4415276339145661267">Xestionar a túa Conta de Google</translation>
 <translation id="4425140285732600465">Estase facendo un seguimento do prezo. Recibe alertas se baixa o prezo en calquera sitio.</translation>
-<translation id="4427306783828095590">A protección mellorada é máis eficaz á hora de bloquear o phishing e o software malicioso</translation>
 <translation id="4450672886426705087">Resultados da busca de Google.</translation>
 <translation id="4452411734226507615">Pecha a pestana <ph name="TAB_TITLE" /></translation>
 <translation id="4452548195519783679">Marcador engadido a <ph name="FOLDER_NAME" /></translation>
@@ -651,6 +655,7 @@ Para cambiar esta opción de configuración, deberás <ph name="BEGIN_LINK" />re
 <translation id="4835385943915508971">Chrome non ten acceso ao recurso solicitado.</translation>
 <translation id="4837753911714442426">Abrir opcións para imprimir a páxina</translation>
 <translation id="4842092870884894799">Mostrando ventá emerxente de xeración de contrasinais</translation>
+<translation id="4842515939542199281">Para facer buscas coa voz, toca o micrófono</translation>
 <translation id="4850886885716139402">Vista</translation>
 <translation id="4860895144060829044">Chamar</translation>
 <translation id="4864369630010738180">Iniciando sesión...</translation>
@@ -697,6 +702,7 @@ Para cambiar esta opción de configuración, deberás <ph name="BEGIN_LINK" />re
 <translation id="5091249083535528968">Datos de uso ampliados</translation>
 <translation id="509429900233858213">Produciuse un erro.</translation>
 <translation id="510275257476243843">Queda 1 hora</translation>
+<translation id="5115811374190515607">á seguinte localización: <ph name="PRODUCT_NAME" /></translation>
 <translation id="5118713593561876160">Intereses</translation>
 <translation id="5123685120097942451">Pestana do modo de incógnito</translation>
 <translation id="5126510351761255129">Verificar a túa tarxeta</translation>
@@ -801,6 +807,7 @@ Para cambiar esta opción de configuración, deberás <ph name="BEGIN_LINK" />re
 <translation id="5749068826913805084">Chrome precisa acceder ao almacenamento para descargar ficheiros.</translation>
 <translation id="5749237766298580851">Desactivada <ph name="SEPARATOR" /> Non recomendado</translation>
 <translation id="5752232708629533680">Compartir só GIF</translation>
+<translation id="5753139477036638699">Podes utilizar a voz para facer buscas en Chrome</translation>
 <translation id="5754350196967618083">Non se puido actualizar Discover</translation>
 <translation id="5763382633136178763">Pestanas do modo de incógnito</translation>
 <translation id="5763514718066511291">Tocar para copiar o URL para esta aplicación</translation>
@@ -826,6 +833,7 @@ Para cambiar esta opción de configuración, deberás <ph name="BEGIN_LINK" />re
 <translation id="5854512288214985237">Non se envían estatísticas nin informes de fallos a Google</translation>
 <translation id="5855546874025048181">Refinar: <ph name="REFINE_TEXT" /></translation>
 <translation id="5857447844686706637">Produciuse un erro. Non se puido actualizar Facer seguimento do prezo.</translation>
+<translation id="5859968346865909126">Podes activalo ou desactivalo na configuración</translation>
 <translation id="5860033963881614850">Non</translation>
 <translation id="5860491529813859533">Activar</translation>
 <translation id="5862731021271217234">Activa a sincronización para sincronizar as pestanas dos demais dispositivos</translation>
@@ -1011,6 +1019,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="6813446258015311409">Panel Iniciar sesión en Chrome (aberto).</translation>
 <translation id="6814033694018386318">Que compartes con Google?</translation>
 <translation id="6817747507826986771">Compartir rapidamente esta páxina. Para editar este atallo, mantén premido o botón.</translation>
+<translation id="6819199143469632133">Para acceder aos teus servizos de Google desde calquera dispositivo, inicia sesión</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6824899148643461612"><ph name="TAB_TITLE" />, pestana, seleccionada</translation>
 <translation id="6828070228333235514">Deter seguimento do prezo</translation>
@@ -1049,6 +1058,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="7027549951530753705">Restaurouse <ph name="ITEM_TITLE" /></translation>
 <translation id="7029390216614421513">Coloca o código QR ou o código de barras neste marco.</translation>
 <translation id="7029809446516969842">Contrasinais</translation>
+<translation id="7037830628447527439">Inicia sesión en Chrome coa túa Conta de Google</translation>
 <translation id="7038956721828960940">chrome_imaxe_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="7054588988317389591">Queres obter descricións de imaxes?</translation>
 <translation id="7055152154916055070">Bloqueouse unha redirección:</translation>
@@ -1070,6 +1080,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="7177466738963138057">Podes cambiar esta opción máis tarde en Configuración</translation>
 <translation id="7177873915659574692">Non se puido crear o código QR. O URL contén máis de <ph name="CHARACTER_LIMIT" /> caracteres.</translation>
 <translation id="7180611975245234373">Actualizar</translation>
+<translation id="718226107353899806">Podes engadir ata <ph name="MAX_NUM_REACTIONS" /> reaccións</translation>
 <translation id="7187993566681480880">Protéxete en Chrome e pode utilizarse para mellorar a túa seguranza noutras aplicacións de Google cando teñas a sesión iniciada.</translation>
 <translation id="718926126787620637">A lista de cartafoles de marcadores está aberta completamente</translation>
 <translation id="7191430249889272776">Abriuse a pestana en segundo plano.</translation>
@@ -1100,6 +1111,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="7359002509206457351">Acceso a métodos de pago</translation>
 <translation id="7375125077091615385">Tipo:</translation>
 <translation id="7376560087009844242">Se inclúes máis texto dunha páxina cando utilizas a función Tocar para buscar, poderías obter mellores resultados. Sempre podes ir á <ph name="BEGIN_LINK" />configuración<ph name="END_LINK" /> para cambiar esta preferencia.</translation>
+<translation id="7379900596734708416">Xa está dispoñible o tema escuro para os sitios</translation>
 <translation id="7386842512861524348">A menos que Chrome indique o contrario, a conexión deste sitio é segura.</translation>
 <translation id="7396940094317457632"><ph name="FILE_NAME" />.</translation>
 <translation id="7400418766976504921">URL</translation>
@@ -1232,7 +1244,6 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="8035133914807600019">Cartafol novo...</translation>
 <translation id="8037750541064988519">Quedan <ph name="DAYS" /> días</translation>
 <translation id="8037801708772278989">A comprobación realizouse agora mesmo</translation>
-<translation id="8040831032425909005">Icona do widget da busca de accións rápidas</translation>
 <translation id="804335162455518893">Non se atopou a tarxeta SD</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> pestana do modo de incógnito}other{<ph name="TAB_COUNT_NORMAL" /> pestanas do modo de incógnito}}</translation>
 <translation id="8051695050440594747">Almacenamento dispoñible: <ph name="MEGABYTES" /> MB</translation>
@@ -1402,6 +1413,7 @@ Por exemplo, algúns sitios web poden responder a esta solicitude mostrándoche 
 <translation id="8945143127965743188"><ph name="LANG" />: non se puido descargar este idioma. Téntao de novo máis tarde.</translation>
 <translation id="8951232171465285730">Chrome permitiuche aforrar <ph name="MEGABYTES" /> MB</translation>
 <translation id="8955719471735800169">Volver ao principio</translation>
+<translation id="8964479563882643397">Para abrir unha nova pestana do modo de incógnito, abre o menú</translation>
 <translation id="8965591936373831584">pendente</translation>
 <translation id="8967427617812342790">Engadir á lista de lectura</translation>
 <translation id="8968085728801125376">{TAB_COUNT,plural, =1{Pecharanse <ph name="INCOGNITO_TAB_COUNT" /> pestanas de incógnito e <ph name="TAB_COUNT_ONE" /> pestana máis}other{Pecharanse <ph name="INCOGNITO_TAB_COUNT" /> pestanas de incógnito e <ph name="TAB_COUNT_MANY" /> pestanas máis}}</translation>

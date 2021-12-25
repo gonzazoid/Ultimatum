@@ -112,6 +112,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="1308113895091915999">Penawaran tersedia</translation>
 <translation id="1312803275555673949">Bukti apa yang mendukungnya?</translation>
 <translation id="131405271941274527"><ph name="URL" /> ingin mengirim dan menerima info saat Anda mengetukkan ponsel pada perangkat NFC</translation>
+<translation id="1314311879718644478">Lihat konten augmented reality</translation>
 <translation id="1314509827145471431">Jilid di kanan</translation>
 <translation id="1318023360584041678">Disimpan di grup tab</translation>
 <translation id="1319245136674974084">Jangan tanya lagi untuk aplikasi ini</translation>
@@ -176,6 +177,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="1472675084647422956">Tampilkan lainnya</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Mencari versi bowser? Buka</translation>
 <translation id="1476595624592550506">Ubah sandi Anda</translation>
 <translation id="1483493594462132177">Kirim</translation>
 <translation id="1484290072879560759">Pilih Alamat Pengiriman</translation>
@@ -214,6 +216,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="1583429793053364125">Terjadi masalah sewaktu menampilkan halaman web ini.</translation>
 <translation id="1586541204584340881">Ekstensi yang telah Anda instal</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Instal ARCore?</translation>
 <translation id="1592005682883173041">Akses Data Lokal</translation>
 <translation id="1594030484168838125">Pilih</translation>
 <translation id="160851722280695521">Mainkan game Dino Run di Chrome</translation>
@@ -1251,6 +1254,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="4968522289500246572">Aplikasi ini didesain untuk perangkat seluler dan perubahan ukurannya mungkin tidak sesuai. Perangkat dapat mengalami masalah atau dimulai ulang.</translation>
 <translation id="4969341057194253438">Hapus rekaman</translation>
 <translation id="4973922308112707173">Dua lubang di atas</translation>
+<translation id="4976702386844183910">Terakhir dibuka <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Gunakan mikrofon?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">Lihat semua</translation>
@@ -1336,6 +1340,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="5215116848420601511">Metode pembayaran dan alamat yang menggunakan Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Baki 13</translation>
+<translation id="5216942107514965959">Terakhir dibuka hari ini</translation>
 <translation id="5222812217790122047">Email wajib diisi</translation>
 <translation id="5230733896359313003">Alamat Pengiriman</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1379,6 +1384,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="5333022057423422993">Chrome menemukan sandi yang baru saja Anda gunakan dalam pelanggaran data. Untuk mengamankan akun, sebaiknya periksa sandi tersimpan Anda.</translation>
 <translation id="5334013548165032829">Log sistem mendetail</translation>
 <translation id="5334145288572353250">Simpan Alamat?</translation>
+<translation id="5335920952954443287">Hati yang Berdebar</translation>
 <translation id="5340250774223869109">Aplikasi diblokir</translation>
 <translation id="534295439873310000">Perangkat NFC</translation>
 <translation id="5344579389779391559">Halaman ini mungkin mencoba menagih Anda</translation>
@@ -1521,6 +1527,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="5869522115854928033">Sandi tersimpan</translation>
 <translation id="5873013647450402046">Bank Anda ingin memastikan bahwa ini memang Anda.</translation>
 <translation id="5887400589839399685">Kartu disimpan</translation>
+<translation id="5887687176710214216">Terakhir dibuka kemarin</translation>
 <translation id="5895138241574237353">Mulai Ulang</translation>
 <translation id="5895187275912066135">Diterbitkan Pada</translation>
 <translation id="5901630391730855834">Kuning</translation>
@@ -1714,6 +1721,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="6529602333819889595">&amp;Ulangi Penghapusan</translation>
 <translation id="6545864417968258051">Pemindaian Bluetooth</translation>
 <translation id="6547208576736763147">Dua lubang di kiri</translation>
+<translation id="6554732001434021288">Terakhir dibuka <ph name="NUM_DAYS" /> hari lalu</translation>
 <translation id="6556866813142980365">Urungkan</translation>
 <translation id="6569060085658103619">Anda melihat halaman ekstensi</translation>
 <translation id="6573200754375280815">Dua lubang di kanan</translation>
@@ -1876,6 +1884,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="7118618213916969306">Telusuri URL papan klip, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Tutup tab atau program lain</translation>
 <translation id="7129409597930077180">Tidak dapat mengirim ke alamat ini. Pilih alamat lain.</translation>
+<translation id="7132939140423847331">Admin Anda telah melarang data ini disalin.</translation>
 <translation id="7135130955892390533">Tampilkan status</translation>
 <translation id="7138472120740807366">Metode pengiriman</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2046,6 +2055,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="7654909834015434372">Jika Anda mengedit anotasi, dokumen ini akan kembali ke rotasi aslinya</translation>
 <translation id="765676359832457558">Sembunyikan setelan lanjutan...</translation>
 <translation id="7658239707568436148">Batal</translation>
+<translation id="7659878911471462949">Air Mata Kebahagiaan</translation>
 <translation id="7662298039739062396">Setelan yang dikontrol oleh ekstensi</translation>
 <translation id="7663736086183791259">Sertifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Tidak diizinkan di Samaran</translation>
@@ -2146,7 +2156,6 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Dapat meminta untuk menggunakan perangkat dan data virtual reality</translation>
 <translation id="7984945080620862648">Anda tidak dapat mengunjungi <ph name="SITE" /> saat ini karena situs web tersebut mengirim kredensial kacau yang tidak dapat diproses oleh Chrome. Kesalahan jaringan dan serangan biasanya bersifat sementara, jadi halaman ini mungkin akan bekerja nanti.</translation>
-<translation id="79859296434321399">Untuk melihat konten augmented reality, instal ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Jilid</translation>
 <translation id="7992044431894087211">Berbagi layar dengan <ph name="APPLICATION_TITLE" /> dilanjutkan</translation>
@@ -2250,6 +2259,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="830498451218851433">Lipatan setengah</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Aplikasi yang diinstal dan seberapa sering digunakan</translation>
+<translation id="8317207217658302555">Update ARCore?</translation>
 <translation id="831997045666694187">Sore</translation>
 <translation id="8321476692217554900">notifikasi</translation>
 <translation id="8328484624016508118">Setelah semua tab Samaran ditutup, Chrome akan menghapus:
@@ -2318,7 +2328,6 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Reset izin}other{Reset izin}}</translation>
 <translation id="8555010941760982128">Gunakan kode ini saat checkout</translation>
 <translation id="8557066899867184262">CVC terletak di bagian belakang kartu Anda.</translation>
-<translation id="8558485628462305855">Untuk melihat konten augmented reality, update ARCore</translation>
 <translation id="8559762987265718583">Sambungan pribadi ke <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> tidak dapat dibuat karena tanggal dan waktu (<ph name="DATE_AND_TIME" />) perangkat tidak benar.</translation>
 <translation id="8564182942834072828">Dokumen terpisah/Salinan tidak tersusun</translation>
 <translation id="8564985650692024650">Chromium menyarankan untuk menyetel ulang sandi <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> jika Anda juga menggunakannya di situs lain.</translation>
@@ -2430,6 +2439,7 @@ Jika tidak, ini akan diblokir oleh setelan privasi Anda. Ini akan memungkinkan k
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Tekan tab lalu Enter untuk melihat histori penjelajahan Anda di Chrome</translation>
 <translation id="8987927404178983737">Bulan</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Mencari versi sistem? Buka</translation>
 <translation id="899688752321268742"><ph name="URL" /> ingin mengetahui saat Anda aktif menggunakan perangkat ini</translation>
 <translation id="8996941253935762404">Situs yang akan dibuka berisi program berbahaya</translation>
 <translation id="8997023839087525404">Server menampilkan sertifikat yang tidak diungkapkan ke publik melalui kebijakan Transparansi Sertifikat. Ini adalah persyaratan untuk beberapa sertifikat, untuk memastikan bahwa sertifikat dapat dipercaya agar terlindung dari penyerang.</translation>

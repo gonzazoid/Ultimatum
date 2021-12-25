@@ -253,9 +253,30 @@ AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::Run() {
     EXTENSION_FUNCTION_VALIDATE(args().size() >= 1);
     EXTENSION_FUNCTION_VALIDATE(args()[0].is_bool());
     bool enabled = args()[0].GetBool();
-    bridge->SetNativeChromeVoxArcSupport(enabled);
+    bridge->SetNativeChromeVoxArcSupport(
+        enabled,
+        base::BindOnce(
+            &AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::
+                OnResponse,
+            this));
+    return did_respond() ? AlreadyResponded() : RespondLater();
   }
-  return RespondNow(NoArguments());
+  return RespondNow(ArgumentList(
+      extensions::api::accessibility_private::
+          SetNativeChromeVoxArcSupportForCurrentApp::Results::Create(
+              extensions::api::accessibility_private::
+                  SetNativeChromeVoxResponse::
+                      SET_NATIVE_CHROME_VOX_RESPONSE_FAILURE)));
+}
+
+void AccessibilityPrivateSetNativeChromeVoxArcSupportForCurrentAppFunction::
+    OnResponse(
+        extensions::api::accessibility_private::SetNativeChromeVoxResponse
+            response) {
+  Respond(ArgumentList(
+      extensions::api::accessibility_private::
+          SetNativeChromeVoxArcSupportForCurrentApp::Results::Create(
+              response)));
 }
 
 ExtensionFunction::ResponseAction
@@ -744,4 +765,21 @@ AccessibilityPrivateGetLocalizedDomKeyStringForKeyCodeFunction::Run() {
   }
 
   return RespondNow(OneArgument(base::Value(std::string())));
+}
+
+ExtensionFunction::ResponseAction
+AccessibilityPrivateUpdateDictationBubbleFunction::Run() {
+  if (!::features::IsExperimentalAccessibilityDictationCommandsEnabled())
+    return RespondNow(Error("Dictation commands feature is disabled."));
+
+  std::unique_ptr<accessibility_private::UpdateDictationBubble::Params> params(
+      accessibility_private::UpdateDictationBubble::Params::Create(args()));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  absl::optional<std::u16string> text;
+  if (params->text)
+    text = base::UTF8ToUTF16(*params->text);
+  ash::AccessibilityController::Get()->UpdateDictationBubble(params->visible,
+                                                             text);
+  return RespondNow(NoArguments());
 }

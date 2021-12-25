@@ -25,7 +25,6 @@
 <translation id="1104084341931202936">ਪਹੁੰਚਯੋਗਤਾ ਸੈਟਿੰਗਾਂ ਦਿਖਾਓ</translation>
 <translation id="1104621072296271835">ਰਲ ਕੇ ਤੁਹਾਡੇ ਡੀਵਾਈਸ ਹੋਰ ਵੀ ਬਿਹਤਰ ਕੰਮ ਕਰਦੇ ਹਨ</translation>
 <translation id="1111781754511998498">ਪ੍ਰੋਜੈਕਟਰ</translation>
-<translation id="1119348796022671382">ਥੀਮਡ ਰੰਗ ਮੋਡ ਇੰਟਰਫੇਸ ਨੂੰ ਹਲਕਾ ਰੰਗੀਨ ਕਰਨ ਲਈ ਅਜਿਹੇ ਰੰਗਾਂ ਦੀ ਵਰਤੋਂ ਕਰਦਾ ਹੈ ਜੋ ਤੁਹਾਡੇ ਵਾਲਪੇਪਰ ਤੋਂ ਐਕਸਟ੍ਰੈਕਟ ਕੀਤੇ ਗਏ ਹਨ।</translation>
 <translation id="112308213915226829">ਸ਼ੈਲਫ ਆਟੋਲੁਕਾਓ</translation>
 <translation id="1142002900084379065">ਹਾਲੀਆ ਫ਼ੋਟੋਆਂ</translation>
 <translation id="1148499908455722006"><ph name="USER_NAME" /> ਲਈ ਜਾਣਕਾਰੀ ਵਿੰਡੋ ਖੋਲ੍ਹੋ</translation>
@@ -35,6 +34,7 @@
 <translation id="1175572348579024023">ਸਕ੍ਰੋਲ</translation>
 <translation id="1178581264944972037">ਰੋਕੋ</translation>
 <translation id="1181037720776840403">ਹਟਾਓ</translation>
+<translation id="118437560755358292">ਵਧੇਰੇ ਸੁਰੱਖਿਆ ਲਈ ਪਾਸਵਰਡ ਜਾਂ ਪਿੰਨ ਦਾਖਲ ਕਰੋ</translation>
 <translation id="118532027333893379">ਪੂਰੀ ਸਕ੍ਰੀਨ ਨੂੰ ਕੈਪਚਰ ਕਰਨ ਲਈ ਕਿਤੇ ਵੀ ਟੈਪ ਕਰੋ</translation>
 <translation id="1190609913194133056">ਸੂਚਨਾ ਕੇਂਦਰ</translation>
 <translation id="1190678134285018527">ਡੀਵਾਈਸ ਨੂੰ ਪਿਛਲੇ ਵਰਜਨ 'ਤੇ ਵਾਪਸ ਜਾਣ ਦੀ ਲੋੜ ਹੈ</translation>
@@ -113,7 +113,6 @@
 <translation id="1632985212731562677">ਸਵਿੱਚ ਪਹੁੰਚ ਨੂੰ ਸੈਟਿੰਗਾਂ &gt; ਪਹੁੰਚਯੋਗਤਾ ਵਿੱਚ ਜਾ ਕੇ ਬੰਦ ਕੀਤਾ ਜਾ ਸਕਦਾ ਹੈ।</translation>
 <translation id="1637505162081889933"><ph name="NUM_DEVICES" /> ਡੀਵਾਈਸ</translation>
 <translation id="1654477262762802994">ਅਵਾਜ਼ੀ ਪੁੱਛਗਿੱਛ ਸ਼ੁਰੂ ਕਰੋ</translation>
-<translation id="1667964833127753507">ਨਿਰਪੱਖ ਰੰਗ ਮੋਡ ਨਿਰਪੱਖ ਰੰਗ ਵਾਲੇ ਹਲਕੇ ਜਾਂ ਗੂੜ੍ਹੇ ਰੰਗ ਦੀਆਂ ਭਾਹਾਂ ਵਾਲੇ ਸੈੱਟ ਦੀ ਜਗ੍ਹਾ ਵਾਲਪੇਪਰ ਤੋਂ ਐਕਸਟ੍ਰੈਕਟ ਕੀਤੇ ਰੰਗਾਂ ਨੂੰ ਨਹੀਂ ਵਰਤਦਾ।</translation>
 <translation id="1677472565718498478"><ph name="TIME" /> ਬਾਕੀ</translation>
 <translation id="1677507110654891115"><ph name="FEATURE_NAME" /> ਕਨੈਕਟ ਨਹੀਂ ਹੈ।</translation>
 <translation id="1698080062160024910"><ph name="TOTAL_TIME" /> ਟਾਈਮਰ · <ph name="LABEL" /></translation>
@@ -132,6 +131,7 @@
 <translation id="1768366657309696705"><ph name="LAUNCHER_KEY_NAME" /> + Period ਕੀ-ਬੋਰਡ ਸ਼ਾਰਟਕੱਟ ਬਦਲ ਗਿਆ ਹੈ। Insert ਕੁੰਜੀ ਵਰਤਣ ਲਈ, <ph name="LAUNCHER_KEY_NAME" /> ਕੁੰਜੀ + Shift + Backspace ਦਬਾਓ।</translation>
 <translation id="1770726142253415363">ਕਤਾਰ <ph name="ROW_NUMBER" />, ਕਾਲਮ <ph name="COLUMN_NUMBER" /> 'ਤੇ ਲਿਜਾਇਆ ਗਿਆ।</translation>
 <translation id="1771761307086386028">ਸੱਜੇ ਪਾਸੇ ਸਕ੍ਰੋਲ ਕਰੋ</translation>
+<translation id="1774796056689732716"><ph name="CURRENT_MONTH_YEAR" /> ਦੇ ਕੈਲੰਡਰ ਵਿੱਚ ਫ਼ਿਲਹਾਲ <ph name="DATE" /> ਨੂੰ ਚੁਣਿਆ ਗਿਆ ਹੈ।</translation>
 <translation id="1787955149152357925">ਬੰਦ ਹੈ</translation>
 <translation id="1804572139604454141">ਡਿਸਕ ਵਿੱਚ ਬਹੁਤ ਘੱਟ ਜਗ੍ਹਾ ਹੋਣ ਕਰਕੇ ਰਿਕਾਰਡਿੰਗ ਸਮਾਪਤ ਹੋਈ</translation>
 <translation id="181103072419391116">ਸਿਗਨਲ ਦੀ ਤੀਬਰਤਾ <ph name="SIGNAL_STRENGTH" />, ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਵੱਲੋਂ ਪ੍ਰਬੰਧਿਤ ਕੀਤਾ ਜਾਂਦਾ ਹੈ</translation>
@@ -191,6 +191,7 @@
 <translation id="2222841058024245321">ਡੈਸਕ 7</translation>
 <translation id="2224075387478458881">ਸੁਰੱਖਿਅਤ ਸਮੱਗਰੀ ਦੇ ਦਿਸਣਯੋਗ ਹੋਣ 'ਤੇ ਸਕ੍ਰੀਨ ਰਿਕਾਰਡਿੰਗ ਦੀ ਇਜਾਜ਼ਤ ਨਹੀਂ ਹੈ</translation>
 <translation id="225680501294068881">ਡਿਵਾਈਸਾਂ ਲਈ ਸਕੈਨ ਕਰ ਰਿਹਾ ਹੈ...</translation>
+<translation id="2257486738914982088"><ph name="FILENAME" /> ਡਾਊਨਲੋਡ ਕਰਨ ਵੇਲੇ ਕੋਈ ਗੜਬੜ ਹੋ ਗਈ</translation>
 <translation id="2268130516524549846">ਬਲੂਟੁੱਥ ਬੰਦ ਹੈ</translation>
 <translation id="2268813581635650749">ਸਭ ਨੂੰ ਸਾਈਨ-ਆਊਟ ਕਰੋ</translation>
 <translation id="2269016722240250274">ਕੋਈ ਐਪਲੀਕੇਸ਼ਨ ਤੁਹਾਡੇ ਮਾਈਕ੍ਰੋਫ਼ੋਨ ਦੀ ਵਰਤੋਂ ਕਰ ਰਹੀ ਹੈ</translation>
@@ -338,6 +339,7 @@
 <translation id="3307642347673023554">ਲੈਪਟਾਪ ਮੋਡ 'ਤੇ ਸਵਿੱਚ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="3308453408813785101"><ph name="USER_EMAIL_ADDRESS" /> ਹਾਲੇ ਵੀ ਬਾਅਦ ਵਿੱਚ ਸਾਈਨ-ਇਨ ਕਰ ਸਕਦੇ ਹਨ।</translation>
 <translation id="3321628682574733415">ਮਾਂ-ਪਿਓ ਵਾਲਾ ਕੋਡ ਗਲਤ ਹੈ</translation>
+<translation id="3339826665088060472">ਸਕ੍ਰੀਨ ਕੈਪਚਰ, ਸਕ੍ਰੀਨਸ਼ਾਟ ਲੈਣ ਲਈ ਅਤੇ ਸਕ੍ਰੀਨ ਰਿਕਾਰਡਿੰਗਾਂ ਲਈ ਟੂਲ</translation>
 <translation id="3341303451326249809">ਸਕ੍ਰੀਨਸ਼ਾਟ ਕੈਪਚਰ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="334252345105450327">ਸਕ੍ਰੀਨਸ਼ਾਟ ਲਓ</translation>
 <translation id="3351879221545518001">ਤੁਸੀਂ ਇਸ ਵੇਲੇ ਸਕ੍ਰੀਨ ਕਾਸਟ ਕਰ ਰਹੇ ਹੋ।</translation>
@@ -394,6 +396,7 @@
 <translation id="3606978283550408104">ਬ੍ਰੇਲ ਡਿਸਪਲੇ ਕਨੈਕਟ ਕੀਤਾ।</translation>
 <translation id="3615926715408477684">ਮੋਬਾਈਲ ਡਾਟਾ ਚਾਲੂ ਕਰਨ ਨਾਲ ਬਲੂਟੁੱਥ ਵੀ ਚਾਲੂ ਹੋ ਜਾਵੇਗਾ</translation>
 <translation id="3616883743181209306">ਮੀਨੂ ਨੂੰ ਸਕ੍ਰੀਨ ਦੇ ਉੱਪਰਲੇ ਸੱਜੇ ਕੋਨੇ ਵਿੱਚ ਲਿਜਾਇਆ ਗਿਆ।</translation>
+<translation id="3619536907358025872">ਸਕ੍ਰੀਨ ਕੈਪਚਰ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="3621202678540785336">ਇਨਪੁਟ</translation>
 <translation id="3621712662352432595"> ਆਡੀਓ  ਸੈਟਿੰਗਾਂ</translation>
 <translation id="3626281679859535460">ਚਮਕ</translation>
@@ -470,7 +473,6 @@
 <translation id="412298498316631026">ਵਿੰਡੋ</translation>
 <translation id="4129129681837227511">ਆਪਣੀ ਲਾਕ ਸਕ੍ਰੀਨ 'ਤੇ ਸੂਚਨਾਵਾਂ ਦੇਖਣ ਲਈ, ਅਣਲਾਕ ਕਰਕੇ ਸੈਟਿੰਗ ਬਦਲੋ</translation>
 <translation id="4146833061457621061">ਸੰਗੀਤ ਚਲਾਓ</translation>
-<translation id="4157822100366708405">ਗੂੜ੍ਹੇ ਥੀਮ ਦੀਆਂ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="4173958948577803258">ਵੀ</translation>
 <translation id="4177913004758410636">{0,plural, =1{ਡੀਵਾਈਸ ਨੂੰ ਇੱਕ ਦਿਨ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}one{ਡੀਵਾਈਸ ਨੂੰ # ਦਿਨ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}other{ਡੀਵਾਈਸ ਨੂੰ # ਦਿਨਾਂ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}}</translation>
 <translation id="4181841719683918333">ਭਾਸ਼ਾਵਾਂ</translation>
@@ -492,6 +494,7 @@
 <translation id="4269883910223712419">ਇਸ ਡੀਵਾਈਸ ਦੇ ਪ੍ਰਸ਼ਾਸਕ ਕੋਲ ਇਹ ਕਰਨ ਦੀ ਸਮਰੱਥਾ ਹੈ:</translation>
 <translation id="4274537685965975248">Ctrl + Alt + ਹੇਠਾਂ ਤੀਰ ਕੀ-ਬੋਰਡ ਸ਼ਾਰਟਕੱਟ ਬਦਲ ਗਿਆ ਹੈ। End ਕੁੰਜੀ ਵਰਤਣ ਲਈ, <ph name="LAUNCHER_KEY_NAME" /> ਕੁੰਜੀ + ਸੱਜਾ ਤੀਰ ਦਬਾਓ।</translation>
 <translation id="4279490309300973883">ਪ੍ਰਤਿਬਿੰਬੀਕਰਨ</translation>
+<translation id="4283888303416325161">ਵਧੇਰੇ ਸੁਰੱਖਿਆ ਲਈ ਪਾਸਵਰਡ ਦਾਖਲ ਕਰੋ</translation>
 <translation id="4285498937028063278">ਅਨਪਿਨ ਕਰੋ</translation>
 <translation id="429402653707266969">ਟੂਲਬਾਰ ਦੇ ਟਿਕਾਣੇ ਨੂੰ ਟੌਗਲ ਕਰੋ</translation>
 <translation id="4294319844246081198">ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ <ph name="GIVEN_NAME" />,</translation>
@@ -583,6 +586,7 @@
 <translation id="4831034276697007977">ਕੀ ਤੁਸੀਂ ਪੱਕਾ ਸਵੈਚਲਿਤ ਕਲਿੱਕਾਂ ਨੂੰ ਬੰਦ ਕਰਨਾ ਚਾਹੁੰਦੇ ਹੋ?</translation>
 <translation id="4849058404725798627">ਕੀ-ਬੋਰਡ ਫੋਕਸ ਨਾਲ ਵਸਤੂ ਨੂੰ ਉਜਾਗਰ ਕਰੋ</translation>
 <translation id="485592688953820832">ਕੋਈ ਕਾਰਵਾਈ ਨਹੀਂ (ਰੋਕੋ)</translation>
+<translation id="4860284199500934869"><ph name="FILENAME" /> ਡਾਊਨਲੋਡ ਕਰਨ ਲਈ ਆਪਣੇ ਨੈੱਟਵਰਕ ਕਨੈਕਸ਼ਨ ਦੀ ਜਾਂਚ ਕਰੋ</translation>
 <translation id="486056901304535126">ਬਾਅਦ ਵਿੱਚ ਡਾਊਨਲੋਡ ਕਰਨ ਦੀ ਕੋਸ਼ਿਸ਼ ਕੀਤੀ ਜਾਵੇਗੀ। ਡਾਊਨਲੋਡ ਪੂਰਾ ਹੋਣ ਤੱਕ ਪ੍ਰਕਿਰਿਆ ਕਰਨ ਲਈ ਬੋਲੀ Google ਨੂੰ ਭੇਜੀ ਜਾਵੇਗੀ।</translation>
 <translation id="4868492592575313542">ਕਿਰਿਆਸ਼ੀਲ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="4872237917498892622">Alt+Search ਜਾਂ Shift</translation>
@@ -617,6 +621,8 @@
 <translation id="5075554201838155866">ਬੰਦ ਸੁਰਖੀਆਂ ਸ਼ੁਰੂ ਕਰੋ</translation>
 <translation id="5078796286268621944">ਗ਼ਲਤ PIN</translation>
 <translation id="5083553833479578423">Assistant ਦੀਆਂ ਹੋਰ ਵਿਸ਼ੇਸ਼ਤਾਵਾਂ ਨੂੰ ਅਣਲਾਕ ਕਰੋ।</translation>
+<translation id="5090752371472782287"><ph name="MANAGER" /> ਡੀਵਾਈਸ 'ਤੇ ਕਾਸਟ ਕਰੋ</translation>
+<translation id="5106223312672646208">ਵਿਅਕਤੀਗਤ ਬਣਾਓ</translation>
 <translation id="5117590920725113268">ਅਗਲਾ ਮਹੀਨਾ ਦਿਖਾਓ</translation>
 <translation id="5136175204352732067">ਵੱਖਰਾ ਕੀ-ਬੋਰਡ ਕਨੈਕਟ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="5147567197700016471">Chromebook ਅਣਲਾਕ ਹੋ ਗਈ</translation>
@@ -625,6 +631,7 @@
 <translation id="5168181903108465623">ਕਾਸਟ ਡਿਵਾਈਸਾਂ ਉਪਲਬਧ</translation>
 <translation id="5170568018924773124">ਫੋਲਡਰ ਵਿੱਚ ਦਿਖਾਓ</translation>
 <translation id="5176318573511391780">ਅੰਸ਼ਕ ਸਕ੍ਰੀਨ ਨੂੰ ਰਿਕਾਰਡ ਕਰੋ</translation>
+<translation id="5198413532174090167"><ph name="DATE" />, <ph name="NUMBER" /> ਇਵੈਂਟ</translation>
 <translation id="5198715732953550718">ਨਵਾਂ ਫੋਲਡਰ ਬਣਾਉਣ ਲਈ <ph name="MOVED_APP_NAME" /> ਨੂੰ <ph name="IN_PLACE_APP" /> ਨਾਲ ਮਿਲਾਇਆ ਜਾਂਦਾ ਹੈ।</translation>
 <translation id="5206028654245650022"><ph name="APP_NAME" />, <ph name="NOTIFICATION_TITLE" />: <ph name="MESSAGE" />, <ph name="PHONE_NAME" /></translation>
 <translation id="5206057955438543357">{NUM_NOTIFICATIONS,plural, =1{1 ਹੋਰ ਸੂਚਨਾ}one{# ਹੋਰ ਸੂਚਨਾ}other{# ਹੋਰ ਸੂਚਨਾਵਾਂ}}</translation>
@@ -661,6 +668,7 @@
 <translation id="5426063383988017631">ਸੈਟਿੰਗ ਮੀਨੂ ਨੂੰ ਬੰਦ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="5428899915242071344">ਚੁਣਨਾ ਸ਼ੁਰੂ ਕਰੋ</translation>
 <translation id="5430931332414098647">ਤਤਕਾਲ ਟੈਦਰਿੰਗ</translation>
+<translation id="5431318178759467895">ਰੰਗ</translation>
 <translation id="5431825016875453137">OpenVPN / L2TP</translation>
 <translation id="5433020815079095860">ਆਡੀਓ ਇਨਪੁੱਟ</translation>
 <translation id="544691375626129091">ਸਾਰੇ ਉਪਲਬਧ ਉਪਭੋਗਤਾ ਇਸ ਸੈਸ਼ਨ ਵਿੱਚ ਪਹਿਲਾਂ ਹੀ ਜੋੜੇ ਗਏ ਹਨ।</translation>
@@ -708,6 +716,7 @@
 <translation id="5769373120130404283">ਪਰਦੇਦਾਰੀ ਸਕ੍ਰੀਨ</translation>
 <translation id="5777841717266010279">ਕੀ ਸਕ੍ਰੀਨ ਸ਼ੇਅਰਿੰਗ ਰੋਕਣੀ ਹੈ?</translation>
 <translation id="5779721926447984944">ਪਿੰਨ ਕੀਤੀਆਂ ਫ਼ਾਈਲਾਂ</translation>
+<translation id="5788127256798019331">Play ਦੀਆਂ ਫ਼ਾਈਲਾਂ</translation>
 <translation id="5790085346892983794">ਸਫਲਤਾ</translation>
 <translation id="5805809050170488595"><ph name="NETWORK_NAME" /> ਨੂੰ ਕਿਰਿਆਸ਼ੀਲ ਕਰਨ ਲਈ ਕਲਿੱਕ ਕਰੋ</translation>
 <translation id="5820394555380036790">Chromium OS</translation>
@@ -760,6 +769,7 @@
 <translation id="607652042414456612">ਨੇੜਲੇ ਬਲੂਟੁੱਥ ਡੀਵਾਈਸ ਤੁਹਾਡੇ ਕੰਪਿਊਟਰ ਨੂੰ ਖੋਜ ਸਕਦੇ ਹਨ ਅਤੇ ਇਹ ਪਤੇ <ph name="ADDRESS" /> ਨਾਲ "<ph name="NAME" />" ਦੇ ਤੌਰ 'ਤੇ ਦਿਖਾਈ ਦੇਵੇਗਾ।</translation>
 <translation id="6114505516289286752"><ph name="LANGUAGE" /> ਦੀਆਂ ਬੋਲੀ ਵਾਲੀਆਂ ਫ਼ਾਈਲਾਂ ਨੂੰ ਡਾਊਨਲੋਡ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="6119360623251949462"><ph name="CHARGING_STATE" />। <ph name="BATTERY_SAVER_STATE" /></translation>
+<translation id="6121838516699723042"><ph name="FILENAME" /> ਡਾਊਨਲੋਡ ਦੀ ਤਸਦੀਕ ਕਰੋ</translation>
 <translation id="612734058257491180">Google Assistant ਮਹਿਮਾਨ ਸੈਸ਼ਨ ਵਿੱਚ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।</translation>
 <translation id="6134259848159370930">ਆਪਣਾ ਡੀਵਾਈਸ, ਐਪਾਂ, ਸੈਟਿੰਗਾਂ ਅਤੇ ਵੈੱਬ ਖੋਜੋ।</translation>
 <translation id="6137566720514957455"><ph name="USER_EMAIL_ADDRESS" /> ਲਈ 'ਹਟਾਓ' ਵਿੰਡੋ ਖੋਲ੍ਹੋ</translation>
@@ -795,9 +805,11 @@
 <translation id="643147933154517414">ਸਭ ਹੋ ਗਿਆ</translation>
 <translation id="6431865393913628856">ਸਕ੍ਰੀਨ ਰਿਕਾਰਡਰ</translation>
 <translation id="6445835306623867477"><ph name="RECEIVER_NAME" /> 'ਤੇ <ph name="ROUTE_TITLE" /></translation>
+<translation id="6447111710783417522"><ph name="DATE" />, <ph name="NUMBER" /> ਇਵੈਂਟ</translation>
 <translation id="6452181791372256707">ਰੱਦ ਕਰੋ</translation>
 <translation id="6453179446719226835">ਭਾਸ਼ਾ ਬਦਲ ਦਿੱਤੀ ਗਈ ਹੈ</translation>
 <translation id="6459472438155181876">ਸਕ੍ਰੀਨ <ph name="DISPLAY_NAME" /> ਵਿੱਚ ਵਧਾ ਰਿਹਾ ਹੈ</translation>
+<translation id="6477681113376365978">ਫ਼ਾਈਲ ਡਾਊਨਲੋਡ ਨਹੀਂ ਕੀਤੀ ਜਾ ਸਕਦੀ</translation>
 <translation id="6482559668224714696">ਪੂਰੀ-ਸਕ੍ਰੀਨ ਵੱਡਦਰਸ਼ੀ</translation>
 <translation id="6490471652906364588">USB-C ਡਿਵਾਈਸ (ਸੱਜਾ ਪੋਰਟ)</translation>
 <translation id="6491071886865974820"><ph name="MANAGER" /> ਲਈ ਤੁਹਾਨੂੰ ਸਮਾਂ-ਸੀਮਾ ਤੋਂ ਪਹਿਲਾਂ ਆਪਣੇ <ph name="DEVICE_TYPE" /> ਨੂੰ ਅੱਪਡੇਟ ਕਰਨ ਦੀ ਲੋੜ ਹੈ</translation>
@@ -809,7 +821,10 @@
 <translation id="6528179044667508675">ਪਰੇਸ਼ਾਨ ਨਾ ਕਰੋ</translation>
 <translation id="65320610082834431">ਇਮੋਜੀ</translation>
 <translation id="6537924328260219877">ਸਿਗਨਲ ਦੀ ਤੀਬਰਤਾ <ph name="SIGNAL_STRENGTH" />, ਫ਼ੋਨ ਦੀ ਬੈਟਰੀ <ph name="BATTERY_STATUS" /></translation>
+<translation id="6539852571005954999">ਡਾਊਨਲੋਡ ਹੋ ਰਹੀ <ph name="FILENAME" /> ਫ਼ਾਈਲ ਨੂੰ ਸਕੈਨ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
 <translation id="6542521951477560771"><ph name="RECEIVER_NAME" /> 'ਤੇ ਕਾਸਟ ਕੀਤਾ ਜਾ ਰਿਹਾ ਹੈ</translation>
+<translation id="655633303491376835"><ph name="APP_NAME" />
+ਨਵੀਂ ਸਥਾਪਤ ਕੀਤੀ ਗਈ</translation>
 <translation id="6559976592393364813">ਪ੍ਰਸ਼ਾਸਕ ਨੂੰ ਪੁੱਛੋ</translation>
 <translation id="6565007273808762236">ਈ-ਸਿਮ ਕਨੈਕਸ਼ਨ ਉਪਲਬਧ ਨਹੀਂ</translation>
 <translation id="6570831796530454248">{0,plural, =1{ਡੀਵਾਈਸ ਨੂੰ ਇੱਕ ਘੰਟੇ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}one{ਡੀਵਾਈਸ ਨੂੰ # ਘੰਟੇ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}other{ਡੀਵਾਈਸ ਨੂੰ # ਘੰਟਿਆਂ ਦੇ ਅੰਦਰ ਅੱਪਡੇਟ ਕਰੋ}}</translation>
@@ -841,6 +856,7 @@
 <translation id="6723839937902243910">ਪਾਵਰ</translation>
 <translation id="6727969043791803658">ਕਨੈਕਟ ਕੀਤਾ ਗਿਆ, <ph name="BATTERY_PERCENTAGE" />% ਬੈਟਰੀ</translation>
 <translation id="6732800389263199929">+<ph name="COUNT" /></translation>
+<translation id="6739144137573853180">ਸੈਟਿੰਗਾਂ 'ਤੇ ਜਾਓ</translation>
 <translation id="6751052314767925245">ਤੁਹਾਡੇ ਪ੍ਰਸ਼ਾਸਕ ਵੱਲੋਂ ਲਾਗੂ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="6751826523481687655">ਪ੍ਰਦਰਸ਼ਨ ਟ੍ਰੇਸਿੰਗ ਚਾਲੂ ਹੈ</translation>
 <translation id="6752912906630585008">ਡੈਸਕ <ph name="REMOVED_DESK" /> ਨੂੰ ਹਟਾ ਕੇ ਡੈਸਕ <ph name="RECEIVE_DESK" /> ਵਿੱਚ ਵਿਲੀਨ ਕੀਤਾ ਗਿਆ</translation>
@@ -853,6 +869,7 @@
 <translation id="6811454077060061666">ਡੈਸਕਟਾਪ ਲਈ Google Drive ਉਪਲਬਧ ਨਹੀਂ ਹੈ</translation>
 <translation id="6818242057446442178">ਇੱਕ ਸ਼ਬਦ ਪਿੱਛੇ ਜਾਓ</translation>
 <translation id="6820676911989879663">ਥੋੜ੍ਹੀ ਦੇਰ ਆਰਾਮ ਕਰੋ!</translation>
+<translation id="6827049576281411231">ਇਵੈਂਟ ਪੈਨਲ ਨੂੰ ਬੰਦ ਕਰੋ</translation>
 <translation id="6836499262298959512">ਖਤਰਨਾਕ ਫ਼ਾਈਲ</translation>
 <translation id="6837064795450991317">ਡੈਸਕਬਾਰ ਲੁਕਾਓ</translation>
 <translation id="6852052252232534364">ਕਿਰਿਆਸ਼ੀਲ ਕਰਨ ਲਈ ਕਲਿੱਕ ਕਰੋ</translation>
@@ -860,6 +877,7 @@
 <translation id="685782768769951078">{NUM_DIGITS,plural, =1{ਇੱਕ ਅੰਕ ਬਾਕੀ}one{# ਅੰਕ ਬਾਕੀ}other{# ਅੰਕ ਬਾਕੀ}}</translation>
 <translation id="6867938213751067702"><ph name="FILENAME" /> ਦਾ ਡਾਊਨਲੋਡ ਰੋਕਿਆ ਗਿਆ</translation>
 <translation id="6878400149835617132">ਸ਼ਾਰਟਕੱਟ ਬੰਦ ਹੈ</translation>
+<translation id="6884665277231944629">ਅੱਜ ਦੀ ਤਾਰੀਖ 'ਤੇ ਵਾਪਸ ਜਾਓ</translation>
 <translation id="6886172995547742638">ਹੋ ਸਕਦਾ ਹੈ ਕਿ ਤੁਹਾਡਾ <ph name="DEVICE_TYPE" /> ਉਮੀਦ ਨਾਲੋਂ ਘੱਟ ਕਾਰਗੁਜ਼ਾਰੀ ਕਰੇ। ਕੋਈ ਪ੍ਰਮਾਣਿਤ <ph name="PREFERRED_MINIMUM_POWER" />W ਜਾਂ ਵੱਧ ਦਾ USB-C ਪਾਵਰ ਅਡਾਪਟਰ ਵਰਤੋ।</translation>
 <translation id="688631446150864480">ਵਿੰਡੋ ਸਵਿੱਚ ਕਰਨ ਲਈ ਹੇਠਾਂ ਤੀਰ ਵਾਲੀ ਕੁੰਜੀ ਦਬਾਓ</translation>
 <translation id="6896758677409633944">ਕਾਪੀ ਕਰੋ</translation>
@@ -946,6 +964,7 @@
 <translation id="7497767806359279797">ਭਾਸ਼ਾ ਅਤੇ ਕੀ-ਬੋਰਡ ਚੁਣੋ</translation>
 <translation id="7509246181739783082">ਆਪਣੀ ਪਛਾਣ ਦੀ ਪੁਸ਼ਟੀ ਕਰੋ</translation>
 <translation id="7513622367902644023">ਸਕ੍ਰੀਨਸ਼ਾਟ ਮੋਡ ਨੂੰ ਚੁਣਿਆ ਗਿਆ</translation>
+<translation id="7513922695575567867"><ph name="DATE" /> ਵਾਲੇ ਹਫ਼ਤੇ ਦੇ ਕੈਲੰਡਰ ਵਿੱਚ ਫ਼ਿਲਹਾਲ <ph name="SELECTED_DATE" /> ਨੂੰ ਚੁਣਿਆ ਗਿਆ ਹੈ।</translation>
 <translation id="7514365320538308">ਡਾਊਨਲੋਡ ਕਰੋ</translation>
 <translation id="7526573455193969409">ਹੋ ਸਕਦਾ ਹੈ ਕਿ ਨੈੱਟਵਰਕ ਦੀ ਨਿਗਰਾਨੀ ਹੋ ਰਹੀ ਹੋਵੇ</translation>
 <translation id="7536035074519304529">IP ਪਤਾ: <ph name="ADDRESS" /></translation>
@@ -955,6 +974,7 @@
 <translation id="7564874036684306347">ਵਿੰਡੋਆਂ ਨੂੰ ਕਿਸੇ ਹੋਰ ਡੈਸਕਟਾਪ 'ਤੇ ਲਿਜਾਉਣ ਨਾਲ ਅਣਕਿਆਸਿਆ ਵਰਤਾਅ ਦਿਖ ਸਕਦਾ ਹੈ। ਇਸ ਤੋਂ ਬਾਅਦ ਦੀਆਂ ਸੂਚਨਾਵਾਂ, ਵਿੰਡੋਆਂ ਅਤੇ ਡਾਇਲੌਗ ਡੈਸਕਟਾਪਾਂ ਵਿੱਚ ਵੱਖ-ਵੱਖ ਕੀਤੇ ਜਾ ਸਕਦੇ ਹਨ।</translation>
 <translation id="7569509451529460200">ਬ੍ਰੇਲ ਅਤੇ ChromeVox ਯੋਗ ਬਣਾਏ ਗਏ ਹਨ</translation>
 <translation id="7569983096843329377">ਕਾਲਾ</translation>
+<translation id="757941033127302446">ਸਾਈਨ-ਇਨ ਕੀਤਾ ਗਿਆ</translation>
 <translation id="7579778809502851308">ਸਕ੍ਰੀਨ ਕੈਪਚਰ ਕਰੋ</translation>
 <translation id="7590883480672980941">ਇਨਪੁੱਟ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="7593891976182323525">Search ਜਾਂ Shift</translation>
@@ -962,7 +982,6 @@
 <translation id="7600875258240007829">ਸਾਰੀਆਂ ਸੂਚਨਾਵਾਂ ਦੇਖੋ</translation>
 <translation id="7607002721634913082">ਰੋਕਿਆ ਗਿਆ</translation>
 <translation id="7610198039767537854"><ph name="DEVICE_TYPE" /> 'ਤੇ ਆਪਣੇ ਫ਼ੋਨ ਦੇ ਕੈਮਰਾ ਰੋਲ ਦੀਆਂ ਹਾਲੀਆ ਫ਼ੋਟੋਆਂ ਦੇਖੋ</translation>
-<translation id="7618774594543487847">ਨਿਰਪੱਖ</translation>
 <translation id="7624117708979618027"><ph name="TEMPERATURE_F" />° F</translation>
 <translation id="7631906263969450674">ਮਾਰਕਰ ਪੈੱਨ</translation>
 <translation id="7633755430369750696">'ਨਜ਼ਦੀਕੀ ਸਾਂਝ' ਸੈਟਿੰਗਾਂ ਦਿਖਾਓ।</translation>
@@ -976,6 +995,7 @@
 <translation id="7662283695561029522">ਸੰਰੂਪਣ ਕਰਨ ਲਈ ਟੈਪ ਕਰੋ</translation>
 <translation id="7705524343798198388">VPN</translation>
 <translation id="7714767791242455379">ਨਵਾਂ ਸੈਲਿਊਲਰ ਨੈੱਟਵਰਕ ਸ਼ਾਮਲ ਕਰੋ</translation>
+<translation id="7720410380936703141">ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ</translation>
 <translation id="7723389094756330927">{NUM_NOTIFICATIONS,plural, =1{1 ਸੂਚਨਾ}one{# ਸੂਚਨਾ}other{# ਸੂਚਨਾਵਾਂ}}</translation>
 <translation id="7724603315864178912">ਕੱਟੋ</translation>
 <translation id="7745560842763881396">ਐਪਾਂ ਨੂੰ ਸ਼ੈਲਫ ਵਿੱਚ ਦਿਖਾਓ</translation>
@@ -1028,6 +1048,7 @@
 <translation id="8035152190676905274">ਪੈੱਨ</translation>
 <translation id="8036504271468642248">ਪਿਛਲਾ ਵਾਕ</translation>
 <translation id="8042893070933512245">ਪਹੁੰਚਯੋਗਤਾ ਸੈਟਿੰਗਾਂ ਮੀਨੂ ਖੋਲ੍ਹੋ</translation>
+<translation id="8042925093898452104">ਵੇਰਵੇ ਦੀ ਜਾਣਕਾਰੀ ਨੂੰ ਬੰਦ ਕਰੋ</translation>
 <translation id="8048123526339889627">ਬਲੂਟੁੱਥ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="8051716679295756675"><ph name="DESK_TEMPLATE_NAME" /> ਨਾਮਕ ਟੈਮਪਲੇਟ ਪਹਿਲਾਂ ਤੋਂ ਹੀ ਮੌਜੂਦ ਹੈ</translation>
 <translation id="8052898407431791827">ਕਲਿੱਪਬੋਰਡ 'ਤੇ ਕਾਪੀ ਕੀਤਾ ਗਿਆ</translation>
@@ -1097,6 +1118,7 @@
 <translation id="8513108775083588393">ਸਵੈ-ਘੁੰਮਾਓ</translation>
 <translation id="851458219935658693">ਮੌਜੂਦਾ ਡੈਸਕ ਤੋਂ ਉਹ ਵਿੰਡੋ ਦਿਖਾਓ ਜਿਸ ਵਿੱਚ ਰੇਡੀਓ ਬਟਨ ਨੂੰ ਚੁਣਿਆ ਹੋਵੇ</translation>
 <translation id="8517041960877371778">ਤੁਹਾਡੀ <ph name="DEVICE_TYPE" /> ਚਾਲੂ ਹੋਣ ਵੇਲੇ ਚਾਰਜ ਨਹੀਂ ਹੋ ਸਕਦੀ।</translation>
+<translation id="8551588720239073785">ਤਾਰੀਖ ਅਤੇ ਸਮਾਂ ਸੈਟਿੰਗਾਂ</translation>
 <translation id="8553395910833293175">ਪਹਿਲਾਂ ਹੀ ਸਾਰੇ ਡੈਸਕਾਂ ਦੇ ਜ਼ਿੰਮੇ ਲਗਾਇਆ ਗਿਆ।</translation>
 <translation id="856298576161209842"><ph name="MANAGER" /> ਵੱਲੋਂ ਤੁਹਾਨੂੰ ਆਪਣੇ <ph name="DEVICE_TYPE" /> ਨੂੰ ਅੱਪਡੇਟ ਕਰਨ ਦੀ ਸਿਫ਼ਾਰਸ਼ ਕੀਤੀ ਜਾਂਦੀ ਹੈ</translation>
 <translation id="8563862697512465947">ਸੂਚਨਾ ਸੈਟਿੰਗਾਂ</translation>
@@ -1116,7 +1138,6 @@
 <translation id="8660331759611631213">71 ਦਾ ਵਰਗ ਮੂਲ</translation>
 <translation id="8663756353922886599"><ph name="CONNECTION_STATUS" />, ਸਿਗਨਲ ਦੀ ਤੀਬਰਤਾ <ph name="SIGNAL_STRENGTH" /></translation>
 <translation id="8664753092453405566">ਨੈੱਟਵਰਕ ਸੂਚੀ ਦਿਖਾਓ। <ph name="STATE_TEXT" /></translation>
-<translation id="8668052347555487755">ਰੰਗਦਾਰ ਮੋਡ</translation>
 <translation id="8676770494376880701">ਘੱਟ-ਪਾਵਰ ਦਾ ਚਾਰਜਰ ਕਨੈਕਟ ਕੀਤਾ</translation>
 <translation id="8683506306463609433">ਪ੍ਰਦਰਸ਼ਨ ਟ੍ਰੇਸਿੰਗ ਕਿਰਿਆਸ਼ੀਲ ਹੈ</translation>
 <translation id="8685326675965865247">ਆਪਣਾ ਡੀਵਾਈਸ, ਐਪਾਂ, ਸੈਟਿੰਗਾਂ ਅਤੇ ਵੈੱਬ ਖੋਜੋ। ਆਪਣੀਆਂ ਐਪਾਂ ਵਿੱਚ ਨੈਵੀਗੇਟ ਕਰਨ ਲਈ ਤੀਰ ਕੁੰਜੀਆਂ ਵਰਤੋ।</translation>
@@ -1150,7 +1171,6 @@
 <translation id="8896630965521842259"><ph name="DESK_TEMPLATE_NAME" /> ਨੂੰ ਪੱਕੇ ਤੌਰ 'ਤੇ ਮਿਟਾਇਆ ਜਾਵੇਗਾ</translation>
 <translation id="890616557918890486">ਸਰੋਤ ਬਦਲੋ</translation>
 <translation id="8909138438987180327">ਬੈਟਰੀ <ph name="PERCENTAGE" /> ਫ਼ੀਸਦ ਹੈ।</translation>
-<translation id="8913384980486163186">ਥੀਮਡ (ਪੂਰਵ-ਨਿਰਧਾਰਤ)</translation>
 <translation id="8921554779039049422">H+</translation>
 <translation id="8921624153894383499">Google Assistant ਇਹ ਭਾਸ਼ਾ ਨਹੀਂ ਬੋਲਦੀ।</translation>
 <translation id="8926951137623668982">ਸ਼ੈਲਫ਼ ਹਮੇਸ਼ਾਂ ਲੁਕੀ ਰਹਿੰਦੀ ਹੈ</translation>
@@ -1162,6 +1182,7 @@
 <translation id="8983038754672563810">HSPA</translation>
 <translation id="8990809378771970590"><ph name="IME_NAME" /> ਦੀ ਵਰਤੋਂ ਹੋ ਰਹੀ ਹੈ</translation>
 <translation id="899350903320462459">ਸੂਚਨਾ 'ਤੇ ਕਾਰਵਾਈ ਕਰਨ ਲਈ <ph name="LOGIN_ID" /> ਵਜੋਂ ਡੀਵਾਈਸ ਨੂੰ ਅਣਲਾਕ ਕਰੋ</translation>
+<translation id="9000771174482730261">ਸਟੋਰੇਜ ਦਾ ਪ੍ਰਬੰਧਨ ਕਰੋ</translation>
 <translation id="9017320285115481645">Family Link ਦਾ ਮਾਂ-ਪਿਓ ਪਹੁੰਚ ਕੋਡ ਦਾਖਲ ਕਰੋ।</translation>
 <translation id="9024331582947483881">ਫੁਲ ਸਕ੍ਰੀਨ</translation>
 <translation id="9047624247355796468"><ph name="NETWORK_NAME" /> ਲਈ ਸੈਟਿੰਗਾਂ ਖੋਲ੍ਹੋ</translation>
@@ -1207,6 +1228,7 @@
 <translation id="938963181863597773">ਮੇਰੇ ਕੈਲੰਡਰ 'ਤੇ ਕੀ ਹੈ?</translation>
 <translation id="945522503751344254">ਪ੍ਰਤੀਕਰਮ ਭੇਜੋ</translation>
 <translation id="951991426597076286">ਅਸਵੀਕਾਰ ਕਰੋ</translation>
+<translation id="954052413789300507"><ph name="FILENAME" /> ਲਈ ਲੋੜੀਂਦੀ ਜਗ੍ਹਾ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਜਗ੍ਹਾ ਖਾਲੀ ਕਰੋ।</translation>
 <translation id="974545358917229949"><ph name="QUERY" /> ਲਈ <ph name="RESULT_COUNT" /> ਨਤੀਜੇ ਦਿਖਾਏ ਜਾ ਰਹੇ ਹਨ</translation>
 <translation id="98515147261107953">ਲੈਂਡਸਕੇਪ</translation>
 <translation id="990277280839877440">ਵਿੰਡੋ <ph name="WINDOW_TITILE" /> ਬੰਦ ਹੋਈ।</translation>

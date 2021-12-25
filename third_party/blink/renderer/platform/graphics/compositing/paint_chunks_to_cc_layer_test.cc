@@ -107,7 +107,7 @@ class PaintRecordMatcher
 
 #define EXPECT_EFFECT_BOUNDS(x, y, width, height, op_buffer, index)         \
   do {                                                                      \
-    FloatRect bounds;                                                       \
+    SkRect bounds;                                                          \
     if (const auto* save_layer_alpha =                                      \
             (op_buffer).GetOpAtForTesting<cc::SaveLayerAlphaOp>(index)) {   \
       bounds = save_layer_alpha->bounds;                                    \
@@ -117,7 +117,7 @@ class PaintRecordMatcher
     } else {                                                                \
       FAIL() << "No SaveLayer[Alpha]Op at " << index;                       \
     }                                                                       \
-    EXPECT_EQ(FloatRect(x, y, width, height), bounds);                      \
+    EXPECT_EQ(SkRect::MakeXYWH(x, y, width, height), bounds);               \
   } while (false)
 
 #define EXPECT_TRANSFORM_MATRIX(transform, op_buffer, index)                 \
@@ -1211,34 +1211,6 @@ TEST_P(PaintChunksToCcLayerTest, NoopEffectDoesNotEmitItems) {
                   cc::PaintOpType::DrawRecord,      // draw with e1
                   cc::PaintOpType::Restore          // end noop_e2 (or e1)
               }));
-}
-
-TEST_P(PaintChunksToCcLayerTest, AllowChunkEscapeLayerNoopEffects) {
-  // This test doesn't apply to CAP.
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
-  auto e1 = CreateOpacityEffect(e0(), 0.5f);
-  auto noop_e2 = CreateOpacityEffect(*e1, 1.0f);
-  auto noop_e3 = CreateOpacityEffect(*noop_e2, 1.0f);
-  auto e4 = CreateOpacityEffect(*e1, 0.5f);
-
-  PropertyTreeState layer_state(t0(), c0(), *noop_e3);
-  TestChunks chunks;
-  chunks.AddChunk(t0(), c0(), *noop_e3);
-  chunks.AddChunk(t0(), c0(), *e4);
-
-  auto output = PaintChunksToCcLayer::Convert(
-                    chunks.Build(), layer_state, gfx::Vector2dF(),
-                    cc::DisplayItemList::kToBeReleasedAsPaintOpBuffer)
-                    ->ReleaseAsRecord();
-
-  EXPECT_THAT(*output, PaintRecordMatcher::Make({
-                           cc::PaintOpType::DrawRecord,
-                           cc::PaintOpType::SaveLayerAlpha,  // e4
-                           cc::PaintOpType::DrawRecord,
-                           cc::PaintOpType::Restore,  // end e4
-                       }));
 }
 
 TEST_P(PaintChunksToCcLayerTest, EmptyChunkRect) {

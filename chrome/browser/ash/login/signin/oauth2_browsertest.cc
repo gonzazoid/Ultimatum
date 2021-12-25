@@ -7,6 +7,8 @@
 #include <string>
 #include <utility>
 
+#include "ash/components/login/auth/key.h"
+#include "ash/components/login/auth/user_context.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/bind.h"
 #include "base/memory/ref_counted.h"
@@ -43,8 +45,6 @@
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/test/base/ui_test_utils.h"
-#include "chromeos/login/auth/key.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/javascript_dialogs/tab_modal_dialog_manager.h"
 #include "components/prefs/pref_service.h"
@@ -356,7 +356,7 @@ class OAuth2Test : public OobeBaseTest {
   user_manager::User::OAuthTokenStatus GetOAuthStatusFromLocalState(
       const std::string& email) const {
     PrefService* local_state = g_browser_process->local_state();
-    const base::DictionaryValue* prefs_oauth_status =
+    const base::Value* prefs_oauth_status =
         local_state->GetDictionary("OAuthTokenStatus");
     if (!prefs_oauth_status)
       return user_manager::User::OAUTH_TOKEN_STATUS_UNKNOWN;

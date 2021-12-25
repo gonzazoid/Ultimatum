@@ -4,13 +4,16 @@
 
 #include "chrome/updater/prefs.h"
 
+#include <functional>
+#include <memory>
+#include <string>
 #include <utility>
 
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
-#include "base/run_loop.h"
+#include "base/synchronization/waitable_event.h"
 #include "chrome/updater/constants.h"
 #include "chrome/updater/prefs_impl.h"
 #include "chrome/updater/updater_scope.h"
@@ -28,6 +31,7 @@ namespace {
 
 const char kPrefQualified[] = "qualified";
 const char kPrefSwapping[] = "swapping";
+const char kPrefMigratedLegacyUpdaters[] = "converted_legacy_updaters";
 const char kPrefActiveVersion[] = "active_version";
 const char kPrefServerStarts[] = "server_starts";
 
@@ -69,6 +73,14 @@ void UpdaterPrefsImpl::SetSwapping(bool value) {
   prefs_->SetBoolean(kPrefSwapping, value);
 }
 
+bool UpdaterPrefsImpl::GetMigratedLegacyUpdaters() const {
+  return prefs_->GetBoolean(kPrefMigratedLegacyUpdaters);
+}
+
+void UpdaterPrefsImpl::SetMigratedLegacyUpdaters() {
+  prefs_->SetBoolean(kPrefMigratedLegacyUpdaters, true);
+}
+
 int UpdaterPrefsImpl::CountServerStarts() {
   int starts = prefs_->GetInteger(kPrefServerStarts);
   if (starts <= kMaxServerStartsBeforeFirstReg)
@@ -95,6 +107,7 @@ scoped_refptr<GlobalPrefs> CreateGlobalPrefs(UpdaterScope scope) {
   auto pref_registry = base::MakeRefCounted<PrefRegistrySimple>();
   update_client::RegisterPrefs(pref_registry.get());
   pref_registry->RegisterBooleanPref(kPrefSwapping, false);
+  pref_registry->RegisterBooleanPref(kPrefMigratedLegacyUpdaters, false);
   pref_registry->RegisterStringPref(kPrefActiveVersion, "0");
   pref_registry->RegisterTimePref(kPrefUpdateTime, base::Time());
   pref_registry->RegisterIntegerPref(kPrefServerStarts, 0);
@@ -123,12 +136,14 @@ scoped_refptr<LocalPrefs> CreateLocalPrefs(UpdaterScope scope) {
 }
 
 void PrefsCommitPendingWrites(PrefService* pref_service) {
-  // Waits in the run loop until pending writes complete.
-  base::RunLoop runloop;
-  pref_service->CommitPendingWrite(base::BindOnce(
-      [](base::OnceClosure quit_closure) { std::move(quit_closure).Run(); },
-      runloop.QuitWhenIdleClosure()));
-  runloop.Run();
+  base::WaitableEvent write_complete_event;
+  pref_service->CommitPendingWrite({}, base::BindOnce(
+                                           [](base::WaitableEvent& event) {
+                                             VLOG(1) << "Prefs committed.";
+                                             event.Signal();
+                                           },
+                                           std::ref(write_complete_event)));
+  write_complete_event.Wait();
 }
 
 }  // namespace updater

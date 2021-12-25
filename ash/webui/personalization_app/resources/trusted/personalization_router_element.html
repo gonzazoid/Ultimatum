@@ -60,8 +60,7 @@
     params-string="{{query_}}">
   </iron-query-params>
   <template is="dom-if" if="[[shouldShowRootPage_(path_)]]">
-    <!-- TODO(b/202734180) replace this with real content -->
-    <h1>Personalization</h1>
+    <personalization-main></personalization-main>
   </template>
   <template is="dom-if" if="[[shouldShowWallpaperSubpage_(path_)]]">
     <div id="wallpaperContainer">
@@ -81,6 +80,7 @@
         hidden="[[!shouldShowCollectionImages_(path_)]]"></wallpaper-images>
       <template is="dom-if" if="[[isGooglePhotosIntegrationEnabled_()]]">
         <google-photos-collection
+          album-id="[[queryParams_.googlePhotosAlbumId]]"
           hidden="[[!shouldShowGooglePhotosCollection_(path_)]]">
         </google-photos-collection>
       </template>

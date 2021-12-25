@@ -77,6 +77,12 @@ void WebAppRegistrar::NotifyWebAppProtocolSettingsChanged() {
     observer.OnWebAppProtocolSettingsChanged();
 }
 
+void WebAppRegistrar::NotifyWebAppFileHandlerApprovalStateChanged(
+    const AppId& app_id) {
+  for (AppRegistrarObserver& observer : observers_)
+    observer.OnWebAppFileHandlerApprovalStateChanged(app_id);
+}
+
 void WebAppRegistrar::NotifyWebAppInstalled(const AppId& app_id) {
   for (AppRegistrarObserver& observer : observers_)
     observer.OnWebAppInstalled(app_id);
@@ -346,6 +352,11 @@ bool WebAppRegistrar::IsShortcutApp(const AppId& app_id) const {
   return !GetAppScopeInternal(app_id).has_value();
 }
 
+bool WebAppRegistrar::IsSystemApp(const AppId& app_id) const {
+  const WebApp* web_app = GetAppById(app_id);
+  return web_app && web_app->IsSystemApp();
+}
+
 DisplayMode WebAppRegistrar::GetAppEffectiveDisplayMode(
     const AppId& app_id) const {
   if (!IsLocallyInstalled(app_id))
@@ -602,6 +613,20 @@ bool WebAppRegistrar::IsAppFileHandlerPermissionBlocked(
          ApiApprovalState::kDisallowed;
 }
 
+ApiApprovalState WebAppRegistrar::GetAppFileHandlerApprovalState(
+    const AppId& app_id) const {
+  const WebApp* web_app = GetAppById(app_id);
+  if (!web_app)
+    return ApiApprovalState::kDisallowed;
+
+  if (web_app->IsSystemApp())
+    return ApiApprovalState::kAllowed;
+
+  // TODO(estade): also consult the policy manager when File Handler policies
+  // exist.
+  return web_app->file_handler_approval_state();
+}
+
 absl::optional<GURL> WebAppRegistrar::GetAppScopeInternal(
     const AppId& app_id) const {
   auto* web_app = GetAppById(app_id);
@@ -691,6 +716,20 @@ std::vector<IconSizes> WebAppRegistrar::GetAppDownloadedShortcutsMenuIconsSizes(
 
 std::vector<AppId> WebAppRegistrar::GetAppIds() const {
   return GetAppIdsForAppSet(GetApps());
+}
+
+std::vector<AppId> WebAppRegistrar::GetAllSubAppIds(
+    const AppId& parent_app_id) const {
+  std::vector<AppId> sub_app_ids;
+
+  for (const WebApp& app : GetApps()) {
+    if (app.parent_app_id().has_value() &&
+        *app.parent_app_id() == parent_app_id) {
+      sub_app_ids.push_back(app.app_id());
+    }
+  }
+
+  return sub_app_ids;
 }
 
 RunOnOsLoginMode WebAppRegistrar::GetAppRunOnOsLoginMode(

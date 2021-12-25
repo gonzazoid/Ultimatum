@@ -999,6 +999,9 @@ const PolicyToPreferenceMapEntry kSimplePolicyMap[] = {
   { key::kPhoneHubAllowed,
     chromeos::multidevice_setup::kPhoneHubAllowedPrefName,
     base::Value::Type::BOOLEAN },
+  { key::kPhoneHubCameraRollAllowed,
+    chromeos::multidevice_setup::kPhoneHubCameraRollAllowedPrefName,
+    base::Value::Type::BOOLEAN },
   { key::kPhoneHubNotificationsAllowed,
     chromeos::multidevice_setup::kPhoneHubNotificationsAllowedPrefName,
     base::Value::Type::BOOLEAN },
@@ -1290,6 +1293,9 @@ const PolicyToPreferenceMapEntry kSimplePolicyMap[] = {
   { key::kChromadToCloudMigrationEnabled,
     ash::prefs::kChromadToCloudMigrationEnabled,
     base::Value::Type::BOOLEAN },
+  { key::kProjectorEnabled,
+    ash::prefs::kProjectorAllowByPolicy,
+    base::Value::Type::BOOLEAN },
 #endif // BUILDFLAG(IS_CHROMEOS_ASH)
 
 #if defined(OS_WIN)
@@ -1562,6 +1568,11 @@ const PolicyToPreferenceMapEntry kSimplePolicyMap[] = {
   { key::kOriginAgentClusterDefaultEnabled,
     prefs::kOriginAgentClusterDefaultEnabled,
     base::Value::Type::BOOLEAN},
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  { key::kDeviceLoginScreenWebUILazyLoading,
+    ash::prefs::kLoginScreenWebUILazyLoading,
+    base::Value::Type::BOOLEAN },
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 };
 // clang-format on
 

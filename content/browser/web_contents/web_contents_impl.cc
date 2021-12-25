@@ -530,6 +530,22 @@ class DefaultColorProviderSource : public ui::ColorProviderSource,
       native_theme_observation_{this};
 };
 
+size_t GetFrameTreeSize(FrameTree* frame_tree) {
+  size_t tree_size = 0;
+  FrameTree::NodeRange node_range = frame_tree->NodesIncludingInnerTreeNodes();
+  FrameTree::NodeIterator node_iter = node_range.begin();
+  while (node_iter != node_range.end()) {
+    // Skip over collapsed frame trees.
+    if ((*node_iter)->is_collapsed()) {
+      node_iter.AdvanceSkippingChildren();
+    } else {
+      ++tree_size;
+      ++node_iter;
+    }
+  }
+  return tree_size;
+}
+
 }  // namespace
 
 CreatedWindow::CreatedWindow() = default;
@@ -1949,7 +1965,7 @@ uint64_t WebContentsImpl::GetUploadPosition() {
 }
 
 const std::string& WebContentsImpl::GetEncoding() {
-  return GetMainFrame()->GetEncoding();
+  return GetPrimaryPage().GetEncoding();
 }
 
 bool WebContentsImpl::WasDiscarded() {
@@ -5550,8 +5566,7 @@ void WebContentsImpl::DidFinishNavigation(NavigationHandle* navigation_handle) {
     // Navigation has completed in main frame. Reset |max_loaded_frame_count_|.
     // |max_loaded_frame_count_| is not necessarily 1 if the navigation was
     // served from BackForwardCache.
-    max_loaded_frame_count_ =
-        GetMainFrame()->frame_tree_node()->GetFrameTreeSize();
+    max_loaded_frame_count_ = GetFrameTreeSize(&primary_frame_tree_);
   }
 
   if (web_preferences_) {
@@ -6046,11 +6061,11 @@ void WebContentsImpl::OnDidFinishLoad(RenderFrameHostImpl* render_frame_host,
     observers_.NotifyObservers(&WebContentsObserver::DidFinishLoad,
                                render_frame_host, validated_url);
   }
-  size_t tree_size = primary_frame_tree_.root()->GetFrameTreeSize();
+  size_t tree_size = GetFrameTreeSize(&primary_frame_tree_);
   if (max_loaded_frame_count_ < tree_size)
     max_loaded_frame_count_ = tree_size;
 
-  if (!render_frame_host->GetParent())
+  if (!render_frame_host->GetParentOrOuterDocument())
     UMA_HISTOGRAM_COUNTS_1000("Navigation.MainFrame.FrameCount", tree_size);
 }
 
@@ -6135,9 +6150,11 @@ void WebContentsImpl::UnregisterProtocolHandler(RenderFrameHostImpl* source,
   delegate_->UnregisterProtocolHandler(source, protocol, url, user_gesture);
 }
 
-void WebContentsImpl::DomOperationResponse(const std::string& json_string) {
-  OPTIONAL_TRACE_EVENT1("content", "WebContentsImpl::DomOperationResponse",
-                        "json_string", json_string);
+void WebContentsImpl::DomOperationResponse(RenderFrameHost* render_frame_host,
+                                           const std::string& json_string) {
+  OPTIONAL_TRACE_EVENT2("content", "WebContentsImpl::DomOperationResponse",
+                        "render_frame_host", render_frame_host, "json_string",
+                        json_string);
 
   // TODO(lukasza): The notification below should probably indicate which
   // RenderFrameHostImpl the message is coming from. This can enable tests to
@@ -6147,6 +6164,9 @@ void WebContentsImpl::DomOperationResponse(const std::string& json_string) {
   NotificationService::current()->Notify(
       NOTIFICATION_DOM_OPERATION_RESPONSE, Source<WebContents>(this),
       Details<const std::string>(&json_string));
+
+  observers_.NotifyObservers(&WebContentsObserver::DomOperationResponse,
+                             render_frame_host, json_string);
 }
 
 void WebContentsImpl::SavableResourceLinksResponse(
@@ -6742,7 +6762,7 @@ void WebContentsImpl::RunJavaScriptDialog(
     if (!render_frame_host->GetLastCommittedOrigin().opaque()) {
       bool is_different_origin_subframe =
           render_frame_host->GetLastCommittedOrigin() !=
-          url::Origin::Create(render_frame_host->GetMainFrame()
+          url::Origin::Create(render_frame_host->GetOutermostMainFrame()
                                   ->GetLastCommittedURL()
                                   .DeprecatedGetOriginAsURL());
       suppress_this_message |= is_different_origin_subframe;
@@ -7454,13 +7474,23 @@ void WebContentsImpl::UpdateTitle(RenderFrameHostImpl* render_frame_host,
       render_frame_host->frame_tree()->controller().GetEntryWithUniqueID(
           render_frame_host->nav_entry_id());
 
-  // We can handle title updates when we don't have an entry in
-  // UpdateTitleForEntry, but only if the update is from the current RFH.
   if (!entry) {
-    if (render_frame_host != GetMainFrame())
+    // We can handle title updates with no matching NavigationEntry, but only if
+    // the update is for the initial NavigationEntry. In that case the initial
+    // empty document RFH wouldn't have a `nav_entry_id` set because it hasn't
+    // committed any navigation. Note that if the title update came from the
+    // initial empty document but the WebContents is doing a session restore,
+    // we will ignore the title update (because GetLastCommittedEntry() would
+    // return the non-initial restored entry), which avoids accidental
+    // overwriting of the restored entry's title.
+    if (render_frame_host->GetParent() || !render_frame_host->frame_tree()
+                                               ->controller()
+                                               .GetLastCommittedEntry()
+                                               ->IsInitialEntry()) {
       return;
-    // Use the last committed entry to attach the title to.
-    entry = GetController().GetLastCommittedEntry();
+    }
+    entry =
+        render_frame_host->frame_tree()->controller().GetLastCommittedEntry();
   }
 
   // TODO(evan): make use of title_direction.
@@ -7885,6 +7915,13 @@ void WebContentsImpl::NotifySwappedFromRenderManager(
   }
 
   NotifyFrameSwapped(old_frame, new_frame);
+}
+
+void WebContentsImpl::NotifySwappedFromRenderManagerWithoutFallbackContent(
+    RenderFrameHostImpl* new_frame) {
+  auto* rwhv = static_cast<RenderWidgetHostViewBase*>(new_frame->GetView());
+  if (rwhv)
+    rwhv->ClearFallbackSurfaceForCommitPending();
 }
 
 void WebContentsImpl::NotifyMainFrameSwappedFromRenderManager(

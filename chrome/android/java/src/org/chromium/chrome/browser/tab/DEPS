@@ -12,6 +12,7 @@ include_rules = [
   "+chrome/android/java/src/org/chromium/chrome/browser/dom_distiller/ReaderModeManager.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/feedback/HelpAndFeedbackLauncherImpl.java",
   "+chrome/android/features/autofill_assistant/public/java/src/org/chromium/chrome/browser/autofill_assistant/AutofillAssistantTabHelper.java",
+  "+chrome/android/features/autofill_assistant/public/java/src/org/chromium/chrome/browser/autofill_assistant/AssistantDependencyUtilsChrome.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/incognito/IncognitoUtils.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/media/MediaCaptureNotificationServiceImpl.java",
   "+chrome/android/java/src/org/chromium/chrome/browser/metrics/UkmRecorder.java",
@@ -74,6 +75,7 @@ specific_include_rules = {
     "+components/url_formatter/android",
     "+components/navigation_interception/android/java/src/org/chromium/components/navigation_interception",
     "+components/security_state/content/android/java/src/org/chromium/components/security_state/SecurityStateModel.java",
+    "+components/version_info/android",
   ],
   'TabStateBrowserControlsVisibilityDelegate\.java': [
     "+chrome/browser/util/android/java/src/org/chromium/chrome/browser/util/ChromeAccessibilityUtil.java",

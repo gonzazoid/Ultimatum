@@ -111,7 +111,7 @@
       <if expr="chromeos">
         <structure type="chrome_scaled_image" name="IDR_FATAL_ERROR" file="cros/fatal_error.png" />
       </if>
-      <if expr="chromeos or lacros">
+      <if expr="chromeos_ash or chromeos_lacros">
         <structure type="chrome_scaled_image" name="IDR_FILETYPE_AUDIO" file="cros/file_types/audio.png" />
         <structure type="chrome_scaled_image" name="IDR_FILETYPE_GENERIC" file="cros/file_types/generic.png" />
         <structure type="chrome_scaled_image" name="IDR_FILETYPE_IMAGE" file="cros/file_types/image.png" />
@@ -366,6 +366,9 @@
           <structure type="chrome_scaled_image" name="IDR_TRANSLATE_TAB_WORDMARK" file="google_chrome/translate_tab_wordmark.png" />
           <structure type="chrome_scaled_image" name="IDR_TRANSLATE_BUTTON_WORDMARK" file="google_chrome/translate_button_wordmark.png" />
         </if>
+      </if>
+      <if expr="not is_android">
+        <structure type="chrome_scaled_image" name="IDR_TAILORED_SECURITY_UNCONSENTED" file="common/tailored_security_unconsented.png" />
       </if>
     </structures>
   </release>

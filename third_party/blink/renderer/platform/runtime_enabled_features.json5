@@ -500,16 +500,6 @@
     {
       name: "CorsRFC1918",
     },
-    // This block isn't really used on its own. Blink doesn't really have to
-    // know about COEP:credentialless. However it is used for "declaring" the
-    // OriginTrial feature name. This is similar to:
-    // https://chromium-review.googlesource.com/c/chromium/src/+/2366778
-    // for CrossOriginOpenerPolicyReporting.
-    {
-      name: "CrossOriginEmbedderPolicyCredentialless",
-      origin_trial_feature_name: "CrossOriginEmbedderPolicyCredentiallessOriginTrial",
-      status: "experimental",
-    },
     {
       name: "CrossOriginIsolation",
       status: "stable",
@@ -554,7 +544,7 @@
     {
       // https://drafts.csswg.org/css-cascade-5/#layering
       name: "CSSCascadeLayers",
-      status: "experimental",
+      status: "stable",
     },
     {
       // Support case-sensitive attribute selector modifier
@@ -1061,7 +1051,6 @@
       // Portals, as we require the support of the browser process to fully
       // enable the feature. Enabling this runtime enabled feature alone has no
       // effect.
-      status: "experimental",
       origin_trial_feature_name: "FencedFrames",
     },
     {
@@ -1211,7 +1200,7 @@
     },
     {
       name: "HTMLInputElementShowPicker",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "HTMLPopupElement",
@@ -1355,6 +1344,10 @@
       name: "LayoutNGTextControl",
       depends_on: ["EditingNG"],
       status: "stable",
+    },
+    {
+      name: "LayoutNGView",
+      implied_by: ["LayoutNGPrinting"],
     },
     {
       name: "LazyFrameLoading",
@@ -2221,11 +2214,6 @@
       status: "stable"
     },
     {
-      // Synchronously load web fonts inlined as data urls (crbug.com/1236283)
-      name: "SyncLoadDataUrlFonts",
-      status: "test",
-    },
-    {
       name: "SystemWakeLock",
       status: "experimental",
     },
@@ -2433,6 +2421,7 @@
     },
     {
       name: "WebAppDarkMode",
+      origin_trial_feature_name: "WebAppDarkMode",
       status: "experimental",
     },
     {
@@ -2485,8 +2474,8 @@
     {
       name: "WebAppWindowControlsOverlay",
       origin_trial_feature_name: "WebAppWindowControlsOverlay",
-      origin_trial_os: ["win", "mac", "linux"],
-      status: "experimental",
+      origin_trial_os: ["win", "mac", "linux", "chromeos"],
+      status: "stable",
     },
     {
       name: "WebAssemblyCSP",
@@ -2617,6 +2606,11 @@
     {
       name: "WebNFC",
       status: {"Android": "stable", "default": "test"},
+    },
+    {
+      name: "WebNFCMakeReadOnly",
+      depends_on: ["WebNFC"],
+      status: "experimental",
     },
     {
       name: "WebOTP",

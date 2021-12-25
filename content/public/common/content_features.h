@@ -69,6 +69,9 @@ CONTENT_EXPORT extern const base::Feature kDesktopPWAsTabStrip;
 CONTENT_EXPORT extern const base::Feature kDevicePosture;
 CONTENT_EXPORT extern const base::Feature kDocumentPolicy;
 CONTENT_EXPORT extern const base::Feature kDocumentPolicyNegotiation;
+#if defined(OS_WIN)
+CONTENT_EXPORT extern const base::Feature kDWriteFontProxyOnIO;
+#endif
 CONTENT_EXPORT extern const base::Feature kEarlyEstablishGpuChannel;
 CONTENT_EXPORT extern const base::Feature kEarlyHintsPreloadForNavigation;
 CONTENT_EXPORT extern const base::Feature kEmbeddingRequiresOptIn;
@@ -93,6 +96,7 @@ CONTENT_EXPORT extern const base::Feature kFractionalScrollOffsets;
 CONTENT_EXPORT extern const base::Feature kGreaseUACH;
 CONTENT_EXPORT extern const base::Feature kHistoryPreventSandboxedNavigation;
 CONTENT_EXPORT extern const base::Feature kIdleDetection;
+CONTENT_EXPORT extern const base::Feature kIncludeIpcOverheadInNavigationStart;
 CONTENT_EXPORT extern const base::Feature kInstalledApp;
 CONTENT_EXPORT extern const base::Feature kInstalledAppProvider;
 CONTENT_EXPORT extern const base::Feature kInstalledAppsInCbd;
@@ -193,6 +197,9 @@ CONTENT_EXPORT extern const base::Feature kDisableProcessReuse;
 CONTENT_EXPORT extern const base::Feature
     kSkipEarlyCommitPendingForCrashedFrame;
 CONTENT_EXPORT extern const base::Feature kUserMediaCaptureOnFocus;
+#if defined(OS_CHROMEOS)
+CONTENT_EXPORT extern const base::Feature kWebLockScreenApi;
+#endif  // defined(OS_CHROMEOS)
 CONTENT_EXPORT extern const base::Feature kWebOTP;
 CONTENT_EXPORT extern const base::Feature kWebOTPAssertionFeaturePolicy;
 CONTENT_EXPORT extern const base::Feature kServiceWorkerSubresourceFilter;

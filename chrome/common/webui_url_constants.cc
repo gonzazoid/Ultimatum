@@ -141,7 +141,6 @@ const char kChromeUIOmniboxHost[] = "omnibox";
 const char kChromeUIOmniboxURL[] = "chrome://omnibox/";
 #if defined(OS_CHROMEOS)
 const char kChromeUIAppDisabledURL[] = "chrome://app-disabled";
-const char kChromeUIOsCroshAppURL[] = "chrome://crosh/";
 const char kChromeUIOsFlagsAppURL[] = "chrome://flags/";
 const char kChromeUIOsUrlAppURL[] = "chrome://internal/";
 #endif
@@ -154,7 +153,9 @@ const char kChromeUIPrefsInternalsHost[] = "prefs-internals";
 const char kChromeUIPrintURL[] = "chrome://print/";
 const char kChromeUIQuitHost[] = "quit";
 const char kChromeUIQuitURL[] = "chrome://quit/";
+// TODO(crbug.com/1202165): Remove when new quota-internals page is done.
 const char kChromeUIQuotaInternalsHost[] = "quota-internals";
+const char kChromeUIQuotaInternals2Host[] = "quota-internals-2";
 const char kChromeUIResetPasswordHost[] = "reset-password";
 const char kChromeUIResetPasswordURL[] = "chrome://reset-password/";
 const char kChromeUIRestartHost[] = "restart";
@@ -347,55 +348,27 @@ const char kChromeUIUrgentPasswordExpiryNotificationHost[] =
 const char kChromeUIUrgentPasswordExpiryNotificationUrl[] =
     "chrome://urgent-password-expiry-notification/";
 
-const char kOsUICroshURL[] = "os://crosh";
-const char kOsUIFileManagerURL[] = "os://file-manager";
-const char kOsUITerminalURL[] = "os://terminal";
 const char kOsUIAccountManagerErrorURL[] = "os://account-manager-error";
 const char kOsUIAccountManagerWelcomeURL[] = "os://account-manager-welcome";
 const char kOsUIAccountMigrationWelcomeURL[] = "os://account-migration-welcome";
 const char kOsUIAddSupervisionURL[] = "os://add-supervision";
 const char kOsUIAppDisabledURL[] = "os://app-disabled";
-const char kOsUIArcGraphicsTracingURL[] = "os://arc-graphics-tracing";
-const char kOsUIArcOverviewTracingURL[] = "os://arc-overview-tracing";
-const char kOsUIArcPowerControlURL[] = "os://arc-power-control";
-const char kOsUIAssistantOptInURL[] = "os://assistant-optin";
-const char kOsUIBluetoothPairingURL[] = "os://bluetooth-pairing";
 const char kOsUICrashesUrl[] = "os://crashes";
 const char kOsUICreditsURL[] = "os://credits";
-const char kOsUICrostiniCreditsURL[] = "os://crostini-credits";
-const char kOsUICrostiniInstallerUrl[] = "os://crostini-installer";
-const char kOsUICrostiniUpgraderUrl[] = "os://crostini-upgrader";
-const char kOsUICryptohomeURL[] = "os://cryptohome";
 const char kOsUIDeviceLogUrl[] = "os://device-log";
-const char kOsUIDiagnosticsAppURL[] = "os://diagnostics";
 const char kOsUIDriveInternalsUrl[] = "os://drive-internals";
 const char kOsUIEmojiPickerURL[] = "os://emoji-picker";
 const char kOsUIGpuURL[] = "os://gpu";
 const char kOsUIHistogramsURL[] = "os://histograms";
-const char kOsUIIntenetConfigDialogURL[] = "os://internet-config-dialog";
-const char kOsUIIntenetDetailDialogURL[] = "os://internet-detail-dialog";
 const char kOsUIInvalidationsUrl[] = "os://invalidations";
 const char kOsUILockScreenNetworkURL[] = "os://lock-network";
-const char kOsUILockScreenStartReauthURL[] = "os://lock-reauth";
-const char kOsUIMobileSetupURL[] = "os://mobilesetup";
-const char kOsUIMultiDeviceSetupUrl[] = "os://multidevice-setup";
 const char kOsUINetworkUrl[] = "os://network";
-const char kOsUIOSCreditsURL[] = "os://os-credits";
 const char kOsUIOSSettingsURL[] = "os://os-settings";
-const char kOsUIPowerUrl[] = "os://power";
-const char kOsUIPrintManagementUrl[] = "os://print-management";
 const char kOsUIRestartURL[] = "os://restart";
 const char kOsUIScanningAppURL[] = "os://scanning";
-const char kOsUISetTimeURL[] = "os://set-time";
 const char kOsUISettingsURL[] = "os://settings";
 const char kOsUISignInInternalsUrl[] = "os://signin-internals";
-const char kOsUISlowURL[] = "os://slow";
-const char kOsUISmbCredentialsURL[] = "os://smb-credentials-dialog";
-const char kOsUISmbShareURL[] = "os://smb-share-dialog";
 const char kOsUISyncInternalsUrl[] = "os://sync-internals";
-const char kOsUISysInternalsUrl[] = "os://sys-internals";
-const char kOsUIUserImageURL[] = "os://userimage";
-const char kOsUIVmUrl[] = "os://vm";
 
 // Keep alphabetized.
 
@@ -622,7 +595,9 @@ const char* const kChromeHostURLs[] = {
     kChromeUIPolicyHost,
     kChromeUIPredictorsHost,
     kChromeUIPrefsInternalsHost,
+    // TODO(crbug.com/1202165): Remove when new quota-internals page is done.
     kChromeUIQuotaInternalsHost,
+    kChromeUIQuotaInternals2Host,
     kChromeUISignInInternalsHost,
     kChromeUISiteEngagementHost,
     kChromeUINTPTilesInternalsHost,

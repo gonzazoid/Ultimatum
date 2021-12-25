@@ -36,6 +36,7 @@ Disa funksione mund të mos ofrohen dhe ndryshimet në preferenca nuk do të ruh
 <translation id="2313870531055795960">Kontrollon URL-të kundrejt një liste sajtesh të pasigurta të ruajtur në Chromium. Nëse një sajt përpiqet të vjedhë fjalëkalimin tënd ose kur shkarkon një skedar të dëmshëm, Chromium mund t'i dërgojë gjithashtu URL-të, duke përfshirë pjesë të përmbajtjes së faqes, te "Shfletimi i sigurt".</translation>
 <translation id="2343156876103232566">Për të dërguar një numër nga këtu te telefoni yt Android, identifikohu në Chromium në të dyja pajisjet.</translation>
 <translation id="2347108572062610441">Kjo shtesë ka ndryshuar se cila faqe shfaqet kur nis Chromium.</translation>
+<translation id="2359808026110333948">Vazhdo</translation>
 <translation id="2396765026452590966">Shtesa "<ph name="EXTENSION_NAME" />" ka ndryshuar se cila faqe shfaqet kur nis Chromium.</translation>
 <translation id="2401032172288869980">Chromium ka nevojë për lejet e kamerës dhe të mikrofonit për këtë sajt</translation>
 <translation id="2483889755041906834">Në Chromium</translation>
@@ -110,20 +111,22 @@ Disa funksione mund të mos ofrohen dhe ndryshimet në preferenca nuk do të ruh
 <translation id="4271805377592243930">Merr ndihmë me Chromium</translation>
 <translation id="4285930937574705105">Instalimi dështoi për shkak të një gabimi të paspecifikuar. Nëse Chromium është aktualisht në ekzekutim, mbylle dhe provo përsëri.</translation>
 <translation id="4407044323746248786">Dëshiron të dalësh nga Chromium gjithsesi?</translation>
+<translation id="4414390922528416758">Personalizo zgjedhjet e privatësisë që Chromium konsideron si më të rëndësishmet. Ky udhëzues nuk përfshin çdo cilësim dhe opsion.</translation>
 <translation id="4415566066719264597">Lejo që Chromium të ekzekutohet në sfond</translation>
 <translation id="4423735387467980091">Personalizo dhe kontrollo Chromium</translation>
+<translation id="4427306783828095590">Mbrojtja e përmirësuar bën edhe më shumë për bllokimin e mashtrimeve dhe softuerëve keqdashës</translation>
 <translation id="452711251841752011">Mirë se erdhe në Chromium. U hap një dritare e re e shfletuesit</translation>
 <translation id="4544142686420020088">Chromium nuk u përditësua. Ndodhi një gabim. <ph name="BEGIN_LINK" />Rregullo problemet e përditësimit të Chromium dhe përditësimet e dështuara.<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">Të vazhdohet te një profil i ri i Chromium?</translation>
 <translation id="4567424176335768812">Je identifikuar si <ph name="USER_EMAIL_ADDRESS" />. Tani mund të qasesh te faqeshënuesit, historiku dhe cilësime të tjera në të gjitha pajisjet ku je identifikuar.</translation>
 <translation id="459535195905078186">Aplikacionet Chromium</translation>
+<translation id="4621240073146040695">Pothuajse i përditësuar! Hape përsëri Chromium për të përfunduar përditësimin.</translation>
 <translation id="4665829708273112819">Paralajmërim: Chromium nuk mund të parandalojë regjistrimin e historikut të shfletimit nga shtesat. Për të çaktivizuar këtë shtesë në modalitetin "e fshehtë", anulo zgjedhjen e këtij opsioni.</translation>
 <translation id="4677944499843243528">Profili duket të jetë në përdorim nga një tjetër proces i Chromium (<ph name="PROCESS_ID" />) në një tjetër kompjuter (<ph name="HOST_NAME" />). Chromium ka kyçur profilin që të mos dëmtohet. Nëse je i sigurt që asnjë proces tjetër nuk po e përdor këtë profil, mund të shkyçësh profilin dhe ta rinisësh Chromium.</translation>
 <translation id="469338717132742108">Merr ndihmë me Chromium OS</translation>
 <translation id="4708774505295300557">Dikush është identifikuar më parë në Chromium në këtë kompjuter si <ph name="ACCOUNT_EMAIL_LAST" />. Krijo një përdorues të ri të Chromium për t'i mbajtur të ndara informacionet e tua.</translation>
 <translation id="4746050847053251315">Dëshiron ta mbyllësh Chromium gjithsesi?</translation>
 <translation id="4748217263233248895">Sapo është zbatuar një përditësim special i sigurisë për Chromium. Rinise tani dhe do të restaurojmë skedat e tua.</translation>
-<translation id="4750035648288509542">Pothuajse u përditësua! Hap përsëri Chromium për të përfunduar përditësimin. Dritaret "e fshehta" nuk do të hapen.</translation>
 <translation id="4788777615168560705">Chromium nuk mund t'i kontrollojë fjalëkalimet e tua. Provo përsëri pas 24 orësh ose <ph name="BEGIN_LINK" />kontrollo fjalëkalimet në "Llogarinë tënde të Google"<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Kjo përdor të njëjtin kontrollues drejtshkrimor që përdoret në kërkimin e Google. Teksti që shkruan në shfletues dërgohet te Google. Mund ta ndryshosh këtë sjellje gjithmonë te cilësimet.</translation>
 <translation id="4888717733111232871">Rregulli hyrës për Chromium për të lejuar trafikun mDNS.</translation>
@@ -236,6 +239,7 @@ Chromium nuk është në gjendje të rikuperojë cilësimet e tua.</translation>
 <translation id="7561906087460245826">Pastro po ashtu të dhënat nga Chromium (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Nëse cilësimi nuk shfaqet në këtë faqe, shiko te <ph name="LINK_BEGIN" />
       cilësimet e sistemit operativ të Chromium<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">Ke aktivizuar "Shfletimin e sigurt të përmirësuar" në llogarinë tënde. Tani merre për Chromium.</translation>
 <translation id="761356813943268536">Chromium po përdor kamerën dhe mikrofonin tënd.</translation>
 <translation id="7617377681829253106">Chromium sapo është përmirësuar</translation>
 <translation id="7686590090926151193">Chromium nuk është shfletuesi i parazgjedhur</translation>
@@ -295,5 +299,6 @@ Chromium nuk është në gjendje të rikuperojë cilësimet e tua.</translation>
 <translation id="9214764063801632699">Sistemi Chromium OS</translation>
 <translation id="93478295209880648">Chromium mund të mos funksionojë si duhet sepse nuk mbështetet më në Windows XP ose Windows Vista</translation>
 <translation id="965162752251293939">Kush po e përdor Chromium?</translation>
+<translation id="967427899662692980">Merr sigurinë më të fortë të Chromium</translation>
 <translation id="985602178874221306">Autorët e Chromium</translation>
 </translationbundle>

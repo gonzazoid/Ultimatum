@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">ມີຂໍ້ສະເໜີ</translation>
 <translation id="1312803275555673949">ມີຫຼັກຖານໃດສະໜັບສະໜຸນມັນ?</translation>
 <translation id="131405271941274527"><ph name="URL" /> ຕ້ອງການສົ່ງ ແລະ ຮັບຂໍ້ມູນເມື່ອທ່ານແຕະໂທລະສັບຂອງທ່ານໃນອຸປະກອນ NFC</translation>
+<translation id="1314311879718644478">ເບິ່ງເນື້ອຫາອາກິວເມັນ ຣີອາລິຕີ</translation>
 <translation id="1314509827145471431">ຫຍິບເຫຼັ້ມເບື້ອງຂວາ</translation>
 <translation id="1318023360584041678">ບັນທຶກໃນກຸ່ມແຖບແລ້ວ</translation>
 <translation id="1319245136674974084">ບໍ່ຕ້ອງຖາມອີກສຳລັບແອັບນີ້</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">ສະແດງເພີ່ມເຕີມ</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">ກຳລັງຊອກຫາເວີຊັນໂປຣແກຣມທ່ອງເວັບບໍ? ເຂົ້າເບິ່ງ</translation>
 <translation id="1476595624592550506">ປ່ຽນລະຫັດຜ່ານຂອງທ່ານ</translation>
 <translation id="1483493594462132177">ສົ່ງ</translation>
 <translation id="1484290072879560759">ເລືອກທີ່ຢູ່ການຈັດສົ່ງ</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">ມີບາງອັນຜິດພາດ ໃນຂະນະທີ່ກໍາລັງສະແດງໜ້າ​ເວັບນີ້.</translation>
 <translation id="1586541204584340881">ສ່ວນຂະຫຍາຍທີ່ທ່ານຕິດຕັ້ງ</translation>
 <translation id="1588438908519853928">ປົກ​ກະ​ຕິ</translation>
+<translation id="1589050138437146318">ຕິດຕັ້ງ ARCore ບໍ?</translation>
 <translation id="1592005682883173041">ການເຂົ້າເຖິງຂໍ້ມູນພາຍໃນເຄື່ອງ</translation>
 <translation id="1594030484168838125">ເລືອກ</translation>
 <translation id="160851722280695521">ຫຼິ້ນເກມ Dino Run ໃນ Chrome</translation>
@@ -1261,6 +1264,7 @@
 <translation id="4968522289500246572">ແອັບນີ້ຖືກອອກແບບມາສຳລັບມືຖື ແລະ ອາດບໍ່ສາມາດປັບຂະໜາດໄດ້ດີ. ແອັບອາດປະສົບບັນຫາ ຫຼື ຣີສະຕາດໄດ້.</translation>
 <translation id="4969341057194253438">ລຶບການບັນທຶກອອກ</translation>
 <translation id="4973922308112707173">ເຈາະຮູຢູ່ເທິງສຸດສອງຮູ</translation>
+<translation id="4976702386844183910">ເຂົ້າເບິ່ງຫຼ້າສຸດ <ph name="DATE" /></translation>
 <translation id="4984088539114770594">ໃຊ້ໄມໂຄຣໂຟນບໍ?</translation>
 <translation id="4984339528288761049">Prc5 (ຊອງຈົດໝາຍ)</translation>
 <translation id="4989163558385430922">ເບິ່ງທັງໝົດ</translation>
@@ -1346,6 +1350,7 @@
 <translation id="5215116848420601511">ວິທີການຈ່າຍເງິນ ແລະ ທີ່ຢູ່ທີ່ໃຊ້ Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">ຖາດ 13</translation>
+<translation id="5216942107514965959">ເຂົ້າເບິ່ງມື້ນີ້</translation>
 <translation id="5222812217790122047">ຈຳເປັນຕ້ອງມີອີເມວ</translation>
 <translation id="5230733896359313003">ທີ່ຢູ່ຈັດສົ່ງ</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@
 <translation id="5333022057423422993">Chrome ພົບລະຫັດຜ່ານທີ່ທ່ານຫາກໍໃຊ້ໄປນັ້ນໃນການຮົ່ວໄຫຼຂໍ້ມູນ. ເພື່ອຮັກສາຄວາມປອດໄພບັນຊີຂອງທ່ານ, ພວກເຮົາແນະນຳໃຫ້ທ່ານກວດສອບລະຫັດຜ່ານທີ່ທ່ານບັນທຶກໄວ້.</translation>
 <translation id="5334013548165032829">ບັນທຶກລະບົບລະອຽດ</translation>
 <translation id="5334145288572353250">ບັນທຶກທີ່ຢູ່ບໍ?</translation>
+<translation id="5335920952954443287">ຫົວໃຈເຕັ້ນ</translation>
 <translation id="5340250774223869109">ແອັບພລິເຄຊັນຖືກບລັອກໄວ້</translation>
 <translation id="534295439873310000">ອຸປະກອນ NFC</translation>
 <translation id="5344579389779391559">ໜ້ານີ້ອາດຈະພະຍາຍາມຮຽກເກັບເງິນນຳທ່ານ</translation>
@@ -1531,6 +1537,7 @@
 <translation id="5869522115854928033">ລະ​ຫັດ​ຜ່ານ​ທີ່ບັນທຶກໄວ້</translation>
 <translation id="5873013647450402046">ທະນາຄານຂອງທ່ານຕ້ອງການຢືນຢັນວ່າແມ່ນທ່ານແທ້.</translation>
 <translation id="5887400589839399685">ບັນທຶກບັດໄວ້ແລ້ວ</translation>
+<translation id="5887687176710214216">ເຂົ້າເບິ່ງຫຼ້າສຸດມື້ວານນີ້</translation>
 <translation id="5895138241574237353">ເລີ່ມຕົ້ນໃໝ່</translation>
 <translation id="5895187275912066135">ອອກໃຫ້</translation>
 <translation id="5901630391730855834">ສີ​ເຫຼືອງ</translation>
@@ -1724,6 +1731,7 @@
 <translation id="6529602333819889595">ເຮັດຄືນຄໍາສັ່ງລຶບ</translation>
 <translation id="6545864417968258051">ການສະແກນ Bluetooth</translation>
 <translation id="6547208576736763147">ເຈາະຮູເບື້ອງຊ້າຍສອງຮູ</translation>
+<translation id="6554732001434021288">ເຂົ້າເບິ່ງຫຼ້າສຸດ <ph name="NUM_DAYS" /> ມື້ກ່ອນ</translation>
 <translation id="6556866813142980365">ເຮັດຄືນ</translation>
 <translation id="6569060085658103619">ທ່ານກຳລັງເບິ່ງໜ້າສ່ວນຂະຫຍາຍ</translation>
 <translation id="6573200754375280815">ເຈາະຮູຢູ່ເບື້ອງຂວາສອງຮູ</translation>
@@ -1886,6 +1894,7 @@
 <translation id="7118618213916969306">ຊອກຫາ URL ຄລິບບອດ, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">ປິດແຖບ ຫຼື ໂປຣແກຣມອື່ນ</translation>
 <translation id="7129409597930077180">ບໍ່ສາມາດຈັດສົ່ງຫາທີ່ຢູ່ນີ້ໄດ້. ກະລຸນາເລືອກທີ່ຢູ່ອື່ນ.</translation>
+<translation id="7132939140423847331">ຜູ້ເບິ່ງແຍງຂອງທ່ານຫ້າມບໍ່ໃຫ້ສຳເນົາຂໍ້ມູນນີ້.</translation>
 <translation id="7135130955892390533">ສະແດງສະຖານະ</translation>
 <translation id="7138472120740807366">ວິທີການສົ່ງ</translation>
 <translation id="7139724024395191329">ອີມິເຣດ</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">ເມື່ອທ່ານແກ້ໄຂຄຳອະທິບາຍຄວາມເຫັນ, ເອກະສານນີ້ຈະກັບໄປໃຊ້ການໝຸນແບບເດີມຂອງມັນ</translation>
 <translation id="765676359832457558">ເຊື່ອງ​ການ​ຕັ້ງຄ່າຂັ້ນສູງ ...</translation>
 <translation id="7658239707568436148">ຍົກ​ເລີກ​</translation>
+<translation id="7659878911471462949">ນ້ຳຕາແຫ່ງຄວາມສຸກ</translation>
 <translation id="7662298039739062396">ການຕັ້ງຄ່າຖືກຄວບຄຸມໂດຍສ່ວນຂະຫຍາຍ</translation>
 <translation id="7663736086183791259">ໃບຮັບຮອງ <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">ບໍ່ອະນຸຍາດໃຫ້ໃຊ້ໃນໂໝດບໍ່ເປີດເຜີຍຕົວຕົນ</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">ສາມາດຂໍໃຊ້ອຸປະກອນເວີຊົວ ຣິອາລິຕີ ແລະ ຂໍ້ມູນ</translation>
 <translation id="7984945080620862648">ທ່ານບໍ່ສາມາດເຂົ້າເບິ່ງ <ph name="SITE" /> ໄດ້ດຽວນີ້ ເພາະວ່າເວັບໄຊທ໌ໄດ້ສົ່ງການຢັ້ງຢືນລົບກວນທີ່ Chrome ບໍ່ສາມາດປະມວນຜົນໄດ້. ໂດຍປົກກະຕິນັ້ນ ຄວາມຂັດຂ້ອງຂອງເຄືອຂ່າຍ ແລະການໂຈມຕີເຄືອຂ່າຍຈະຊົ່ວຄາວເທົ່ານັ້ນ, ດັ່ງນັ້ນ ໜ້ານີ້ອາດຈະກັບມາໃຊ້ງານໄດ້ໃນພາຍຫຼັງ.</translation>
-<translation id="79859296434321399">ເພື່ອເບິ່ງເນື້ອຫາອາກິວເມັນ ຣີອາລິຕີ, ກະລຸນາຕິດຕັ້ງ ARCore ກ່ອນ</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">ຫບິບເຫຼັ້ມ</translation>
 <translation id="7992044431894087211">ສືບຕໍ່ການແບ່ງປັນໜ້າຈໍກັບ <ph name="APPLICATION_TITLE" /> ແລ້ວ</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">ພັບເຄິ່ງ</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">ແອັບທີ່ຕິດຕັ້ງ ແລະ ມີການນຳໃຊ້ພວກມັນເລື້ອຍໆສໍ່າໃດ</translation>
+<translation id="8317207217658302555">ອັບເດດ ARCore ບໍ?</translation>
 <translation id="831997045666694187">ຕອນແລງ</translation>
 <translation id="8321476692217554900">ການແຈ້ງເຕືອນ</translation>
 <translation id="8328484624016508118">ຫຼັງຈາກການປິດແຖບ​ບໍ່ເປີດເຜີຍຕົວຕົນທັງໝົດແລ້ວ, Chrome ຈະລຶບລ້າງ:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{ຣີເຊັດການອະນຸຍາດ}other{ຣີເຊັດການອະນຸຍາດ}}</translation>
 <translation id="8555010941760982128">ໃຊ້ລະຫັດນີ້ເພື່ອຈ່າຍເງິນ</translation>
 <translation id="8557066899867184262">ມີ CVC ຢູ່ຫຼັງບັດຂອງທ່ານ.</translation>
-<translation id="8558485628462305855">ເພື່ອເບິ່ງເນື້ອຫາອາກິວເມັນ ຣີອາລິຕີ, ກະລຸນາອັບເດດ ARCore</translation>
 <translation id="8559762987265718583">ບໍ່​ສາ​ມາດ​ຕັ້ງ​ການ​ເຊື່ອມ​ຕໍ່​ສ່ວນ​ຕົວ​ກັບ <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> ໄດ້ ເພາະ​ວ່າ​ວັນ​ທີ ແລະ​ເວ​ລາ​ອຸ​ປະ​ກອນ​ຂອງ​ທ່ານ (<ph name="DATE_AND_TIME" />) ບໍ່​ຖືກ​ຕ້ອງ.</translation>
 <translation id="8564182942834072828">ເອກະສານແຍກກັນ/ບໍ່ໄດ້ຈັດຊຸດສຳເນົາ</translation>
 <translation id="8564985650692024650">Chromium ແນະນຳໃຫ້ຣີເຊັດລະຫັດຜ່ານ <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> ຂອງທ່ານ ຖ້າທ່ານນຳມັນມາໃຊ້ໃໝ່ໃນເວັບໄຊອື່ນ.</translation>
@@ -2444,6 +2453,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, ກົດ tab ຈາກນັ້ນກົດ Enter ເພື່ອເບິ່ງປະຫວັດການທ່ອງເວັບຂອງທ່ານໃນ Chrome</translation>
 <translation id="8987927404178983737">ເດືອນ</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">ກຳລັງຊອກຫາເວີຊັນລະບົບບໍ? ເຂົ້າເບິ່ງ</translation>
 <translation id="899688752321268742"><ph name="URL" /> ຕ້ອງການຮູ້ເມື່ອທ່ານກຳລັງໃຊ້ອຸປະກອນນີ້ຢູ່</translation>
 <translation id="8996941253935762404">ເວັບໄຊທ໌ຢູ່ຂ້າງໜ້າມີໂປຣແກຣມທີ່ເປັນ​ອັນ​ຕະ​ລາຍ</translation>
 <translation id="8997023839087525404">ເຊີບເວີໄດ້ນຳສະເໜີໃບຢັ້ງຢືນທີ່ບໍ່ຖືກເປີດເຜີຍທົ່ວໄປ ໂດຍໃຊ້ນະໂຍບາຍຄວາມໂປ່ງໃສຂອງໃບຢັ້ງຢືນ. ນະໂຍບາຍນີ້ແມ່ນຂໍ້ກຳນົດສຳລັບບາງໃບຢັ້ງຢືນ ເພື່ອຮັບປະກັນວ່າພວກມັນເຊື່ອຖືໄດ້ ແລະ ປ້ອງກັນຈາກຜູ້ໂຈມຕີ.</translation>

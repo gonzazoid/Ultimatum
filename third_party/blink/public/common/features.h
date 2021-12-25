@@ -159,7 +159,7 @@ BLINK_COMMON_EXPORT extern const base::FeatureParam<ForceDarkInversionMethod>
 BLINK_COMMON_EXPORT extern const base::FeatureParam<ForceDarkImageBehavior>
     kForceDarkImageBehaviorParam;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
-    kForceDarkTextLightnessThresholdParam;
+    kForceDarkForegroundLightnessThresholdParam;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<int>
     kForceDarkBackgroundLightnessThresholdParam;
 BLINK_COMMON_EXPORT extern const base::FeatureParam<
@@ -458,9 +458,6 @@ BLINK_COMMON_EXPORT extern const base::Feature kDesktopPWAsSubApps;
 // inspector issue anyway.
 BLINK_COMMON_EXPORT extern const base::Feature kCORSErrorsIssueOnly;
 
-// Synchronously load web fonts inlined as data urls. See crbug.com/1236283
-BLINK_COMMON_EXPORT extern const base::Feature kSyncLoadDataUrlFonts;
-
 // Makes Persistent quota the same as Temporary quota.
 BLINK_COMMON_EXPORT
 extern const base::Feature kPersistentQuotaIsTemporaryQuota;
@@ -497,6 +494,21 @@ extern const base::FeatureParam<base::TimeDelta> kHttpRttThreshold;
 // `kDelayLowPriorityRequestsAccordingToNetworkState` is enabled.
 BLINK_COMMON_EXPORT
 extern const base::FeatureParam<double> kCostReductionOfMultiplexedRequests;
+
+// If enabled, the major version number returned by Chrome will be locked at
+// 99. The minor version number returned by Chrome will be forced to the
+// value of the major version number. The purpose of this
+// feature is a back up plan for if the major version moving from
+// two to three digits breaks unexpected things.
+BLINK_COMMON_EXPORT extern const base::Feature
+    kForceMajorVersionInMinorPositionInUserAgent;
+
+// If enabled, the minor version number returned by Chrome will be forced to
+// 100.  This feature is only applicable for M96-M99 and will be removed after
+// M99.  The purpose of this feature is to allow testing of mitigation
+// strategies for conveying the major version number in the minor version string
+// if we decide to freeze the major version at 99.
+BLINK_COMMON_EXPORT extern const base::Feature kForceMinorVersion100InUserAgent;
 
 // If enabled, the major version number returned by Chrome will be forced to
 // 100.  This feature is only applicable for M96-M99 and will be removed after

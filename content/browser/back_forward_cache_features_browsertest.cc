@@ -460,7 +460,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheWithDedicatedWorkerBrowserTest,
 // should evicted in this case.
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheWithDedicatedWorkerBrowserTest,
-    FetchStillLoading_ResponseStartedWhileFrozen_ExceedsPerRequestBytesLimit) {
+    FetchStillLoading_ResponseStartedWhileFrozen_ExceedsPerProcessBytesLimit) {
   CreateHttpsServer();
 
   net::test_server::ControllableHttpResponse image_response(https_server(),
@@ -502,7 +502,7 @@ IN_PROC_BROWSER_TEST_F(
   RenderFrameDeletedObserver delete_observer_rfh_a(rfh_a);
   // Start sending the image response while in the back-forward cache.
   image_response.Send(net::HTTP_OK, "image/png");
-  std::string body(kMaxBufferedBytesPerRequest + 1, '*');
+  std::string body(kMaxBufferedBytesPerProcess + 1, '*');
   image_response.Send(body);
   image_response.Done();
   delete_observer_rfh_a.WaitUntilDeleted();
@@ -521,7 +521,7 @@ IN_PROC_BROWSER_TEST_F(
 // cached page should evicted in this case.
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheWithDedicatedWorkerBrowserTest,
-    FetchStillLoading_ResponseStartedWhileFrozen_ExceedsPerRequestBytesLimit_Nested) {
+    FetchStillLoading_ResponseStartedWhileFrozen_ExceedsPerProcessBytesLimit_Nested) {
   CreateHttpsServer();
 
   net::test_server::ControllableHttpResponse image_response(https_server(),
@@ -568,7 +568,7 @@ IN_PROC_BROWSER_TEST_F(
   RenderFrameDeletedObserver delete_observer_rfh_a(rfh_a);
   // Start sending the image response while in the back-forward cache.
   image_response.Send(net::HTTP_OK, "image/png");
-  std::string body(kMaxBufferedBytesPerRequest + 1, '*');
+  std::string body(kMaxBufferedBytesPerProcess + 1, '*');
   image_response.Send(body);
   image_response.Done();
   delete_observer_rfh_a.WaitUntilDeleted();
@@ -1238,9 +1238,8 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest, DoesNotCacheSMSService) {
       blink::scheduler::WebSchedulerTrackedFeature::kWebOTPService, FROM_HERE);
 }
 
-// crbug.com/1090223
 IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
-                       DISABLED_DoesNotCachePaymentManager) {
+                       DoesNotCachePaymentManager) {
   ASSERT_TRUE(CreateHttpsServer()->Start());
 
   // 1) Navigate to a page which includes PaymentManager functionality. Note
@@ -2243,17 +2242,14 @@ std::unique_ptr<net::test_server::HttpResponse> RequestHandlerForUpdateWorker(
 
 }  // namespace
 
-class BackForwardCacheBrowserTestWithVibration
-    : public BackForwardCacheBrowserTest,
-      public device::mojom::VibrationManager {
+class TestVibrationManager : public device::mojom::VibrationManager {
  public:
-  BackForwardCacheBrowserTestWithVibration() {
+  TestVibrationManager() {
     OverrideVibrationManagerBinderForTesting(base::BindRepeating(
-        &BackForwardCacheBrowserTestWithVibration::BindVibrationManager,
-        base::Unretained(this)));
+        &TestVibrationManager::BindVibrationManager, base::Unretained(this)));
   }
 
-  ~BackForwardCacheBrowserTestWithVibration() override {
+  ~TestVibrationManager() override {
     OverrideVibrationManagerBinderForTesting(base::NullCallback());
   }
 
@@ -2262,18 +2258,18 @@ class BackForwardCacheBrowserTestWithVibration
     receiver_.Bind(std::move(receiver));
   }
 
-  bool TriggerVibrate(RenderFrameHostImpl* rfh,
-                      int duration,
-                      base::OnceClosure vibrate_done) {
-    vibrate_done_ = std::move(vibrate_done);
+  bool TriggerVibrate(RenderFrameHostImpl* rfh, int duration) {
     return EvalJs(rfh, JsReplace("navigator.vibrate($1)", duration))
         .ExtractBool();
   }
 
-  bool TriggerShortVibrationSequence(RenderFrameHostImpl* rfh,
-                                     base::OnceClosure vibrate_done) {
-    vibrate_done_ = std::move(vibrate_done);
+  bool TriggerShortVibrationSequence(RenderFrameHostImpl* rfh) {
     return EvalJs(rfh, "navigator.vibrate([10] * 1000)").ExtractBool();
+  }
+
+  bool WaitForCancel() {
+    run_loop_.Run();
+    return IsCancelled();
   }
 
   bool IsCancelled() { return cancelled_; }
@@ -2283,63 +2279,66 @@ class BackForwardCacheBrowserTestWithVibration
   void Vibrate(int64_t milliseconds, VibrateCallback callback) override {
     cancelled_ = false;
     std::move(callback).Run();
-    std::move(vibrate_done_).Run();
   }
 
   void Cancel(CancelCallback callback) override {
     cancelled_ = true;
     std::move(callback).Run();
+    run_loop_.Quit();
   }
 
   bool cancelled_ = false;
-  base::OnceClosure vibrate_done_;
+  base::RunLoop run_loop_;
   mojo::Receiver<device::mojom::VibrationManager> receiver_{this};
 };
 
-// TODO(crbug.com/1269046): Enable this test.
-IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTestWithVibration,
-                       DISABLED_VibrationStopsAfterEnteringCache) {
+// Tests that vibration stops after the page enters bfcache.
+IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
+                       VibrationStopsAfterEnteringCache) {
   ASSERT_TRUE(embedded_test_server()->Start());
+  TestVibrationManager vibration_manager;
 
   // 1) Navigate to a page with a long vibration.
   GURL url(embedded_test_server()->GetURL("a.com", "/title1.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  base::RunLoop run_loop;
   RenderFrameHostImpl* rfh_a = current_frame_host();
-  ASSERT_TRUE(TriggerVibrate(rfh_a, 10000, run_loop.QuitClosure()));
-  EXPECT_FALSE(IsCancelled());
+  ASSERT_TRUE(vibration_manager.TriggerVibrate(rfh_a, 10000));
+  EXPECT_FALSE(vibration_manager.IsCancelled());
 
   // 2) Navigate away and expect the vibration to be canceled.
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("b.com", "/title1.html")));
   EXPECT_NE(current_frame_host(), rfh_a);
   EXPECT_TRUE(rfh_a->IsInBackForwardCache());
-  EXPECT_TRUE(IsCancelled());
+  EXPECT_TRUE(vibration_manager.WaitForCancel());
+  EXPECT_TRUE(vibration_manager.IsCancelled());
 
   // 3) Go back to A.
   ASSERT_TRUE(HistoryGoBack(web_contents()));
   ExpectRestored(FROM_HERE);
 }
 
-// TODO(crbug.com/1142778): flaky.
-IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTestWithVibration,
+// Tests that the short vibration sequence on the page stops after it enters
+// bfcache.
+// TODO(crbug.com/1280741, crbug.com/1280768): Flaky on all platforms.
+IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
                        DISABLED_ShortVibrationSequenceStopsAfterEnteringCache) {
   ASSERT_TRUE(embedded_test_server()->Start());
+  TestVibrationManager vibration_manager;
 
   // 1) Navigate to a page with a long vibration.
   GURL url(embedded_test_server()->GetURL("a.com", "/title1.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url));
-  base::RunLoop run_loop;
   RenderFrameHostImpl* rfh_a = current_frame_host();
-  ASSERT_TRUE(TriggerShortVibrationSequence(rfh_a, run_loop.QuitClosure()));
-  EXPECT_FALSE(IsCancelled());
+  ASSERT_TRUE(vibration_manager.TriggerShortVibrationSequence(rfh_a));
+  EXPECT_FALSE(vibration_manager.IsCancelled());
 
   // 2) Navigate away and expect the vibration to be canceled.
   EXPECT_TRUE(NavigateToURL(
       shell(), embedded_test_server()->GetURL("b.com", "/title1.html")));
   EXPECT_NE(current_frame_host(), rfh_a);
   EXPECT_TRUE(rfh_a->IsInBackForwardCache());
-  EXPECT_TRUE(IsCancelled());
+  EXPECT_TRUE(vibration_manager.IsCancelled());
 
   // 3) Go back to A.
   ASSERT_TRUE(HistoryGoBack(web_contents()));
@@ -2659,7 +2658,7 @@ IN_PROC_BROWSER_TEST_F(GeolocationBackForwardCacheBrowserTest,
 // was inside bfcache.
 // The test is flaky on multiple platforms: crbug.com/1033270
 IN_PROC_BROWSER_TEST_F(GeolocationBackForwardCacheBrowserTest,
-                       DISABLED_CancelGeolocationRequestInFlight) {
+                       CancelGeolocationRequestInFlight) {
   ASSERT_TRUE(embedded_test_server()->Start());
   GURL url_a(embedded_test_server()->GetURL("/title1.html"));
   GURL url_b(embedded_test_server()->GetURL("b.com", "/title1.html"));
@@ -3753,10 +3752,10 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
 
   // 1) Navigate to a page and start using SpeechSynthesis.
   EXPECT_TRUE(NavigateToURL(shell(), url_a));
-  RenderFrameHostImpl* rfh_a = current_frame_host();
-  RenderFrameDeletedObserver rhf_a_deleted(rfh_a);
+  RenderFrameHostImplWrapper rfh_a(current_frame_host());
+  RenderFrameDeletedObserver rfh_a_deleted(rfh_a.get());
 
-  EXPECT_TRUE(ExecJs(rfh_a, R"(
+  EXPECT_TRUE(ExecJs(rfh_a.get(), R"(
     new Promise(async resolve => {
     var u = new SpeechSynthesisUtterance(" ");
     speechSynthesis.speak(u);
@@ -3768,7 +3767,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
   EXPECT_TRUE(NavigateToURL(shell(), url_b));
 
   // The page uses SpeechSynthesis so it should be deleted.
-  rhf_a_deleted.WaitUntilDeleted();
+  rfh_a_deleted.WaitUntilDeleted();
 
   // 3) Go back to the page with SpeechSynthesis.
   ASSERT_TRUE(HistoryGoBack(web_contents()));
@@ -3776,6 +3775,50 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
       {BackForwardCacheMetrics::NotRestoredReason::kBlocklistedFeatures},
       {blink::scheduler::WebSchedulerTrackedFeature::kSpeechSynthesis}, {}, {},
       {}, FROM_HERE);
+}
+
+// This test is not important for Chrome OS if TTS is called in content. For
+// more details refer (content/browser/speech/tts_platform_impl.cc).
+#if defined(OS_CHROMEOS)
+#define MAYBE_CacheIfSpeechSynthesisCancelled \
+  DISABLED_CacheIfSpeechSynthesisCancelled
+#else
+#define MAYBE_CacheIfSpeechSynthesisCancelled CacheIfSpeechSynthesisCancelled
+#endif  // BUILDFLAG(IS_CHROMEOS_ASH)
+IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
+                       MAYBE_CacheIfSpeechSynthesisCancelled) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+  GURL url_a(embedded_test_server()->GetURL("a.com", "/title1.html"));
+  GURL url_b(embedded_test_server()->GetURL("b.com", "/title1.html"));
+
+  // 1) Navigate to a page and start using SpeechSynthesis.
+  EXPECT_TRUE(NavigateToURL(shell(), url_a));
+  RenderFrameHostImplWrapper rfh_a(current_frame_host());
+
+  EXPECT_TRUE(ExecJs(rfh_a.get(), R"(
+    new Promise(async resolve => {
+    var u = new SpeechSynthesisUtterance(" ");
+    speechSynthesis.speak(u);
+    resolve();
+    });
+    )"));
+  // Register a pagehide handler to cancel SpeechSynthesis. It will no longer
+  // block bfcache.
+  EXPECT_TRUE(ExecJs(rfh_a.get(), R"(
+    window.onpagehide = function(e) {
+      new Promise(resolve => {
+      speechSynthesis.cancel();
+      resolve();
+      });
+    };
+  )"));
+
+  // 2) Navigate away.
+  EXPECT_TRUE(NavigateToURL(shell(), url_b));
+
+  // 3) Go back to the page with SpeechSynthesis.
+  ASSERT_TRUE(HistoryGoBack(web_contents()));
+  ExpectRestored(FROM_HERE);
 }
 
 IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
@@ -4039,18 +4082,39 @@ class BackForwardCacheBrowserTestWithMediaSessionPlaybackStateChangeSupported
   }
 };
 
-// This test is flaky on Linux.
-// See https://crbug.com/1253200
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-#define MAYBE_CacheWhenMediaSessionServiceIsNotUsed \
-  DISABLED_CacheWhenMediaSessionServiceIsNotUsed
-#else
-#define MAYBE_CacheWhenMediaSessionServiceIsNotUsed \
-  CacheWhenMediaSessionServiceIsNotUsed
-#endif
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheBrowserTestWithMediaSessionPlaybackStateChangeSupported,
-    MAYBE_CacheWhenMediaSessionServiceIsNotUsed) {
+    CacheWhenMediaSessionPlaybackStateIsChanged) {
+  ASSERT_TRUE(embedded_test_server()->Start());
+
+  // 1) Navigate to a page.
+  EXPECT_TRUE(NavigateToURL(
+      shell(), embedded_test_server()->GetURL("a.test", "/title1.html")));
+
+  // 2) Update the playback state change.
+  EXPECT_TRUE(ExecJs(shell()->web_contents()->GetMainFrame(), R"(
+    navigator.mediaSession.playbackState = 'playing';
+  )"));
+
+  // 3) Navigate away.
+  EXPECT_TRUE(NavigateToURL(
+      shell(), embedded_test_server()->GetURL("b.com", "/title1.html")));
+
+  // 4) Go back.
+  ASSERT_TRUE(HistoryGoBack(web_contents()));
+
+  // The page is restored since a MediaSession service is not used.
+  ExpectRestored(FROM_HERE);
+}
+
+IN_PROC_BROWSER_TEST_F(
+    BackForwardCacheBrowserTestWithMediaSessionPlaybackStateChangeSupported,
+    CacheWhenMediaSessionServiceIsNotUsed) {
+  // There are sometimes unexpected messages from a renderer to the browser,
+  // which caused test flakiness.
+  // TODO(crbug.com/1253200): Fix the test flakiness.
+  DoNotFailForUnexpectedMessagesWhileCached();
+
   ASSERT_TRUE(embedded_test_server()->Start());
 
   // 1) Navigate to a page using MediaSession.

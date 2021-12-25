@@ -165,8 +165,7 @@ class PaintArtifactCompositorTest : public testing::Test,
                        &scroll_translation);
   }
 
-  // Returns the |num|th scrollable layer. In CompositeAfterPaint, this will be
-  // a scroll hit test layer, whereas currently this will be a content layer.
+  // Returns the |num|th scroll hit test layer.
   cc::Layer* ScrollableLayerAt(size_t num) {
     const cc::ScrollTree& scroll_tree = GetPropertyTrees().scroll_tree;
     for (auto& layer : RootLayer()->children()) {
@@ -179,10 +178,7 @@ class PaintArtifactCompositorTest : public testing::Test,
     return nullptr;
   }
 
-  // Returns the |num|th non-scrollable layer. In CompositeAfterPaint, content
-  // layers are not scrollable so this is the |num|th content layer. Currently,
-  // content layers are scrollable and non-scrollable, so this will return the
-  // |num|th content layer that is not scrollable.
+  // Returns the |num|th non-scrollable content layer.
   cc::Layer* NonScrollableLayerAt(size_t num) {
     const cc::ScrollTree& scroll_tree = GetPropertyTrees().scroll_tree;
     for (auto& layer : RootLayer()->children()) {
@@ -2084,8 +2080,7 @@ TEST_P(PaintArtifactCompositorTest, ForcedCompositedExoticBlendMode) {
   masking_state.local_transform_space = &t0();
   masking_state.output_clip = &c0();
   masking_state.blend_mode = SkBlendMode::kXor;
-  masking_state.direct_compositing_reasons =
-      CompositingReason::kSquashingDisallowed;
+  masking_state.direct_compositing_reasons = CompositingReason::kOverlap;
   auto masking =
       EffectPaintPropertyNode::Create(*masked, std::move(masking_state));
 
@@ -4110,15 +4105,19 @@ TEST_P(PaintArtifactCompositorTest,
 
 TEST_P(PaintArtifactCompositorTest, OpacityIndirectlyAffectingTwoLayers) {
   auto opacity = CreateOpacityEffect(e0(), 0.5f);
-  auto child_composited_effect =
-      CreateOpacityEffect(*opacity, 1.f, CompositingReason::kWillChangeOpacity);
-  auto grandchild_composited_effect = CreateOpacityEffect(
-      *child_composited_effect, 1.f, CompositingReason::kWillChangeOpacity);
+  auto child_composited_transform =
+      CreateTransform(t0(), TransformationMatrix(), FloatPoint3D(),
+                      CompositingReason::k3DTransform);
+  auto grandchild_composited_transform =
+      CreateTransform(*child_composited_transform, TransformationMatrix(),
+                      FloatPoint3D(), CompositingReason::k3DTransform);
+  auto child_effect = CreateOpacityEffect(*opacity, 1.f);
+  auto grandchild_effect = CreateOpacityEffect(*child_effect, 1.f);
 
   TestPaintArtifact artifact;
-  artifact.Chunk(t0(), c0(), *child_composited_effect)
+  artifact.Chunk(*child_composited_transform, c0(), *child_effect)
       .RectDrawing(gfx::Rect(150, 150, 100, 100), Color::kWhite);
-  artifact.Chunk(t0(), c0(), *grandchild_composited_effect)
+  artifact.Chunk(*grandchild_composited_transform, c0(), *grandchild_effect)
       .RectDrawing(gfx::Rect(150, 150, 100, 100), Color::kGray);
   Update(artifact.Build());
   ASSERT_EQ(2u, LayerCount());
@@ -4132,6 +4131,28 @@ TEST_P(PaintArtifactCompositorTest, OpacityIndirectlyAffectingTwoLayers) {
   // so it should have a render surface.
   int opacity_id = effect_tree.Node(layer0_effect_id)->parent_id;
   EXPECT_OPACITY(opacity_id, 0.5f, kHasRenderSurface);
+}
+
+TEST_P(PaintArtifactCompositorTest, WillChangeOpacityRenderSurface) {
+  auto opacity =
+      CreateOpacityEffect(e0(), 1.f, CompositingReason::kWillChangeOpacity);
+  auto child_composited_transform =
+      CreateTransform(t0(), TransformationMatrix(), FloatPoint3D(),
+                      CompositingReason::k3DTransform);
+  auto child_effect = CreateOpacityEffect(*opacity, 1.f);
+
+  TestPaintArtifact artifact;
+  artifact.Chunk(t0(), c0(), *opacity)
+      .RectDrawing(gfx::Rect(0, 0, 100, 100), Color::kBlack);
+  artifact.Chunk(*child_composited_transform, c0(), *child_effect)
+      .RectDrawing(gfx::Rect(150, 150, 100, 100), Color::kWhite);
+  Update(artifact.Build());
+  ASSERT_EQ(2u, LayerCount());
+
+  int layer0_effect_id = LayerAt(0)->effect_tree_index();
+  EXPECT_OPACITY(layer0_effect_id, 1.f, kHasRenderSurface);
+  int layer1_effect_id = LayerAt(1)->effect_tree_index();
+  EXPECT_OPACITY(layer1_effect_id, 1.f, kNoRenderSurface);
 }
 
 TEST_P(PaintArtifactCompositorTest,

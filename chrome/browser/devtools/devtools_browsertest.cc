@@ -1891,9 +1891,9 @@ IN_PROC_BROWSER_TEST_F(DevToolsTest, TestDevToolsExternalNavigation) {
       std::string("window.location = \"") + url.spec() + "\""));
   observer.Wait();
 
-  ASSERT_TRUE(main_web_contents()->GetURL().
-                  SchemeIs(content::kChromeDevToolsScheme));
-  ASSERT_EQ(url, GetInspectedTab()->GetURL());
+  ASSERT_TRUE(main_web_contents()->GetLastCommittedURL().SchemeIs(
+      content::kChromeDevToolsScheme));
+  ASSERT_EQ(url, GetInspectedTab()->GetLastCommittedURL());
   CloseDevToolsWindow();
 }
 
@@ -2734,6 +2734,30 @@ IN_PROC_BROWSER_TEST_F(DevToolsExtensionTest,
   DispatchOnTestSuite(window_, "testExtensionWebSocketOfflineNetworkConditions",
                       base::NumberToString(websocket_port).c_str());
   CloseDevToolsWindow();
+}
+
+IN_PROC_BROWSER_TEST_F(DevToolsExtensionTest, IsDeveloperModeTrueHistogram) {
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kExtensionsUIDeveloperMode, true);
+  base::HistogramTester histograms;
+  const char* histogram_name = "Extensions.DevTools.UserIsInDeveloperMode";
+
+  LoadExtension("devtools_extension");
+  RunTest("waitForTestResultsInConsole", kArbitraryPage);
+
+  histograms.ExpectBucketCount(histogram_name, true, 2);
+}
+
+IN_PROC_BROWSER_TEST_F(DevToolsExtensionTest, IsDeveloperModeFalseHistogram) {
+  browser()->profile()->GetPrefs()->SetBoolean(
+      prefs::kExtensionsUIDeveloperMode, false);
+  base::HistogramTester histograms;
+  const char* histogram_name = "Extensions.DevTools.UserIsInDeveloperMode";
+
+  LoadExtension("devtools_extension");
+  RunTest("waitForTestResultsInConsole", kArbitraryPage);
+
+  histograms.ExpectBucketCount(histogram_name, false, 2);
 }
 
 namespace {

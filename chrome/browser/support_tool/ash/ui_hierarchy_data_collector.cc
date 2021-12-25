@@ -18,6 +18,7 @@
 #include "base/task/post_task.h"
 #include "base/task/thread_pool.h"
 #include "chrome/browser/support_tool/data_collector.h"
+#include "components/feedback/pii_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 
 UiHierarchyDataCollector::UiHierarchyDataCollector() = default;
@@ -79,7 +80,7 @@ void UiHierarchyDataCollector::CollectDataAndDetectPII(
 }
 
 void UiHierarchyDataCollector::ExportCollectedDataWithPII(
-    std::set<PIIType> pii_types_to_keep,
+    std::set<feedback::PIIType> pii_types_to_keep,
     base::FilePath target_directory,
     DataCollectorDoneCallback on_exported_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -105,6 +106,8 @@ void UiHierarchyDataCollector::OnDataExportDone(
 
 void UiHierarchyDataCollector::InsertIntoPIIMap(
     const std::vector<std::string>& window_titles) {
+  std::set<std::string>& pii_window_titles =
+      pii_map_[feedback::PIIType::kUIHierarchyWindowTitles];
   for (auto const& title : window_titles)
-    pii_map_.emplace(PIIType::kUIHierarchyWindowTitles, title);
+    pii_window_titles.insert(title);
 }

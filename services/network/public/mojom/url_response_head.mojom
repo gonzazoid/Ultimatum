@@ -65,7 +65,7 @@ struct URLResponseHead {
   // True if the response was delivered using SPDY.
   bool was_fetched_via_spdy = false;
 
-  // True if the response was delivered after NPN is negotiated.
+  // True if the response was delivered over a connection that negotiated ALPN.
   bool was_alpn_negotiated = false;
 
   // True if response could use alternate protocol. However, browser will
@@ -226,6 +226,7 @@ struct URLResponseHead {
   // TODO(crbug.com/1176753): Remove this once the investigation is done.
   bool has_authorization_covered_by_wildcard_on_preflight = false;
 
+  // [spec] https://fetch.spec.whatwg.org/#response-request-includes-credentials
   // The request's |includeCredentials| value from the "HTTP-network fetch"
   // algorithm.
   // See: https://fetch.spec.whatwg.org/#concept-http-network-fetch

@@ -52,7 +52,6 @@
 #include "third_party/blink/renderer/core/layout/ng/ng_style_variant.h"
 #include "third_party/blink/renderer/core/layout/subtree_layout_scope.h"
 #include "third_party/blink/renderer/core/loader/resource/image_resource_observer.h"
-#include "third_party/blink/renderer/core/paint/compositing/compositing_state.h"
 #include "third_party/blink/renderer/core/paint/fragment_data.h"
 #include "third_party/blink/renderer/core/paint/paint_phase.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
@@ -316,10 +315,6 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   ALWAYS_INLINE void CheckIsNotDestroyed() const {}
 #endif
 #define NOT_DESTROYED() CheckIsNotDestroyed()
-
-#if DCHECK_IS_ON()
-  bool IsDestroyed() const { return is_destroyed_; }
-#endif
 
   // Returns the name of the layout object.
   virtual const char* GetName() const = 0;
@@ -600,6 +595,25 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
     return fragment_->UniqueId();
   }
 
+  inline bool ShouldApplyOverflowClipMargin() const {
+    NOT_DESTROYED();
+    // If the object is clipped by something other than overflow:clip (i.e. it's
+    // a scroll container), then we should not apply overflow-clip-margin.
+    if (IsScrollContainer())
+      return false;
+
+    const auto& style = StyleRef();
+    // Nothing to apply if there is no margin.
+    if (!style.OverflowClipMargin())
+      return false;
+
+    // In all other cases, we apply overflow-clip-margin when we clip to
+    // overflow clip edge, meaning we have overflow: clip or paint containment.
+    return (style.OverflowX() == EOverflow::kClip &&
+            style.OverflowY() == EOverflow::kClip) ||
+           ShouldApplyPaintContainment();
+  }
+
   inline bool IsEligibleForPaintOrLayoutContainment() const {
     NOT_DESTROYED();
     return (!IsInline() || IsAtomicInlineLevel()) && !IsRubyText() &&
@@ -871,6 +885,10 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   bool IsLayoutNGTextCombine() const {
     NOT_DESTROYED();
     return IsOfType(kLayoutObjectNGTextCombine);
+  }
+  bool IsLayoutNGView() const {
+    NOT_DESTROYED();
+    return IsOfType(kLayoutObjectNGView);
   }
   bool IsLayoutTableCol() const {
     NOT_DESTROYED();
@@ -1467,6 +1485,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
     return bitfields_.IsAtomicInlineLevel();
   }
   bool IsBlockInInline() const {
+    NOT_DESTROYED();
     return IsAnonymous() && !IsInline() && !IsFloatingOrOutOfFlowPositioned() &&
            Parent() && Parent()->IsLayoutInline();
   }
@@ -2232,8 +2251,6 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
 
   virtual void AddAnnotatedRegions(Vector<AnnotatedRegionValue>&);
 
-  CompositingState GetCompositingState() const;
-
   // True for object types which override |AdditionalCompositingReasons|.
   virtual bool CanHaveAdditionalCompositingReasons() const;
   virtual CompositingReasons AdditionalCompositingReasons() const;
@@ -2366,7 +2383,8 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
                                    MapCoordinatesFlags mode = 0) const {
     NOT_DESTROYED();
     return PhysicalRect::EnclosingRect(
-        AncestorToLocalQuad(ancestor, FloatRect(rect), mode).BoundingBox());
+        AncestorToLocalQuad(ancestor, FloatQuad(gfx::RectF(rect)), mode)
+            .BoundingBox());
   }
   FloatQuad AncestorToLocalQuad(const LayoutBoxModelObject*,
                                 const FloatQuad&,
@@ -2401,7 +2419,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
                                     const LayoutBoxModelObject* ancestor,
                                     MapCoordinatesFlags mode = 0) const {
     NOT_DESTROYED();
-    return LocalToAncestorQuad(FloatRect(rect), ancestor, mode);
+    return LocalToAncestorQuad(FloatQuad(gfx::RectF(rect)), ancestor, mode);
   }
   FloatQuad LocalToAncestorQuad(const FloatQuad&,
                                 const LayoutBoxModelObject* ancestor,
@@ -2494,7 +2512,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   // ancestor - use |LocalToAncestorPoint| if there might be transforms.
   PhysicalOffset OffsetFromAncestor(const LayoutObject*) const;
 
-  FloatRect AbsoluteBoundingBoxFloatRect(MapCoordinatesFlags = 0) const;
+  gfx::RectF AbsoluteBoundingBoxRectF(MapCoordinatesFlags = 0) const;
   // This returns an gfx::Rect enclosing this object. If this object has an
   // integral size and the position has fractional values, the resultant
   // gfx::Rect can be larger than the integral size.
@@ -2525,7 +2543,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   // For accessibility, we want the bounding box rect of this element
   // in local coordinates, which can then be converted to coordinates relative
   // to any ancestor using, e.g., localToAncestorTransform.
-  virtual FloatRect LocalBoundingBoxRectForAccessibility() const = 0;
+  virtual gfx::RectF LocalBoundingBoxRectForAccessibility() const = 0;
 
   // This function returns the:
   //  - Minimal logical width this object can have without overflowing. This
@@ -2584,12 +2602,6 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   }
 
   virtual CursorDirective GetCursor(const PhysicalOffset&, ui::Cursor&) const;
-
-  const LayoutBoxModelObject& DirectlyCompositableContainer() const;
-
-  bool IsPaintInvalidationContainer() const;
-
-  bool CanBeCompositedForDirectReasons() const;
 
   // Returns the rect that should have raster invalidated whenever this object
   // changes. The rect is in the coordinate space of the document's scrolling
@@ -3138,6 +3150,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   // Whether this object's Node has a blocking wheel event handler on itself or
   // an ancestor.
   bool InsideBlockingWheelEventHandler() const {
+    NOT_DESTROYED();
     return bitfields_.InsideBlockingWheelEventHandler();
   }
   // Mark this object as having a |InsideBlockingWheelEventHandler| changed, and
@@ -3146,12 +3159,15 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   void MarkBlockingWheelEventHandlerChanged();
   void MarkDescendantBlockingWheelEventHandlerChanged();
   bool BlockingWheelEventHandlerChanged() const {
+    NOT_DESTROYED();
     return bitfields_.BlockingWheelEventHandlerChanged();
   }
   bool DescendantBlockingWheelEventHandlerChanged() const {
+    NOT_DESTROYED();
     return bitfields_.DescendantBlockingWheelEventHandlerChanged();
   }
   void UpdateInsideBlockingWheelEventHandler(bool inside) {
+    NOT_DESTROYED();
     bitfields_.SetInsideBlockingWheelEventHandler(inside);
   }
 
@@ -3449,9 +3465,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   }
 
   bool IsLayoutNGObjectForCanvasFormattedText() const {
+    NOT_DESTROYED();
     return bitfields_.IsLayoutNGObjectForCanvasFormattedText();
   }
   void SetIsLayoutNGObjectForCanvasFormattedText(bool b) {
+    NOT_DESTROYED();
     bitfields_.SetIsLayoutNGObjectForCanvasFormattedText(b);
   }
 
@@ -3472,17 +3490,21 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
   }
 
   bool ShouldSkipNextLayoutShiftTracking() const {
+    NOT_DESTROYED();
     return bitfields_.ShouldSkipNextLayoutShiftTracking();
   }
   void SetShouldSkipNextLayoutShiftTracking(bool b) {
+    NOT_DESTROYED();
     bitfields_.SetShouldSkipNextLayoutShiftTracking(b);
   }
 
   bool ShouldAssumePaintOffsetTranslationForLayoutShiftTracking() const {
+    NOT_DESTROYED();
     return bitfields_
         .ShouldAssumePaintOffsetTranslationForLayoutShiftTracking();
   }
   void SetShouldAssumePaintOffsetTranslationForLayoutShiftTracking(bool b) {
+    NOT_DESTROYED();
     bitfields_.SetShouldAssumePaintOffsetTranslationForLayoutShiftTracking(b);
   }
 
@@ -3520,13 +3542,13 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
     kLayoutObjectNGGrid,
     kLayoutObjectNGInsideListMarker,
     kLayoutObjectNGListItem,
-    kLayoutObjectNGMixin,
     kLayoutObjectNGOutsideListMarker,
     kLayoutObjectNGProgress,
     kLayoutObjectNGText,
     kLayoutObjectNGTextCombine,
     kLayoutObjectNGTextControlMultiLine,
     kLayoutObjectNGTextControlSingleLine,
+    kLayoutObjectNGView,
     kLayoutObjectOutsideListMarker,
     kLayoutObjectProgress,
     kLayoutObjectQuote,
@@ -3721,6 +3743,11 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
     bitfields_.SetTransformAffectsVectorEffect(b);
   }
 
+  void SetMightTraversePhysicalFragments(bool b) {
+    NOT_DESTROYED();
+    bitfields_.SetMightTraversePhysicalFragments(b);
+  }
+
  private:
   bool LocalToAncestorRectFastPath(const PhysicalRect& rect,
                                    const LayoutBoxModelObject* ancestor,
@@ -3757,8 +3784,6 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
       bool mark_container_chain_layout_overflow_recalc);
 
   inline void InvalidateContainerIntrinsicLogicalWidths();
-
-  const LayoutBoxModelObject* EnclosingDirectlyCompositableContainer() const;
 
   LayoutFlowThread* LocateFlowThreadContainingBlock() const;
   void RemoveFromLayoutFlowThreadRecursive(LayoutFlowThread*);
@@ -4221,7 +4246,6 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
                          HasNonCollapsedBorderDecoration);
 
     // True at start of |Destroy()| before calling |WillBeDestroyed()|.
-    // TODO(yukiy): Remove this bitfield
     ADD_BOOLEAN_BITFIELD(being_destroyed_, BeingDestroyed);
 
     // From LayoutListMarkerImage
@@ -4403,6 +4427,7 @@ class CORE_EXPORT LayoutObject : public GarbageCollected<LayoutObject>,
  private:
   friend class LineLayoutItem;
   friend class LocalFrameView;
+  friend class SubtreeLayoutScope;
 
   scoped_refptr<const ComputedStyle> style_;
 

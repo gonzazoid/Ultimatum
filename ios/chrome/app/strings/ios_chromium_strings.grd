@@ -289,9 +289,6 @@ locale.  The strings in this file are specific to iOS.
       <message name="IDS_IOS_FIRSTRUN_WELCOME_TO_CHROME" desc="Title on the Welcome to Chromium screen presented to the user on First Run. [iOS only]">
         Welcome to Chromium
       </message>
-      <message name="IDS_IOS_PASSWORD_MANAGER_SETTINGS_SYNC_HEADER" desc="Header text and link for the view in Settings for managing saved passwords when the user is signed in and syncing passwords. [Length: unlimited] [iOS only]">
-        Passwords are saved to <ph name="BEGIN_LINK">BEGIN_LINK</ph>Password Manager<ph name="END_LINK">END_LINK</ph> so you can use them on any device.
-      </message>
       <message name="IDS_IOS_GOOGLE_SERVICES_SETTINGS_IMPROVE_CHROME_TEXT" desc="Feature title in the settings for the user enable or disable. Related with 'Automatically sends usage statistics and crash reports to Google'. [iOS only]">
         Help Improve Chromium's Features and Performance
       </message>
@@ -367,7 +364,7 @@ locale.  The strings in this file are specific to iOS.
       <message name="IDS_IOS_SAVE_IMAGE_PRIVACY_ALERT_MESSAGE_GO_TO_SETTINGS" desc="Body of the alert shown when the user tries to save an image but we lack permission to add photos. This body tells the user he'll be redirected to the Settings app. [Length: 100em] [iOS only].">
         To save images, tap on Settings to let Chromium add to your photos
       </message>
-      <message name="IDS_IOS_PASSWORD_MANAGER_SETTINGS_NOT_SYNC_HEADER" desc="Header text for the view in Settings for managing saved passwords when the user is not signed in, or signed in and not syncing passwords. [Length: unlimited] [iOS only]">
+      <message name="IDS_IOS_SAVE_PASSWORD_FOOTER_NOT_SYNCING" desc="Helper text above the save credentials modal's primary action button. [Length: unlimited] [iOS only]">
         Passwords are saved to Password Manager on this device only.
       </message>
       <message name="IDS_IOS_SCANNER_CAMERA_IN_USE_ALERT_DETAIL" desc="Body of a modal dialog shown when the user tries to open the QR or credit card scanner but the camera is in use by another application. [Length: 140em] [iOS only]">
@@ -387,6 +384,12 @@ locale.  The strings in this file are specific to iOS.
       </message>
       <message name="IDS_IOS_SCANNER_MULTIPLE_FOREGROUND_APPS_ALERT_DETAIL" desc="Body of a modal dialog shown when the user tries to open the QR or credit card scanner in a Split View mode, when the camera is unavailable. [Length: 140em] [iOS only]">
         Chromium can't use your camera in Split View mode
+      </message>
+      <message name="IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPAD" desc="The subtitle of the view that teaches users to turn on iOS auto-fill from Chrome password manager for iPad [iPadOS only]">
+        You can use the passwords you saved to Password Manager in other apps on your iPad.
+      </message>
+      <message name="IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPHONE" desc="The subtitle of the view that teaches users to turn on iOS auto-fill from Chrome password manager for iPhone [iOS only]">
+        You can use the passwords you saved to Password Manager in other apps on your iPhone.
       </message>
       <message name="IDS_IOS_SHORT_PRODUCT_NAME" desc="The Chrome application short name.">
         Chromium
@@ -459,6 +462,9 @@ locale.  The strings in this file are specific to iOS.
       </message>
       <message name="IDS_IOS_SETTINGS_SIGNIN_DISABLED_POPOVER_TEXT" desc="This text is shown when sign-in is disabled by policy and the user taps on the info pop-over of the 'Sign in to Chromium' button in the settings. [iOS only]">
         Your organization requires you to stay signed out of Chromium.
+      </message>
+      <message name="IDS_IOS_SUGGESTED_STRONG_PASSWORD_HINT_DISPLAYING_EMAIL" desc="Text shown alongside a suggested password to tell user that generated passwords are recorded by chrome. [Length: unlimited] [iOS only]">
+            You won't need to remember this password. It will be saved to Password Manager for <ph name="EMAIL">$1<ex>johndoe@gmail.com</ex></ph>
       </message>
       <message name="IDS_IOS_PASSWORD_CHECK_ERROR" desc="Description of the password check cell, explaining that Password Check failed. [iOS only]" meaning="Password Check failed due to some error.">
         Chromium can't check your passwords

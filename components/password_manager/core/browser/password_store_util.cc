@@ -6,14 +6,32 @@
 
 namespace password_manager {
 
-PasswordStoreChangeList JoinPasswordStoreChanges(
-    std::vector<PasswordStoreChangeList> changes) {
+absl::optional<PasswordStoreChangeList> JoinPasswordStoreChanges(
+    std::vector<absl::optional<PasswordStoreChangeList>> changes) {
   PasswordStoreChangeList joined_changes;
   for (auto changes_list : changes) {
-    std::move(changes_list.begin(), changes_list.end(),
+    if (!changes_list.has_value())
+      return absl::nullopt;
+    std::move(changes_list->begin(), changes_list->end(),
               std::back_inserter(joined_changes));
   }
   return joined_changes;
+}
+
+LoginsResult GetLoginsOrEmptyListOnFailure(LoginsResultOrError result) {
+  if (absl::holds_alternative<PasswordStoreBackendError>(result)) {
+    return {};
+  }
+  return std::move(absl::get<LoginsResult>(result));
+}
+
+PasswordStoreChangeListReply IgnoreChangeListAndRunCallback(
+    base::OnceClosure callback) {
+  return base::BindOnce(
+      [](base::OnceClosure callback, absl::optional<PasswordStoreChangeList>) {
+        std::move(callback).Run();
+      },
+      std::move(callback));
 }
 
 }  // namespace password_manager

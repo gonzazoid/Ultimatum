@@ -467,6 +467,7 @@ interface CSSImageValue : CSSStyleValue
 interface CSSImportRule : CSSRule
     attribute @@toStringTag
     getter href
+    getter layerName
     getter media
     getter styleSheet
     method constructor
@@ -493,6 +494,14 @@ interface CSSKeywordValue : CSSStyleValue
     getter value
     method constructor
     setter value
+interface CSSLayerBlockRule : CSSGroupingRule
+    attribute @@toStringTag
+    getter name
+    method constructor
+interface CSSLayerStatementRule : CSSRule
+    attribute @@toStringTag
+    getter nameList
+    method constructor
 interface CSSMathInvert : CSSMathValue
     attribute @@toStringTag
     getter value
@@ -765,6 +774,9 @@ interface CanvasCaptureMediaStreamTrack : MediaStreamTrack
     getter canvas
     method constructor
     method requestFrame
+interface CanvasFilter
+    attribute @@toStringTag
+    method constructor
 interface CanvasGradient
     attribute @@toStringTag
     method addColorStop
@@ -780,10 +792,14 @@ interface CanvasRenderingContext2D
     getter fillStyle
     getter filter
     getter font
+    getter fontKerning
+    getter fontStretch
+    getter fontVariantCaps
     getter globalAlpha
     getter globalCompositeOperation
     getter imageSmoothingEnabled
     getter imageSmoothingQuality
+    getter letterSpacing
     getter lineCap
     getter lineDashOffset
     getter lineJoin
@@ -796,6 +812,8 @@ interface CanvasRenderingContext2D
     getter strokeStyle
     getter textAlign
     getter textBaseline
+    getter textRendering
+    getter wordSpacing
     method arc
     method arcTo
     method beginPath
@@ -804,6 +822,7 @@ interface CanvasRenderingContext2D
     method clip
     method closePath
     method constructor
+    method createConicGradient
     method createImageData
     method createLinearGradient
     method createPattern
@@ -818,6 +837,7 @@ interface CanvasRenderingContext2D
     method getImageData
     method getLineDash
     method getTransform
+    method isContextLost
     method isPointInPath
     method isPointInStroke
     method lineTo
@@ -826,9 +846,11 @@ interface CanvasRenderingContext2D
     method putImageData
     method quadraticCurveTo
     method rect
+    method reset
     method resetTransform
     method restore
     method rotate
+    method roundRect
     method save
     method scale
     method setLineDash
@@ -842,10 +864,14 @@ interface CanvasRenderingContext2D
     setter fillStyle
     setter filter
     setter font
+    setter fontKerning
+    setter fontStretch
+    setter fontVariantCaps
     setter globalAlpha
     setter globalCompositeOperation
     setter imageSmoothingEnabled
     setter imageSmoothingQuality
+    setter letterSpacing
     setter lineCap
     setter lineDashOffset
     setter lineJoin
@@ -858,6 +884,8 @@ interface CanvasRenderingContext2D
     setter strokeStyle
     setter textAlign
     setter textBaseline
+    setter textRendering
+    setter wordSpacing
 interface ChannelMergerNode : AudioNode
     attribute @@toStringTag
     method constructor
@@ -1382,7 +1410,9 @@ interface Document : Node
     getter onchange
     getter onclick
     getter onclose
+    getter oncontextlost
     getter oncontextmenu
+    getter oncontextrestored
     getter oncopy
     getter oncuechange
     getter oncut
@@ -1581,7 +1611,9 @@ interface Document : Node
     setter onchange
     setter onclick
     setter onclose
+    setter oncontextlost
     setter oncontextmenu
+    setter oncontextrestored
     setter oncopy
     setter oncuechange
     setter oncut
@@ -2641,7 +2673,9 @@ interface HTMLElement : Element
     getter onchange
     getter onclick
     getter onclose
+    getter oncontextlost
     getter oncontextmenu
+    getter oncontextrestored
     getter oncopy
     getter oncuechange
     getter oncut
@@ -2760,7 +2794,9 @@ interface HTMLElement : Element
     setter onchange
     setter onclick
     setter onclose
+    setter oncontextlost
     setter oncontextmenu
+    setter oncontextrestored
     setter oncopy
     setter oncuechange
     setter oncut
@@ -3170,6 +3206,7 @@ interface HTMLInputElement : HTMLElement
     method setCustomValidity
     method setRangeText
     method setSelectionRange
+    method showPicker
     method stepDown
     method stepUp
     setter accept
@@ -4803,6 +4840,7 @@ interface Navigator
     getter webdriver
     getter webkitPersistentStorage
     getter webkitTemporaryStorage
+    getter windowControlsOverlay
     getter xr
     method clearAppBadge
     method constructor
@@ -4964,12 +5002,16 @@ interface OfflineAudioContext : BaseAudioContext
 interface OffscreenCanvas : EventTarget
     attribute @@toStringTag
     getter height
+    getter oncontextlost
+    getter oncontextrestored
     getter width
     method constructor
     method convertToBlob
     method getContext
     method transferToImageBitmap
     setter height
+    setter oncontextlost
+    setter oncontextrestored
     setter width
 interface OffscreenCanvasRenderingContext2D
     attribute @@toStringTag
@@ -4978,10 +5020,14 @@ interface OffscreenCanvasRenderingContext2D
     getter fillStyle
     getter filter
     getter font
+    getter fontKerning
+    getter fontStretch
+    getter fontVariantCaps
     getter globalAlpha
     getter globalCompositeOperation
     getter imageSmoothingEnabled
     getter imageSmoothingQuality
+    getter letterSpacing
     getter lineCap
     getter lineDashOffset
     getter lineJoin
@@ -4994,6 +5040,8 @@ interface OffscreenCanvasRenderingContext2D
     getter strokeStyle
     getter textAlign
     getter textBaseline
+    getter textRendering
+    getter wordSpacing
     method arc
     method arcTo
     method beginPath
@@ -5002,6 +5050,7 @@ interface OffscreenCanvasRenderingContext2D
     method clip
     method closePath
     method constructor
+    method createConicGradient
     method createImageData
     method createLinearGradient
     method createPattern
@@ -5014,6 +5063,7 @@ interface OffscreenCanvasRenderingContext2D
     method getImageData
     method getLineDash
     method getTransform
+    method isContextLost
     method isPointInPath
     method isPointInStroke
     method lineTo
@@ -5022,9 +5072,11 @@ interface OffscreenCanvasRenderingContext2D
     method putImageData
     method quadraticCurveTo
     method rect
+    method reset
     method resetTransform
     method restore
     method rotate
+    method roundRect
     method save
     method scale
     method setLineDash
@@ -5038,10 +5090,14 @@ interface OffscreenCanvasRenderingContext2D
     setter fillStyle
     setter filter
     setter font
+    setter fontKerning
+    setter fontStretch
+    setter fontVariantCaps
     setter globalAlpha
     setter globalCompositeOperation
     setter imageSmoothingEnabled
     setter imageSmoothingQuality
+    setter letterSpacing
     setter lineCap
     setter lineDashOffset
     setter lineJoin
@@ -5054,6 +5110,8 @@ interface OffscreenCanvasRenderingContext2D
     setter strokeStyle
     setter textAlign
     setter textBaseline
+    setter textRendering
+    setter wordSpacing
 interface Option
     attribute @@toStringTag
     getter defaultSelected
@@ -5140,6 +5198,7 @@ interface Path2D
     method moveTo
     method quadraticCurveTo
     method rect
+    method roundRect
 interface PaymentAddress
     attribute @@toStringTag
     getter addressLine
@@ -6158,7 +6217,9 @@ interface SVGElement : Element
     getter onchange
     getter onclick
     getter onclose
+    getter oncontextlost
     getter oncontextmenu
+    getter oncontextrestored
     getter oncopy
     getter oncuechange
     getter oncut
@@ -6262,7 +6323,9 @@ interface SVGElement : Element
     setter onchange
     setter onclick
     setter onclose
+    setter oncontextlost
     setter oncontextmenu
+    setter oncontextrestored
     setter oncopy
     setter oncuechange
     setter oncut
@@ -9445,6 +9508,18 @@ interface Window : EventTarget
     attribute PERSISTENT
     attribute TEMPORARY
     method constructor
+interface WindowControlsOverlay : EventTarget
+    attribute @@toStringTag
+    getter ongeometrychange
+    getter visible
+    method constructor
+    method getTitlebarAreaRect
+    setter ongeometrychange
+interface WindowControlsOverlayGeometryChangeEvent : Event
+    attribute @@toStringTag
+    getter titlebarAreaRect
+    getter visible
+    method constructor
 interface Worker : EventTarget
     attribute @@toStringTag
     getter onerror
@@ -10079,7 +10154,9 @@ namespace CSS
     getter onchange
     getter onclick
     getter onclose
+    getter oncontextlost
     getter oncontextmenu
+    getter oncontextrestored
     getter oncuechange
     getter ondblclick
     getter ondevicemotion
@@ -10287,7 +10364,9 @@ namespace CSS
     setter onchange
     setter onclick
     setter onclose
+    setter oncontextlost
     setter oncontextmenu
+    setter oncontextrestored
     setter oncuechange
     setter ondblclick
     setter ondevicemotion

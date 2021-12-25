@@ -15,6 +15,7 @@
 #include "content/browser/webid/idp_network_request_manager.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
+#include "content/public/browser/web_contents.h"
 #include "third_party/blink/public/mojom/webid/federated_auth_request.mojom.h"
 #include "url/gurl.h"
 
@@ -46,6 +47,7 @@ class CONTENT_EXPORT FederatedAuthRequestImpl {
       blink::mojom::RequestMode mode,
       bool prefer_auto_sign_in,
       blink::mojom::FederatedAuthRequest::RequestIdTokenCallback);
+  void CancelTokenRequest();
   void Revoke(const GURL& provider,
               const std::string& client_id,
               const std::string& account_id,
@@ -80,12 +82,16 @@ class CONTENT_EXPORT FederatedAuthRequestImpl {
   void OnIdpPageClosed();
   void OnTokenProvisionApproved(
       IdentityRequestDialogController::UserApproval approval);
+
+  void DownloadBitmap(const GURL& icon_url,
+                      int ideal_icon_size,
+                      WebContents::ImageDownloadCallback callback);
   void OnAccountsResponseReceived(
-      IdpNetworkRequestManager::AccountsResponse status,
+      IdpNetworkRequestManager::FetchStatus status,
       IdpNetworkRequestManager::AccountList accounts,
-      content::IdentityProviderMetadata idp_metadata);
+      IdentityProviderMetadata idp_metadata);
   void OnAccountSelected(const std::string& account_id);
-  void OnTokenResponseReceived(IdpNetworkRequestManager::TokenResponse status,
+  void OnTokenResponseReceived(IdpNetworkRequestManager::FetchStatus status,
                                const std::string& id_token);
   void DispatchOneLogout();
   void OnLogoutCompleted();

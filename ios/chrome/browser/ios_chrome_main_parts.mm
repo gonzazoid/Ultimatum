@@ -36,6 +36,7 @@
 #include "components/open_from_clipboard/clipboard_recent_content.h"
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_service.h"
+#import "components/signin/public/identity_manager/tribool.h"
 #include "components/translate/core/browser/translate_download_manager.h"
 #include "components/variations/field_trial_config/field_trial_util.h"
 #include "components/variations/service/variations_service.h"
@@ -58,6 +59,7 @@
 #include "ios/chrome/browser/policy/browser_policy_connector_ios.h"
 #include "ios/chrome/browser/pref_names.h"
 #include "ios/chrome/browser/safe_browsing/safe_browsing_service.h"
+#import "ios/chrome/browser/signin/signin_util.h"
 #include "ios/chrome/browser/translate/translate_service_ios.h"
 #include "ios/chrome/common/channel_info.h"
 #include "ios/web/public/thread/web_task_traits.h"
@@ -180,6 +182,20 @@ void IOSChromeMainParts::PreCreateThreads() {
   static crash_reporter::CrashKeyString<4> key("first-run");
   if (FirstRun::IsChromeFirstRun())
     key.Set("yes");
+
+  // Compute device restore flag before IO is disallowed on UI thread, so the
+  // value is available from cache synchronously.
+  static crash_reporter::CrashKeyString<8> device_restore_key("device-restore");
+  switch (IsFirstSessionAfterDeviceRestore()) {
+    case signin::Tribool::kTrue:
+      device_restore_key.Set("yes");
+      break;
+    case signin::Tribool::kFalse:
+      break;
+    case signin::Tribool::kUnknown:
+      device_restore_key.Set("unknown");
+      break;
+  }
 
   // Convert freeform experimental settings into switches before initializing
   // local state, in case any of the settings affect policy.

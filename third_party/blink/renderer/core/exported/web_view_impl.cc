@@ -150,7 +150,6 @@
 #include "third_party/blink/renderer/core/page/pointer_lock_controller.h"
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/paint/paint_timing.h"
 #include "third_party/blink/renderer/core/paint/paint_timing_detector.h"
@@ -2139,7 +2138,7 @@ void WebViewImpl::ComputeScaleAndScrollForEditableElementRects(
   if (!need_animation)
     return;
 
-  FloatSize target_viewport_size(visual_viewport.Size());
+  gfx::SizeF target_viewport_size(visual_viewport.Size());
   target_viewport_size.Scale(1 / new_scale);
 
   if (element_bounds_in_content.width() <= target_viewport_size.width()) {
@@ -2646,7 +2645,7 @@ PageScaleConstraintsSet& WebViewImpl::GetPageScaleConstraintsSet() const {
 
 void WebViewImpl::RefreshPageScaleFactor() {
   if (!MainFrame() || !GetPage() || !GetPage()->MainFrame() ||
-      !GetPage()->MainFrame()->IsLocalFrame() ||
+      !GetPage()->MainFrame()->IsLocalFrame() || IsFencedFrameRoot() ||
       !GetPage()->DeprecatedLocalMainFrame()->View())
     return;
   UpdatePageDefinedViewportConstraints(MainFrameImpl()
@@ -3605,8 +3604,7 @@ void WebViewImpl::ApplyViewportChanges(const ApplyViewportChangesArgs& args) {
     visual_viewport.UserDidChangeScale();
   }
 
-  elastic_overscroll_ += FloatSize(args.elastic_overscroll_delta.x(),
-                                   args.elastic_overscroll_delta.y());
+  elastic_overscroll_ += args.elastic_overscroll_delta;
   UpdateBrowserControlsConstraint(args.browser_controls_constraint);
 
   if (args.scroll_gesture_did_end) {

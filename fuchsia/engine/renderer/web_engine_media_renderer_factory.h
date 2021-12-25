@@ -9,11 +9,9 @@
 #include <vector>
 
 #include "base/callback.h"
+#include "fuchsia/engine/mojom/web_engine_media_resource_provider.mojom.h"
 #include "media/base/renderer_factory.h"
-
-namespace blink {
-class BrowserInterfaceBrokerProxy;
-}  // namespace blink
+#include "mojo/public/cpp/bindings/remote.h"
 
 namespace media {
 class AudioRendererSink;
@@ -35,7 +33,8 @@ class WebEngineMediaRendererFactory final : public media::RendererFactory {
       media::MediaLog* media_log,
       media::DecoderFactory* decoder_factory,
       GetGpuFactoriesCB get_gpu_factories_cb,
-      blink::BrowserInterfaceBrokerProxy* interface_broker);
+      mojo::Remote<mojom::WebEngineMediaResourceProvider>
+          media_resource_provider);
   ~WebEngineMediaRendererFactory() override;
 
   // RendererFactory interface.
@@ -63,7 +62,7 @@ class WebEngineMediaRendererFactory final : public media::RendererFactory {
   // Creates factories for supporting video accelerators. May be null.
   GetGpuFactoriesCB get_gpu_factories_cb_;
 
-  blink::BrowserInterfaceBrokerProxy* const interface_broker_;
+  mojo::Remote<mojom::WebEngineMediaResourceProvider> media_resource_provider_;
 };
 
 #endif  // FUCHSIA_ENGINE_RENDERER_WEB_ENGINE_MEDIA_RENDERER_FACTORY_H_

@@ -148,6 +148,7 @@ bool MinBlockSizeShouldEncompassIntrinsicSize(const NGFlexItem& item) {
 
   // TODO(almaher): Figure out which cases this should be true. (Should this
   // only be true when min-block-size is auto in the case of |is_column_|?)
+  // Also, should this be the same in the case of a row flex container?
   const auto& item_style = item.ng_input_node.Style();
   return item_style.LogicalHeight().IsAutoOrContentOrIntrinsic();
 }
@@ -1164,7 +1165,8 @@ NGFlexLayoutAlgorithm::GiveItemsFinalPositionAndSizeForFragmentation(
   DCHECK(involved_in_block_fragmentation_);
 
   absl::optional<LayoutUnit> fallback_baseline;
-  NGFlexItemIterator item_iterator(*flex_line_outputs, BreakToken());
+  NGFlexItemIterator item_iterator(*flex_line_outputs, BreakToken(),
+                                   is_horizontal_flow_);
 
   for (auto entry = item_iterator.NextItem();
        NGFlexItem* flex_item = entry.flex_item;

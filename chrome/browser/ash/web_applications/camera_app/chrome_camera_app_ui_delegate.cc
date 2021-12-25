@@ -31,9 +31,11 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/chrome_pages.h"
 #include "chrome/browser/ui/web_applications/system_web_app_ui_utils.h"
+#include "chrome/browser/web_applications/system_web_apps/system_web_app_manager.h"
 #include "chrome/browser/web_applications/web_app_id_constants.h"
+#include "chrome/browser/web_applications/web_app_provider.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
-#include "chrome/browser/web_launch/web_launch_files_helper.h"
+#include "chrome/browser/web_applications/web_launch_params_helper.h"
 #include "components/services/app_service/public/mojom/types.mojom.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
@@ -175,9 +177,17 @@ void ChromeCameraAppUIDelegate::SetLaunchDirectory() {
   auto my_files_folder_path =
       file_manager::util::GetMyFilesFolderForProfile(profile);
 
-  web_launch::WebLaunchFilesHelper::EnqueueLaunchParams(
-      web_contents,
-      /*app_scope=*/GURL(ash::kChromeUICameraAppScopeURL),
+  auto* provider = web_app::WebAppProvider::GetForSystemWebApps(profile);
+  absl::optional<web_app::AppId> app_id =
+      provider->system_web_app_manager().GetAppIdForSystemApp(
+          web_app::SystemAppType::CAMERA);
+
+  // The launch directory is passed here rather than
+  // `SystemWebAppDelegate::LaunchAndNavigateSystemWebApp()` to handle the case
+  // of the app being opened to handle an Android intent, i.e. when it's shown
+  // as a dialog via `CameraAppDialog`.
+  web_app::WebLaunchParamsHelper::EnqueueLaunchParams(
+      web_contents, provider->registrar(), *app_id,
       /*await_navigation=*/true,
       /*launch_url=*/GURL(ash::kChromeUICameraAppMainURL), my_files_folder_path,
       /*launch_paths=*/{});

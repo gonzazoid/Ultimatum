@@ -33,6 +33,7 @@ source_set("browser") {
     "//content/public/browser:browser_sources",
     "//content/test/fuzzer:browser_accessibility_fuzzer",
     "//content/test/fuzzer:indexed_db_fuzzer_support",
+    "//content/test/fuzzer:media_stream_dispatcher_host_mojolpm_fuzzer",
   ]
 
   configs += [
@@ -207,6 +208,7 @@ source_set("browser") {
     "//skia:skia_resources",
     "//skia/public/mojom",
     "//storage/browser",
+    "//storage/browser/quota:mojo_bindings",
     "//storage/common",
     "//third_party/angle:angle_version_info",
     "//third_party/blink/public:blink_headers",
@@ -216,6 +218,7 @@ source_set("browser") {
     "//third_party/blink/public/common",
     "//third_party/blink/public/common:font_enumeration_table_proto",
     "//third_party/blink/public/strings",
+    "//third_party/blink/public/strings:accessibility_strings",
     "//third_party/boringssl",
     "//third_party/brotli:dec",
     "//third_party/distributed_point_functions",
@@ -338,8 +341,6 @@ source_set("browser") {
     "$target_gen_dir/devtools/protocol/tracing.h",
     "about_url_loader_factory.cc",
     "about_url_loader_factory.h",
-    "accessibility/accessibility_event_recorder.cc",
-    "accessibility/accessibility_event_recorder.h",
     "accessibility/accessibility_tree_formatter_blink.cc",
     "accessibility/accessibility_tree_formatter_blink.h",
     "accessibility/browser_accessibility.cc",
@@ -398,8 +399,6 @@ source_set("browser") {
     "attribution_reporting/attribution_policy.h",
     "attribution_reporting/attribution_report.cc",
     "attribution_reporting/attribution_report.h",
-    "attribution_reporting/attribution_reporter_impl.cc",
-    "attribution_reporting/attribution_reporter_impl.h",
     "attribution_reporting/attribution_storage.cc",
     "attribution_reporting/attribution_storage.h",
     "attribution_reporting/attribution_storage_delegate_impl.cc",
@@ -412,8 +411,7 @@ source_set("browser") {
     "attribution_reporting/attribution_utils.h",
     "attribution_reporting/rate_limit_table.cc",
     "attribution_reporting/rate_limit_table.h",
-    "attribution_reporting/sent_report.cc",
-    "attribution_reporting/sent_report.h",
+    "attribution_reporting/send_result.h",
     "attribution_reporting/sql_utils.cc",
     "attribution_reporting/sql_utils.h",
     "attribution_reporting/storable_source.cc",
@@ -1338,6 +1336,8 @@ source_set("browser") {
     "quota/quota_change_dispatcher.h",
     "quota/quota_context.cc",
     "quota/quota_context.h",
+    "quota/quota_internals_ui.cc",
+    "quota/quota_internals_ui.h",
     "quota/quota_manager_host.cc",
     "quota/quota_manager_host.h",
     "renderer_host/agent_scheduling_group_host.cc",
@@ -2318,11 +2318,16 @@ source_set("browser") {
   }
 
   if (is_chromeos) {
+    deps += [ "//components/value_store:value_store" ]
     sources += [
       "handwriting/handwriting_recognition_service_impl_cros.cc",
       "handwriting/handwriting_recognition_service_impl_cros.h",
       "handwriting/handwriting_recognizer_impl_cros.cc",
       "handwriting/handwriting_recognizer_impl_cros.h",
+      "lock_screen/lock_screen_service_impl.cc",
+      "lock_screen/lock_screen_service_impl.h",
+      "lock_screen/lock_screen_storage_impl.cc",
+      "lock_screen/lock_screen_storage_impl.h",
     ]
   }
 
@@ -2809,6 +2814,7 @@ source_set("browser") {
       "//media/capture/content/android",
       "//media/capture/video/android",
       "//third_party/blink/public/common:font_unique_name_table_proto",
+      "//third_party/blink/public/mojom:mojom_platform_blink",
       "//third_party/icu",
       "//ui/accessibility:ax_assistant",
       "//ui/accessibility/mojom",

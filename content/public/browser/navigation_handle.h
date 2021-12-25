@@ -11,7 +11,7 @@
 
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
-#include "content/public/browser/navigating_frame_type.h"
+#include "content/public/browser/frame_type.h"
 #include "content/public/browser/navigation_handle_timing.h"
 #include "content/public/browser/navigation_throttle.h"
 #include "content/public/browser/prerender_trigger_type.h"
@@ -123,7 +123,7 @@ class CONTENT_EXPORT NavigationHandle : public base::SupportsUserData {
   virtual bool IsPrerenderedPageActivation() = 0;
 
   // Returns the type of the frame in which this navigation is taking place.
-  virtual NavigatingFrameType GetNavigatingFrameType() const = 0;
+  virtual FrameType GetNavigatingFrameType() const = 0;
 
   // Whether the navigation was initiated by the renderer process. Examples of
   // renderer-initiated navigations include:
@@ -265,6 +265,11 @@ class CONTENT_EXPORT NavigationHandle : public base::SupportsUserData {
   // Note: This is not guaranteed to refer to a RenderFrameHost that still
   // exists.
   virtual GlobalRenderFrameHostId GetPreviousRenderFrameHostId() = 0;
+
+  // Returns the id of the RenderProcessHost this navigation is expected to
+  // commit in. The actual RenderProcessHost may change at commit time. It is
+  // only valid to call this before commit.
+  virtual int GetExpectedRenderProcessHostId() = 0;
 
   // Whether the navigation happened without changing document. Examples of
   // same document navigations are:

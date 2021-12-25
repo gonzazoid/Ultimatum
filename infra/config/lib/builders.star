@@ -30,7 +30,6 @@ load("./args.star", "args")
 load("./branches.star", "branches")
 load("./bootstrap.star", "register_bootstrap")
 load("./builder_config.star", "builder_config", "register_builder_config")
-load("./listify.star", "listify")
 load("./recipe_experiments.star", "register_recipe_experiments_ref")
 
 ################################################################################
@@ -103,8 +102,10 @@ os = struct(
     WINDOWS_8_1 = os_enum("Windows-8.1", os_category.WINDOWS),
     WINDOWS_10 = os_enum("Windows-10", os_category.WINDOWS),
     WINDOWS_10_1703 = os_enum("Windows-10-15063", os_category.WINDOWS),
-    WINDOWS_10_20h2 = os_enum("Windows-10-19042", os_category.WINDOWS),
     WINDOWS_10_1909 = os_enum("Windows-10-18363", os_category.WINDOWS),
+    WINDOWS_10_20h2 = os_enum("Windows-10-19042", os_category.WINDOWS),
+    WINDOWS_11 = os_enum("Windows-11", os_category.WINDOWS),
+    WINDOWS_11_21h2 = os_enum("Windows-11-22000", os_category.WINDOWS),
     WINDOWS_DEFAULT = os_enum("Windows-10", os_category.WINDOWS),
     WINDOWS_ANY = os_enum("Windows", os_category.WINDOWS),
 )
@@ -366,6 +367,7 @@ defaults = args.defaults(
     # unnecessarily make wrapper functions
     bucket = args.COMPUTE,
     executable = args.COMPUTE,
+    notifies = None,
     triggered_by = args.COMPUTE,
 )
 
@@ -375,6 +377,7 @@ def builder(
         branch_selector = branches.MAIN,
         bucket = args.DEFAULT,
         executable = args.DEFAULT,
+        notifies = None,
         triggered_by = args.DEFAULT,
         os = args.DEFAULT,
         builderless = args.DEFAULT,
@@ -436,6 +439,9 @@ def builder(
             (may be specified by module-level default).
         executable: an executable to run, e.g. a luci.recipe(...). Required (may
             be specified by module-level default).
+        notifies: A string or list of strings with notifiers that will be
+            triggered for builds of the builder. Supports a module-level default
+            that will be merged with the provided values.
         triggered_by: an optional poller or builder that triggers the builder or
             a list of pollers and/or builders that trigger the builder. Supports
             a module-level default.
@@ -642,7 +648,7 @@ def builder(
     if pool:
         dimensions["pool"] = pool
 
-    sheriff_rotations = listify(defaults.sheriff_rotations.get(), sheriff_rotations)
+    sheriff_rotations = defaults.get_value("sheriff_rotations", sheriff_rotations, merge = args.MERGE_LIST)
     if sheriff_rotations:
         properties["sheriff_rotations"] = sheriff_rotations
 
@@ -729,6 +735,8 @@ def builder(
         if triggered_by != args.DEFAULT:
             fail("triggered testers cannot specify triggered_by")
         triggered_by = [builder_spec.parent]
+
+    kwargs["notifies"] = defaults.get_value("notifies", notifies, merge = args.MERGE_LIST)
 
     triggered_by = defaults.get_value("triggered_by", triggered_by)
     if triggered_by != args.COMPUTE:

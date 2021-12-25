@@ -6,7 +6,6 @@
 #define CHROME_BROWSER_UI_ASH_PROJECTOR_PROJECTOR_APP_CLIENT_IMPL_H_
 
 #include <memory>
-#include <set>
 
 #include "ash/webui/projector_app/projector_app_client.h"
 #include "base/memory/weak_ptr.h"
@@ -39,19 +38,20 @@ class ProjectorAppClientImpl : public ash::ProjectorAppClient {
   void RemoveObserver(Observer* observer) override;
   signin::IdentityManager* GetIdentityManager() override;
   network::mojom::URLLoaderFactory* GetUrlLoaderFactory() override;
-  void OnNewScreencastPreconditionChanged(bool can_start) override;
-  const std::set<ash::PendingScreencast>& GetPendingScreencasts()
-      const override;
+  void OnNewScreencastPreconditionChanged(
+      const ash::NewScreencastPrecondition& precondition) override;
+  const ash::PendingScreencastSet& GetPendingScreencasts() const override;
   bool ShouldDownloadSoda() override;
   bool IsSpeechRecognitionAvailable() override;
   void InstallSoda() override;
   void OnSodaInstallProgress(int combined_progress) override;
   void OnSodaInstallError() override;
   void OnSodaInstalled() override;
+  void OpenFeedbackDialog() override;
 
  private:
   void NotifyScreencastsPendingStatusChanged(
-      const std::set<ash::PendingScreencast>& pending_screencast);
+      const ash::PendingScreencastSet& pending_screencast);
 
   base::ObserverList<Observer> observers_;
 

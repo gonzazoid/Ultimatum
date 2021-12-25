@@ -111,7 +111,6 @@
 #include "third_party/blink/renderer/core/scroll/smooth_scroll_sequencer.h"
 #include "third_party/blink/renderer/core/style/content_data.h"
 #include "third_party/blink/renderer/core/style/cursor_data.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/property_tree_state.h"
 #include "third_party/blink/renderer/platform/graphics/touch_action.h"
@@ -1624,7 +1623,7 @@ bool LayoutObject::ComputeIsAbsoluteContainer(
          ComputeIsFixedContainer(style);
 }
 
-FloatRect LayoutObject::AbsoluteBoundingBoxFloatRect(
+gfx::RectF LayoutObject::AbsoluteBoundingBoxRectF(
     MapCoordinatesFlags flags) const {
   NOT_DESTROYED();
   DCHECK(!(flags & kIgnoreTransforms));
@@ -1633,9 +1632,9 @@ FloatRect LayoutObject::AbsoluteBoundingBoxFloatRect(
 
   wtf_size_t n = quads.size();
   if (n == 0)
-    return FloatRect();
+    return gfx::RectF();
 
-  FloatRect result = quads[0].BoundingBox();
+  gfx::RectF result = quads[0].BoundingBox();
   for (wtf_size_t i = 1; i < n; ++i)
     result.Union(quads[i].BoundingBox());
   return result;
@@ -1661,7 +1660,7 @@ gfx::Rect LayoutObject::AbsoluteBoundingBoxRect(
 PhysicalRect LayoutObject::AbsoluteBoundingBoxRectHandlingEmptyInline(
     MapCoordinatesFlags flags) const {
   NOT_DESTROYED();
-  return PhysicalRect::EnclosingRect(AbsoluteBoundingBoxFloatRect(flags));
+  return PhysicalRect::EnclosingRect(AbsoluteBoundingBoxRectF(flags));
 }
 
 PhysicalRect LayoutObject::AbsoluteBoundingBoxRectForScrollIntoView() const {
@@ -1704,40 +1703,6 @@ gfx::Rect LayoutObject::AbsoluteBoundingBoxRectIncludingDescendants() const {
 
 void LayoutObject::Paint(const PaintInfo&) const {
   NOT_DESTROYED();
-}
-
-const LayoutBoxModelObject& LayoutObject::DirectlyCompositableContainer()
-    const {
-  NOT_DESTROYED();
-  CHECK(IsRooted());
-
-  if (const LayoutBoxModelObject* container =
-          EnclosingDirectlyCompositableContainer())
-    return *container;
-
-  // If the current frame is not composited, we send just return the main
-  // frame's LayoutView so that we generate invalidations on the window.
-  const LayoutView* layout_view = View();
-  while (const LayoutObject* owner_object =
-             layout_view->GetFrame()->OwnerLayoutObject())
-    layout_view = owner_object->View();
-
-  DCHECK(layout_view);
-  return *layout_view;
-}
-
-const LayoutBoxModelObject*
-LayoutObject::EnclosingDirectlyCompositableContainer() const {
-  NOT_DESTROYED();
-  DCHECK(!RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
-  LayoutBoxModelObject* container = nullptr;
-  if (PaintLayer* painting_layer = PaintingLayer()) {
-    if (PaintLayer* compositing_layer =
-            painting_layer
-                ->EnclosingDirectlyCompositableLayerCrossingFrameBoundaries())
-      container = &compositing_layer->GetLayoutObject();
-  }
-  return container;
 }
 
 RecalcLayoutOverflowResult LayoutObject::RecalcLayoutOverflow() {
@@ -1884,20 +1849,6 @@ DOMNodeId LayoutObject::OwnerNodeId() const {
   return GetNode() ? DOMNodeIds::IdForNode(GetNode()) : kInvalidDOMNodeId;
 }
 
-bool LayoutObject::IsPaintInvalidationContainer() const {
-  NOT_DESTROYED();
-  return HasLayer() && To<LayoutBoxModelObject>(this)
-                           ->Layer()
-                           ->IsPaintInvalidationContainer();
-}
-
-bool LayoutObject::CanBeCompositedForDirectReasons() const {
-  NOT_DESTROYED();
-  return HasLayer() && To<LayoutBoxModelObject>(this)
-                           ->Layer()
-                           ->CanBeCompositedForDirectReasons();
-}
-
 void LayoutObject::InvalidateDisplayItemClients(
     PaintInvalidationReason reason) const {
   NOT_DESTROYED();
@@ -1967,7 +1918,7 @@ bool LayoutObject::MapToVisualRectInAncestorSpaceInternalFastPath(
   // or property_container->FirstFragment().ContentsProperties().
   rect.Move(FirstFragment().PaintOffset());
   if (property_container != ancestor) {
-    FloatClipRect clip_rect(ToGfxRectF(FloatRect(rect)));
+    FloatClipRect clip_rect((gfx::RectF(rect)));
     intersects = GeometryMapper::LocalToAncestorVisualRect(
         container_properties, ancestor->FirstFragment().ContentsProperties(),
         clip_rect, kIgnoreOverlayScrollbarSize,
@@ -1991,7 +1942,7 @@ bool LayoutObject::MapToVisualRectInAncestorSpace(
     return intersects;
 
   TransformState transform_state(TransformState::kApplyTransformDirection,
-                                 FloatQuad(FloatRect(rect)));
+                                 FloatQuad(gfx::RectF(rect)));
   intersects = MapToVisualRectInAncestorSpaceInternal(ancestor, transform_state,
                                                       visual_rect_flags);
   transform_state.Flatten();
@@ -3499,14 +3450,14 @@ bool LayoutObject::LocalToAncestorRectFastPath(
   if (!property_container)
     return false;
 
-  FloatRect mapping_rect(rect);
+  gfx::RectF mapping_rect(rect);
 
   // This works because it's not possible to have any intervening clips,
   // effects, transforms between |this| and |property_container|, and therefore
   // FirstFragment().PaintOffset() is relative to the transform space defined by
   // FirstFragment().LocalBorderBoxProperties() (if this == property_container)
   // or property_container->FirstFragment().ContentsProperties().
-  mapping_rect.Offset(FloatSize(FirstFragment().PaintOffset()));
+  mapping_rect.Offset(gfx::Vector2dF(FirstFragment().PaintOffset()));
 
   if (property_container != ancestor) {
     GeometryMapper::SourceToDestinationRect(
@@ -3514,7 +3465,7 @@ bool LayoutObject::LocalToAncestorRectFastPath(
         ancestor->FirstFragment().ContentsProperties().Transform(),
         mapping_rect);
   }
-  mapping_rect.Offset(-FloatSize(ancestor->FirstFragment().PaintOffset()));
+  mapping_rect.Offset(-gfx::Vector2dF(ancestor->FirstFragment().PaintOffset()));
 
   result = PhysicalRect::EnclosingRect(mapping_rect);
   return true;
@@ -3530,7 +3481,8 @@ PhysicalRect LayoutObject::LocalToAncestorRect(
     return result;
 
   return PhysicalRect::EnclosingRect(
-      LocalToAncestorQuad(FloatRect(rect), ancestor, mode).BoundingBox());
+      LocalToAncestorQuad(FloatQuad(gfx::RectF(rect)), ancestor, mode)
+          .BoundingBox());
 }
 
 FloatQuad LayoutObject::LocalToAncestorQuad(
@@ -3561,7 +3513,7 @@ void LayoutObject::LocalToAncestorRects(
     PhysicalRect& rect = rects[i];
     rect.Move(pre_offset);
     FloatQuad container_quad =
-        LocalToAncestorQuad(FloatQuad(FloatRect(rect)), ancestor);
+        LocalToAncestorQuad(FloatQuad(gfx::RectF(rect)), ancestor);
     PhysicalRect container_rect =
         PhysicalRect::EnclosingRect(container_quad.BoundingBox());
     if (container_rect.IsEmpty()) {
@@ -4073,13 +4025,6 @@ PositionWithAffinity LayoutObject::PositionForPoint(
   DCHECK(!IsLayoutNGObject() || GetDocument().Lifecycle().GetState() >=
                                     DocumentLifecycle::kPrePaintClean);
   return CreatePositionWithAffinity(0);
-}
-
-CompositingState LayoutObject::GetCompositingState() const {
-  NOT_DESTROYED();
-  return HasLayer()
-             ? To<LayoutBoxModelObject>(this)->Layer()->GetCompositingState()
-             : kNotComposited;
 }
 
 bool LayoutObject::CanHaveAdditionalCompositingReasons() const {

@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">ऑफर उपलब्ध आहे</translation>
 <translation id="1312803275555673949">यासाठी काय पुरावा आहे?</translation>
 <translation id="131405271941274527">तुम्ही तुमचा फोन NFC डिव्हाइसवर टॅप करता तेव्हा <ph name="URL" /> ला माहिती पाठवायची आणि मिळवायची असते</translation>
+<translation id="1314311879718644478">ऑगमेंटेड रीअ‍ॅलिटी आशय पहा</translation>
 <translation id="1314509827145471431">बाइंड राइट</translation>
 <translation id="1318023360584041678">टॅबच्या गटामध्ये सेव्ह केला</translation>
 <translation id="1319245136674974084">या अ‍ॅपसाठी पुन्‍हा विचारू नका</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">अधिक दर्शवा</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">ब्राउझर आवृत्ती शोधत आहात का? भेट द्या</translation>
 <translation id="1476595624592550506">तुमचा पासवर्ड बदला</translation>
 <translation id="1483493594462132177">पाठवा</translation>
 <translation id="1484290072879560759">पाठवण्याचा पत्ता निवडा</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">हे वेबपेज प्रदर्शित करताना काहीतरी चूक झाली.</translation>
 <translation id="1586541204584340881">तुम्ही कोणती एक्स्टेंशन इंस्टॉल केली आहेत</translation>
 <translation id="1588438908519853928">सामान्य</translation>
+<translation id="1589050138437146318">ARCore इंस्टॉल करायचे आहे का?</translation>
 <translation id="1592005682883173041">स्थानिक डेटा ॲक्सेस</translation>
 <translation id="1594030484168838125">निवडा</translation>
 <translation id="160851722280695521">Chrome मध्ये Dino Run गेम खेळा</translation>
@@ -1260,6 +1263,7 @@
 <translation id="4968522289500246572">हे ॲप मोबाइलसाठी डिझाइन केले असून योग्यप्रकारे आकार बदलू शकणार नाही. अ‍ॅपमध्ये समस्या येऊ शकतात किंवा ते रीस्टार्ट होऊ शकते.</translation>
 <translation id="4969341057194253438">रेकॉर्डिंग हटवा</translation>
 <translation id="4973922308112707173">ड्युअल पंच टॉप</translation>
+<translation id="4976702386844183910"><ph name="DATE" /> रोजी शेवटची भेट दिली</translation>
 <translation id="4984088539114770594">मायक्रोफोन वापरायचा का?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">सर्व पहा</translation>
@@ -1345,6 +1349,7 @@
 <translation id="5215116848420601511">Google Pay वापरून पेमेंट पद्धती आणि पत्ते</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">ट्रे १३</translation>
+<translation id="5216942107514965959">आज शेवटची भेट दिली</translation>
 <translation id="5222812217790122047">ईमेल आवश्यक आहे</translation>
 <translation id="5230733896359313003">पाठविण्याचा पत्ता</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1388,6 +1393,7 @@
 <translation id="5333022057423422993">Chrome ला तुम्ही नुकताच डेटा भंगामध्ये वापरलेला पासवर्ड आढळळा आहे. तुमची खाती सुरक्षित करण्यासाठी, आम्ही तुमचे सेव्ह केलेले पासवर्ड तपासण्याची शिफारस करतो.</translation>
 <translation id="5334013548165032829">तपशीलवार सिस्टम लॉग</translation>
 <translation id="5334145288572353250">पत्ता सेव्ह करायचा आहे का?</translation>
+<translation id="5335920952954443287">धडधडणारे हृदय</translation>
 <translation id="5340250774223869109">अ‍ॅप्लिकेशन ब्लॉक केले आहे</translation>
 <translation id="534295439873310000">NFC डिव्हाइस</translation>
 <translation id="5344579389779391559">या पेजवर कदाचित तुमच्याकडून शुल्क आकारले जाऊ शकते</translation>
@@ -1530,6 +1536,7 @@
 <translation id="5869522115854928033">सेव्ह केलेले पासवर्ड</translation>
 <translation id="5873013647450402046">हे तुम्हीच असल्याचे तुमच्या बॅंकला कंफर्म करायचे आहे.</translation>
 <translation id="5887400589839399685">कार्ड सेव्ह केले</translation>
+<translation id="5887687176710214216">काल शेवटची भेट दिली</translation>
 <translation id="5895138241574237353">रीस्टार्ट करा</translation>
 <translation id="5895187275912066135">रोजी जारी केले</translation>
 <translation id="5901630391730855834">पिवळा</translation>
@@ -1724,6 +1731,7 @@
 <translation id="6529602333819889595">&amp;पुन्हा करा हटवा</translation>
 <translation id="6545864417968258051">ब्लूटूथ स्कॅन करत आहे</translation>
 <translation id="6547208576736763147">ड्युअल पंच लेफ्ट</translation>
+<translation id="6554732001434021288"><ph name="NUM_DAYS" /> दिवसांपूर्वी शेवटची भेट दिली</translation>
 <translation id="6556866813142980365">पुन्हा करा</translation>
 <translation id="6569060085658103619">तुम्ही एक एक्स्टेंशन पेज पाहत आहात</translation>
 <translation id="6573200754375280815">ड्युअल पंच राइट</translation>
@@ -1886,6 +1894,7 @@
 <translation id="7118618213916969306">क्लिपबोर्ड URL, <ph name="SHORT_URL" /> शोधा</translation>
 <translation id="7119414471315195487">अन्य टॅब आणि प्रोग्राम बंद करा</translation>
 <translation id="7129409597930077180">या पत्त्यावर पाठवू शकत नाही. वेगळा पत्ता निवडा.</translation>
+<translation id="7132939140423847331">तुमच्या ॲडमिनने हा डेटा कॉपी करण्यापासून प्रतिबंधित केले आहे.</translation>
 <translation id="7135130955892390533">स्थिती दाखवा</translation>
 <translation id="7138472120740807366">वितरण पद्धत</translation>
 <translation id="7139724024395191329">अमिरात</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">तुम्ही भाष्ये संपादित करता तेव्हा हा दस्तऐवज त्याच्या मूळ रोटेशनवर परत येईल</translation>
 <translation id="765676359832457558">प्रगत सेटिंग्ज लपवा...</translation>
 <translation id="7658239707568436148">रद्द करा</translation>
+<translation id="7659878911471462949">आनंदाश्रू</translation>
 <translation id="7662298039739062396">सेटिंग एका एक्स्टेंशनद्वारे नियंत्रित केली आहेत</translation>
 <translation id="7663736086183791259">सर्टिफिकेट <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">गुप्त मोडमध्ये अनुमती नाही</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">आभासी वास्तविकता डिव्हाइस आणि डेटा वापरण्याची विनंती करू शकते</translation>
 <translation id="7984945080620862648">Chrome प्रक्रिया करू शकत नसलेले न समजणारे क्रेडेन्शियल वेबसाइटने पाठविल्यामुळे तुम्ही आत्ता <ph name="SITE" /> ला भेट देऊ शकत नाही. नेटवर्क एरर आणि आक्रमणकर्ते सामान्यतः तात्पुरते असतात, यामुळे हे पृष्ठ कदाचित नंतर कार्य करेल.</translation>
-<translation id="79859296434321399">ऑगमेंटेड रीअ‍ॅलिटी आशय पाहण्यासाठी, ARCore इंस्टॉल करा</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">बाइंड</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> सोबत स्क्रीन शेअर करणे पुन्हा सुरू केले</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">फोल्ड हाफ</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">इंस्टॉल केलेली अ‍ॅप्स आणि ती किती वेळा वापरली जातात</translation>
+<translation id="8317207217658302555">ARCore अपडेट करायचे आहे का?</translation>
 <translation id="831997045666694187">संध्याकाळी</translation>
 <translation id="8321476692217554900">सूचना</translation>
 <translation id="8328484624016508118">सर्व गुप्त टॅब बंद केल्यानंतर, Chrome हे साफ करते:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{परवानगी रीसेट करा}other{परवानग्या रीसेट करा}}</translation>
 <translation id="8555010941760982128">चेकआउट करताना हा कोड वापरा</translation>
 <translation id="8557066899867184262">CVV तुमच्या कार्डाच्या मागील बाजूस दिलेला असतो.</translation>
-<translation id="8558485628462305855">ऑगमेंटेड रीअ‍ॅलिटी आशय पाहण्यासाठी, ARCore अपडेट करा</translation>
 <translation id="8559762987265718583">आपल्या डिव्हाइसची तारीख आणि वेळ (<ph name="DATE_AND_TIME" />) चुकीची असल्याने <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> सह खाजगी कनेक्शन इंस्टॉल केले जाऊ शकले नाही.</translation>
 <translation id="8564182942834072828">वेगळे केलेले दस्तऐवज/संकलित न केलेल्या प्रती</translation>
 <translation id="8564985650692024650">जर तुम्ही तुमच्या <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> पासवर्डचा इतर साइटवर पुन्हा वापर केला असेल तर Chromium तुम्हाला तो रीसेट करण्याची शिफारस करतो.</translation>
@@ -2444,6 +2453,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Chrome मधील तुमचा ब्राउझिंग इतिहास पाहण्यासाठी, टॅब दाबून एंटर दाबा</translation>
 <translation id="8987927404178983737">महिना</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">सिस्टीम आवृत्ती शोधत आहात का? भेट द्या</translation>
 <translation id="899688752321268742">तुम्ही हे डिव्हाइस ॲक्टिव्हपणे कधी वापरता हे <ph name="URL" /> ला जाणून घ्यायचे आहे</translation>
 <translation id="8996941253935762404">पुढे असणार्‍या साइटमध्ये हानिकारक प्रोग्राम आहेत</translation>
 <translation id="8997023839087525404">सर्व्हरने सर्टिफिकेट पारदर्शकता धोरणाचा वापर करून सार्वजनिकरत्या उघड न केलेले एक सर्टिफिकेट सादर केले. काही सर्टिफिकेट विश्वसनीय आहेत आणि हल्लेखोरांविरूद्ध संरक्षण करतात याची खात्री करण्‍यासाठी त्यांच्यासाठी ही एक आवश्यकता आहे.</translation>

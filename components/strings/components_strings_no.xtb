@@ -112,6 +112,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="1308113895091915999">Et tilbud er tilgjengelig</translation>
 <translation id="1312803275555673949">Hvilke beviser finnes?</translation>
 <translation id="131405271941274527"><ph name="URL" /> vil sende og motta info når du berører NFC-enheter med telefonen</translation>
+<translation id="1314311879718644478">Se utvidet virkelighet-innhold</translation>
 <translation id="1314509827145471431">Innbinding høyre</translation>
 <translation id="1318023360584041678">Lagret i fanegruppe</translation>
 <translation id="1319245136674974084">Ikke spør igjen for denne appen</translation>
@@ -176,6 +177,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="1472675084647422956">Vis mer</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Ser du etter nettleserversjonen? Gå til</translation>
 <translation id="1476595624592550506">Endre passordet</translation>
 <translation id="1483493594462132177">Send</translation>
 <translation id="1484290072879560759">Velg leveringsadresse</translation>
@@ -214,6 +216,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="1583429793053364125">Noe gikk galt da denne nettsiden skulle åpnes.</translation>
 <translation id="1586541204584340881">hvilke utvidelser du har installert</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Vil du installere ARCore?</translation>
 <translation id="1592005682883173041">Tilgang til lokale data</translation>
 <translation id="1594030484168838125">Velg</translation>
 <translation id="160851722280695521">Spill Dino Run-spillet i Chrome</translation>
@@ -1261,6 +1264,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="4968522289500246572">Denne appen er designet for mobil, så det fungerer kanskje ikke så bra å endre størrelse på den. Det kan hende appen støter på problemer eller startes på nytt.</translation>
 <translation id="4969341057194253438">Slett opptak</translation>
 <translation id="4973922308112707173">To hull topp</translation>
+<translation id="4976702386844183910">Sist besøkt <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Vil du bruke mikrofonen?</translation>
 <translation id="4984339528288761049">Prc5 (konvolutt)</translation>
 <translation id="4989163558385430922">Se alle</translation>
@@ -1346,6 +1350,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="5215116848420601511">Betalingsmåter og adresser som bruker Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Skuff 13</translation>
+<translation id="5216942107514965959">Sist besøkt i dag</translation>
 <translation id="5222812217790122047">E-post er obligatorisk</translation>
 <translation id="5230733896359313003">Leveringsadresse</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="5333022057423422993">Chrome har funnet passordet du nettopp brukte, i et databrudd. For å sikre kontoene dine anbefaler vi at du sjekker de lagrede passordene dine.</translation>
 <translation id="5334013548165032829">Detaljerte systemlogger</translation>
 <translation id="5334145288572353250">Lagre adresse?</translation>
+<translation id="5335920952954443287">Bankende hjerte</translation>
 <translation id="5340250774223869109">Programmet er blokkert</translation>
 <translation id="534295439873310000">NFC-enheter</translation>
 <translation id="5344579389779391559">Denne siden kan prøve å belaste deg for penger</translation>
@@ -1531,6 +1537,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="5869522115854928033">Lagrede passord</translation>
 <translation id="5873013647450402046">Banken din vil bekrefte at det er deg.</translation>
 <translation id="5887400589839399685">Kortet er lagret</translation>
+<translation id="5887687176710214216">Sist besøkt i går</translation>
 <translation id="5895138241574237353">Start på nytt</translation>
 <translation id="5895187275912066135">Utstedt</translation>
 <translation id="5901630391730855834">Gul</translation>
@@ -1724,6 +1731,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="6529602333819889595">&amp;Slett likevel</translation>
 <translation id="6545864417968258051">Bluetooth-skanning</translation>
 <translation id="6547208576736763147">To hull venstre</translation>
+<translation id="6554732001434021288">Sist besøkt for <ph name="NUM_DAYS" /> dager siden</translation>
 <translation id="6556866813142980365">Gjør om</translation>
 <translation id="6569060085658103619">Du ser på en utvidelsesside</translation>
 <translation id="6573200754375280815">To hull høyre</translation>
@@ -1886,6 +1894,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="7118618213916969306">Søk etter nettadressen <ph name="SHORT_URL" /> på utklippstavlen</translation>
 <translation id="7119414471315195487">Lukk andre faner eller programmer</translation>
 <translation id="7129409597930077180">Kan ikke sende til denne adressen. Velg en annen adresse.</translation>
+<translation id="7132939140423847331">Administratoren din har forbudt kopiering av disse dataene.</translation>
 <translation id="7135130955892390533">Vis statusen</translation>
 <translation id="7138472120740807366">Leveringsmetode</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2057,6 +2066,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="7654909834015434372">Når du redigerer annoteringer, går dette dokumentet tilbake til den opprinnelige rotasjonen</translation>
 <translation id="765676359832457558">Skjul avanserte innstillinger</translation>
 <translation id="7658239707568436148">Avbryt</translation>
+<translation id="7659878911471462949">Gledestårer</translation>
 <translation id="7662298039739062396">Innstillingen kontrolleres av en utvidelse</translation>
 <translation id="7663736086183791259">Sertifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Ikke tillatt i Inkognito</translation>
@@ -2157,7 +2167,6 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Kan be om å få bruke virtuell virkelighet-enheter og -data</translation>
 <translation id="7984945080620862648">Du kan ikke gå til <ph name="SITE" /> akkurat nå fordi nettstedet sendte kryptert legitimasjon som Chrome ikke kan behandle. Nettverksfeil og -angrep er som regel kortvarige, så denne siden fungerer nok igjen senere.</translation>
-<translation id="79859296434321399">Du må installere ARCore for å se innhold med utvidet virkelighet</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Innbinding</translation>
 <translation id="7992044431894087211">Skjermdeling med <ph name="APPLICATION_TITLE" /> er gjenopptatt</translation>
@@ -2261,6 +2270,7 @@ I motsatt fall blir dette blokkert av personverninnstillingene. Dette gjør at i
 <translation id="830498451218851433">Halvfals</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">hvilke apper som er installert, og hvor ofte de brukes</translation>
+<translation id="8317207217658302555">Vil du oppdatere ARCore?</translation>
 <translation id="831997045666694187">Kveld</translation>
 <translation id="8321476692217554900">varsler</translation>
 <translation id="8328484624016508118">Når du lukker alle inkognitofaner, sletter Chrome
@@ -2331,7 +2341,6 @@ Mer informasjon:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Tilbakestill tillatelse}other{Tilbakestill tillatelser}}</translation>
 <translation id="8555010941760982128">Bruk denne koden i kassen</translation>
 <translation id="8557066899867184262">CVC-koden finner du på baksiden av kortet.</translation>
-<translation id="8558485628462305855">Du må oppdatere ARCore for å se innhold med utvidet virkelighet</translation>
 <translation id="8559762987265718583">En privat tilkobling til <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> kunne ikke etableres fordi datoen og klokkeslettet (<ph name="DATE_AND_TIME" />) er feil på enheten.</translation>
 <translation id="8564182942834072828">Separate dokumenter / ukollaterte eksemplarer</translation>
 <translation id="8564985650692024650">Chromium anbefaler at du tilbakestiller passordet ditt for <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> hvis du også har brukt det på andre nettsteder.</translation>
@@ -2443,6 +2452,7 @@ Mer informasjon:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" /> – trykk på Tab og deretter på Enter for å se nettleserloggen din i Chrome</translation>
 <translation id="8987927404178983737">Måned</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Ser du etter systemversjonen? Gå til</translation>
 <translation id="899688752321268742"><ph name="URL" /> vil vite når du bruker denne enheten aktivt</translation>
 <translation id="8996941253935762404">Nettstedet du er i ferd med å åpne, inneholder skadelige programmer</translation>
 <translation id="8997023839087525404">Tjeneren har presentert et sertifikat som ikke er offentlig vist i henhold til regelen om sertifikatåpenhet. Dette er et krav for enkelte sertifikater for å sikre at de er pålitelige, og bidrar til å beskytte mot angrep.</translation>

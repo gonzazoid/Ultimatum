@@ -44,7 +44,6 @@
 #include "third_party/blink/renderer/core/frame/sticky_ad_detector.h"
 #include "third_party/blink/renderer/core/layout/depth_ordered_layout_object_list.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
-#include "third_party/blink/renderer/core/paint/compositing/compositing_update_type.h"
 #include "third_party/blink/renderer/core/paint/layout_object_counter.h"
 #include "third_party/blink/renderer/platform/geometry/layout_size.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
@@ -67,6 +66,10 @@ using PaintRecord = PaintOpBuffer;
 struct PaintBenchmarkResult;
 }
 
+namespace gfx {
+class SizeF;
+}
+
 namespace ui {
 class Cursor;
 }
@@ -77,7 +80,6 @@ class ChromeClient;
 class CompositorAnimationTimeline;
 class DarkModeFilter;
 class DocumentLifecycle;
-class FloatSize;
 class FragmentAnchor;
 class Frame;
 class FrameViewAutoSizeInfo;
@@ -235,13 +237,6 @@ class CORE_EXPORT LocalFrameView final
   void ForceUpdateViewportIntersections();
 
   void SetPaintArtifactCompositorNeedsUpdate();
-
-  // Marks this frame, and ancestor frames, as needing a mandatory compositing
-  // update. This overrides throttling for one frame, up to kCompositingClean.
-  void SetNeedsForcedCompositingUpdate();
-  void ResetNeedsForcedCompositingUpdate() {
-    needs_forced_compositing_update_ = false;
-  }
 
   // Methods for getting/setting the size Blink should use to layout the
   // contents.
@@ -639,11 +634,11 @@ class CORE_EXPORT LocalFrameView final
   // Viewport size that should be used for viewport units (i.e. 'vh'/'vw').
   // May include the size of browser controls. See implementation for further
   // documentation.
-  FloatSize ViewportSizeForViewportUnits() const;
+  gfx::SizeF ViewportSizeForViewportUnits() const;
 
   // Initial containing block size for evaluating viewport-dependent media
   // queries.
-  FloatSize ViewportSizeForMediaQueries() const;
+  gfx::SizeF ViewportSizeForMediaQueries() const;
 
   void EnqueueScrollAnchoringAdjustment(ScrollableArea*);
   void DequeueScrollAnchoringAdjustment(ScrollableArea*);
@@ -927,9 +922,6 @@ class CORE_EXPORT LocalFrameView final
   void UpdatePluginsTimerFired(TimerBase*);
   bool UpdatePlugins();
 
-  void UpdateCompositedSelectionIfNeeded();
-  void SetNeedsCompositingUpdate(CompositingUpdateType);
-
   AXObjectCache* ExistingAXObjectCache() const;
 
   void SetLayoutSizeInternal(const gfx::Size&);
@@ -1117,7 +1109,6 @@ class CORE_EXPORT LocalFrameView final
   bool allows_layout_invalidation_after_layout_clean_ = true;
 #endif
   IntersectionObservationState intersection_observation_state_;
-  bool needs_forced_compositing_update_;
 
   bool needs_focus_on_fragment_;
 

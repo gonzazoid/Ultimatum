@@ -61,9 +61,9 @@ const base::Feature kDiscoFeedEndpoint{"DiscoFeedEndpoint",
 const base::Feature kXsurfaceMetricsReporting{
     "XsurfaceMetricsReporting", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kReliabilityLogging{"FeedReliabilityLogging",
-                                        base::FEATURE_DISABLED_BY_DEFAULT};
+                                        base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kFeedInteractiveRefresh{"FeedInteractiveRefresh",
-                                            base::FEATURE_DISABLED_BY_DEFAULT};
+                                            base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kFeedLoadingPlaceholder{"FeedLoadingPlaceholder",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
 const base::FeatureParam<bool>
@@ -75,8 +75,6 @@ const base::Feature kFeedClearImageMemoryCache{
     "FeedClearImageMemoryCache", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kFeedBackToTop{"FeedBackToTop",
                                    base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kFeedSignInPromoDismiss{"FeedSignInPromoDismiss",
-                                            base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kFeedStamp{"FeedStamp", base::FEATURE_DISABLED_BY_DEFAULT};
 
 const char kDefaultReferrerUrl[] = "https://www.google.com/";

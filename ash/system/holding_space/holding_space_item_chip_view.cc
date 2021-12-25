@@ -18,7 +18,7 @@
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/style/ash_color_provider.h"
 #include "ash/system/holding_space/holding_space_item_view.h"
-#include "ash/system/holding_space/holding_space_progress_ring.h"
+#include "ash/system/holding_space/holding_space_progress_indicator.h"
 #include "ash/system/holding_space/holding_space_progress_ring_animation.h"
 #include "ash/system/holding_space/holding_space_view_delegate.h"
 #include "base/bind.h"
@@ -143,43 +143,52 @@ VIEW_BUILDER_PROPERTY(bool, PaintToLayer)
 VIEW_BUILDER_PROPERTY(bool, ViewAccessibilityIsIgnored)
 END_VIEW_BUILDER
 
-// ProgressRingView ------------------------------------------------------------
+// ProgressIndicatorView -------------------------------------------------------
 
-class ProgressRingView : public views::View {
+class ProgressIndicatorView : public views::View {
  public:
-  ProgressRingView() = default;
-  ProgressRingView(const ProgressRingView&) = delete;
-  ProgressRingView& operator=(const ProgressRingView&) = delete;
-  ~ProgressRingView() override = default;
+  ProgressIndicatorView() = default;
+  ProgressIndicatorView(const ProgressIndicatorView&) = delete;
+  ProgressIndicatorView& operator=(const ProgressIndicatorView&) = delete;
+  ~ProgressIndicatorView() override = default;
+
+  // Copies the address of `progress_indicator_` to the specified `ptr`.
+  // NOTE: This method should only be invoked after `SetHoldingSpaceItem()`.
+  void CopyProgressIndicatorAddressTo(HoldingSpaceProgressIndicator** ptr) {
+    DCHECK(progress_indicator_);
+    *ptr = progress_indicator_.get();
+  }
 
   // Sets the underlying `item` for which to indicate progress.
   // NOTE: This method should be invoked only once.
   void SetHoldingSpaceItem(const HoldingSpaceItem* item) {
-    DCHECK(!progress_ring_);
-    progress_ring_ = HoldingSpaceProgressRing::CreateForItem(item);
+    DCHECK(!progress_indicator_);
+    progress_indicator_ = HoldingSpaceProgressIndicator::CreateForItem(item);
 
     SetPaintToLayer();
     layer()->SetFillsBoundsOpaquely(false);
-    layer()->Add(progress_ring_->layer());
+    layer()->Add(progress_indicator_->layer());
   }
 
  private:
   // views::View:
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override {
-    if (progress_ring_)
-      progress_ring_->layer()->SetBounds(GetLocalBounds());
+    if (progress_indicator_)
+      progress_indicator_->layer()->SetBounds(GetLocalBounds());
   }
 
   void OnThemeChanged() override {
     views::View::OnThemeChanged();
-    if (progress_ring_)
-      progress_ring_->InvalidateLayer();
+    if (progress_indicator_)
+      progress_indicator_->InvalidateLayer();
   }
 
-  std::unique_ptr<HoldingSpaceProgressRing> progress_ring_;
+  std::unique_ptr<HoldingSpaceProgressIndicator> progress_indicator_;
 };
 
-BEGIN_VIEW_BUILDER(/*no export*/, ProgressRingView, views::View)
+BEGIN_VIEW_BUILDER(/*no export*/, ProgressIndicatorView, views::View)
+VIEW_BUILDER_METHOD(CopyProgressIndicatorAddressTo,
+                    HoldingSpaceProgressIndicator**)
 VIEW_BUILDER_PROPERTY(const HoldingSpaceItem*, HoldingSpaceItem)
 END_VIEW_BUILDER
 
@@ -188,7 +197,7 @@ END_VIEW_BUILDER
 
 DEFINE_VIEW_BUILDER(/*no export*/, ash::ObservableRoundedImageView)
 DEFINE_VIEW_BUILDER(/*no export*/, ash::PaintCallbackLabel)
-DEFINE_VIEW_BUILDER(/*no export*/, ash::ProgressRingView)
+DEFINE_VIEW_BUILDER(/*no export*/, ash::ProgressIndicatorView)
 
 namespace ash {
 namespace {
@@ -254,8 +263,9 @@ HoldingSpaceItemChipView::HoldingSpaceItemChipView(
       .SetPreferredSize(gfx::Size(kPreferredWidth, kPreferredHeight))
       .SetLayoutManager(std::move(layout_manager))
       .AddChild(
-          views::Builder<ProgressRingView>()
+          views::Builder<ProgressIndicatorView>()
               .SetHoldingSpaceItem(item)
+              .CopyProgressIndicatorAddressTo(&progress_indicator_)
               .SetUseDefaultFillLayout(true)
               .AddChild(views::Builder<ObservableRoundedImageView>()
                             .SetCornerRadius(kHoldingSpaceChipIconSize / 2)
@@ -332,6 +342,7 @@ HoldingSpaceItemChipView::HoldingSpaceItemChipView(
                             base::Unretained(this))));
 
   UpdateImage();
+  UpdateImageAndProgressIndicatorVisibility();
   UpdateLabels();
 }
 
@@ -494,6 +505,32 @@ void HoldingSpaceItemChipView::UpdateImage() {
   UpdateImageTransform();
 }
 
+void HoldingSpaceItemChipView::UpdateImageAndProgressIndicatorVisibility() {
+  // If the associated `item()` has been deleted then `this` is in the process
+  // of being destroyed and no action needs to be taken.
+  if (!item())
+    return;
+
+  const bool is_secondary_action_visible =
+      secondary_action_container_->GetVisible();
+
+  // The inner icon of the `progress_indicator_` may be visible iff there is
+  // no visible secondary action or multiselect UI.
+  const bool is_progress_indicator_inner_icon_visible =
+      !is_secondary_action_visible && !checkmark()->GetVisible();
+
+  // Similarly, the `image_` may be visible iff there is no visible secondary
+  // action or multiselect UI but additionally, when v2 animations are enabled,
+  // the `image_` may only be visible upon progress completion.
+  bool is_image_visible = is_progress_indicator_inner_icon_visible;
+  if (features::IsHoldingSpaceInProgressAnimationV2Enabled())
+    is_image_visible &= item()->progress().IsComplete();
+
+  image_->SetVisible(is_image_visible);
+  progress_indicator_->SetInnerIconVisible(
+      is_progress_indicator_inner_icon_visible);
+}
+
 void HoldingSpaceItemChipView::UpdateImageTransform() {
   // If the associated `item()` has been deleted then `this` is in the process
   // of being destroyed and no action needs to be taken.
@@ -596,8 +633,8 @@ void HoldingSpaceItemChipView::UpdateSecondaryAction() {
       HoldingSpaceItem::IsDownload(item()->type()) && IsMouseHovered();
 
   if (!has_secondary_action) {
-    image_->SetVisible(!checkmark()->GetVisible());
     secondary_action_container_->SetVisible(false);
+    UpdateImageAndProgressIndicatorVisibility();
     return;
   }
 
@@ -606,8 +643,8 @@ void HoldingSpaceItemChipView::UpdateSecondaryAction() {
   secondary_action_pause_->SetVisible(!is_item_paused);
   secondary_action_resume_->SetVisible(is_item_paused);
 
-  image_->SetVisible(false);
   secondary_action_container_->SetVisible(true);
+  UpdateImageAndProgressIndicatorVisibility();
 }
 
 BEGIN_METADATA(HoldingSpaceItemChipView, HoldingSpaceItemView)

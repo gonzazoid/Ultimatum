@@ -57,6 +57,7 @@
 <translation id="2348335408836342058">Chrome necesita permiso para acceder a tu cámara y micrófono para este sitio</translation>
 <translation id="234869673307233423">Chrome no puede revisar las contraseñas. Vuelve a intentarlo más tarde.</translation>
 <translation id="235650106824528204">El administrador del perfil de trabajo puede quitar cualquier dato de Chrome que se genere durante el uso de este perfil (como la creación de favoritos, un historial, contraseñas y otras opciones de configuración). <ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">Continuar</translation>
 <translation id="2429317896000329049">Google Chrome no pudo sincronizar los datos porque la sincronización no está disponible para el dominio.</translation>
 <translation id="2467438592969358367">Google Chrome desea exportar tus contraseñas. Para permitirlo, ingresa tu contraseña de Windows.</translation>
 <translation id="2485422356828889247">Desinstalación</translation>
@@ -141,6 +142,7 @@
 <translation id="4343195214584226067">Se agregó <ph name="EXTENSION_NAME" /> a Chrome</translation>
 <translation id="4384570495110188418">Chrome no puede revisar las contraseñas porque no accediste a tu cuenta</translation>
 <translation id="4407807842708586359">SO de Google Chrome</translation>
+<translation id="4427306783828095590">La protección mejorada permite bloquear mejor la suplantación de identidad (phishing) y el software malicioso.</translation>
 <translation id="4450664632294415862">Chrome: Acceso a la red - <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">Hay otra operación en Google Chrome en curso. Vuelve a intentarlo más tarde.</translation>
 <translation id="4480040274068703980">El Chrome OS no pudo sincronizar los datos porque se produjo un error de acceso.</translation>
@@ -169,7 +171,6 @@
 <translation id="5193136243808726294">El Sistema operativo Google Chrome no puede abrir esta página.</translation>
 <translation id="521447420733633466">Si compartes un dispositivo, tus amigos y familiares podrán navegar de forma independiente y configurar Chrome según sus preferencias.</translation>
 <translation id="5251420635869119124">Los invitados pueden utilizar Chrome sin dejar nada detrás.</translation>
-<translation id="5251679006894510177">Ya casi completas la actualización. Reinicia Chrome para completar la actualización. No se volverán a abrir las ventanas de incógnito.</translation>
 <translation id="5334487786912937552">Chrome necesita permiso de acceso al almacenamiento para descargar archivos.</translation>
 <translation id="5386244825306882791">También controla qué página se muestra al iniciar Chrome o al realizar búsquedas desde el cuadro multifunción.</translation>
 <translation id="5394833366792865639">Compartir una pestaña de Chrome</translation>
@@ -240,6 +241,7 @@
 <translation id="7398801000654795464">Accediste a Google Chrome con <ph name="USER_EMAIL_ADDRESS" />. Usa la misma cuenta para volver a acceder.</translation>
 <translation id="7408085963519505752">Condiciones del Chrome OS</translation>
 <translation id="7419046106786626209">El Chrome OS no pudo sincronizar los datos porque la sincronización no está disponible para el dominio.</translation>
+<translation id="7481213027396403996">Obtén la seguridad más sólida de Chrome</translation>
 <translation id="7486227612705979895">Chrome accederá a tus datos de Drive para hacer sugerencias en la barra de direcciones</translation>
 <translation id="7535429826459677826">Google Chrome Dev</translation>
 <translation id="7573289029918943991">Para saber si tu dispositivo está actualizado, ve a la <ph name="LINK_BEGIN" />configuración del Sistema operativo Chrome<ph name="LINK_END" /></translation>
@@ -298,6 +300,8 @@
 <translation id="8862326446509486874">No tienes los derechos que se requieren para realizar la instalación al nivel del sistema. Intenta ejecutar el instalador nuevamente como Administrador.</translation>
 <translation id="8914504000324227558">Volver a iniciar Chrome</translation>
 <translation id="8922193594870374009">Para enviar un número de <ph name="ORIGIN" /> a tu teléfono Android, accede a Chrome en ambos dispositivos.</translation>
+<translation id="8927704157641862988">Personaliza las opciones de privacidad más importantes de Chrome. Esta guía no incluye todas las opciones ni los parámetros de configuración.</translation>
+<translation id="8983720963221508955">Activaste la Navegación segura mejorada en tu cuenta. Ahora actívala en Chrome.</translation>
 <translation id="8986207147630327271">Estás agregando un perfil de trabajo a este navegador y dándole a tu administrador el control únicamente del perfil de trabajo.</translation>
 <translation id="8999208279178790196">{0,plural, =0{Hay una actualización de Chrome disponible}=1{Hay una actualización de Chrome disponible}other{Hay una actualización de Chrome disponible hace # días}}</translation>
 <translation id="9026991721384951619">El Chrome OS no pudo sincronizar los datos porque la información de acceso de la cuenta está desactualizada.</translation>

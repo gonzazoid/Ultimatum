@@ -2841,25 +2841,35 @@ bool AXObject::ComputeAccessibilityIsIgnoredButIncludedInTree() const {
   // Allow the browser side ax tree to access "visibility: [hidden|collapse]"
   // and "display: none" nodes. This is useful for APIs that return the node
   // referenced by aria-labeledby and aria-describedby.
-  // An element must have an id attribute or it cannot be referenced by
-  // aria-labelledby or aria-describedby.
-  if (RuntimeEnabledFeatures::AccessibilityExposeDisplayNoneEnabled()) {
-    if (Element* element = GetElement()) {
-      if (element->FastHasAttribute(html_names::kIdAttr) &&
-          IsHiddenViaStyle()) {
-        return true;
-      }
-    }
-  } else if (GetLayoutObject()) {
+  // The conditions are oversimplified, we will include more nodes than
+  // strictly necessary for aria-labelledby and aria-describedby but we
+  // avoid performing very complicated checks that could impact performance.
+
+  // We identify nodes in display none subtrees, or nodes that are display
+  // locked, because they lack a layout object.
+  if (!GetLayoutObject()) {
+    // Datalists and options inside them will never a layout object. They
+    // match the condition above, but we don't need them for accessible
+    // naming nor have any other use in the accessibility tree, so we exclude
+    // them specifically. What's more, including them breaks the browser test
+    // SelectToSpeakKeystrokeSelectionTest.textFieldWithComboBoxSimple.
+    // Selection and position code takes into account ignored nodes, and it
+    // looks like including ignored nodes for datalists and options is totally
+    // unexpected, making selections misbehave.
+    if (!IsA<HTMLDataListElement>(node) && !IsA<HTMLOptionElement>(node))
+      return true;
+
+  } else {  // GetLayoutObject() != null
+    // We identify hidden or collapsed nodes by their associated style values.
     if (GetLayoutObject()->Style()->Visibility() != EVisibility::kVisible)
       return true;
-  }
 
-  // Allow the browser side ax tree to access "aria-hidden" nodes.
-  // This is useful for APIs that return the node referenced by
-  // aria-labeledby and aria-describedby.
-  if (GetLayoutObject() && IsAriaHidden())
-    return true;
+    // Allow the browser side ax tree to access "aria-hidden" nodes.
+    // This is useful for APIs that return the node referenced by
+    // aria-labeledby and aria-describedby.
+    if (IsAriaHidden())
+      return true;
+  }
 
   // Labels are sometimes marked ignored, to prevent duplication when the AT
   // reads the label and the control it labels (see
@@ -3463,6 +3473,15 @@ String AXObject::RecursiveTextAlternative(
                                 name_from, nullptr, nullptr);
 }
 
+// There are 4 ways to use CSS to hide something:
+// * "display: none" is "destroy rendering state and don't do anything in the
+//   subtree"
+// * "visibility: [hidden|collapse]" are "don't visually show things, but still
+//   keep all of the rendering up to date"
+// * "content-visibility: hidden" is "don't show anything, skip all of the
+//   work, but don't destroy the work that was already there"
+// * "content-visibility: auto" is "paint when it's scrolled into the viewport,
+//   but its layout information is not updated when it isn't"
 bool AXObject::ComputeIsHiddenViaStyle() const {
   Node* node = GetNode();
   if (!node)
@@ -3606,7 +3625,7 @@ String AXObject::AriaTextAlternative(
         // calculations.
         AXObjectSet visited_copy = visited;
         text_alternative = TextFromElements(
-            true, visited, elements_from_attribute, related_objects);
+            true, visited_copy, elements_from_attribute, related_objects);
         if (!ids.IsEmpty())
           AXObjectCache().UpdateReverseRelations(this, ids);
         if (!text_alternative.IsNull()) {
@@ -5241,11 +5260,11 @@ int AXObject::GetDOMNodeId() const {
 }
 
 void AXObject::GetRelativeBounds(AXObject** out_container,
-                                 FloatRect& out_bounds_in_container,
+                                 gfx::RectF& out_bounds_in_container,
                                  skia::Matrix44& out_container_transform,
                                  bool* clips_children) const {
   *out_container = nullptr;
-  out_bounds_in_container = FloatRect();
+  out_bounds_in_container = gfx::RectF();
   out_container_transform.setIdentity();
 
   // First check if it has explicit bounds, for example if this element is tied
@@ -5255,7 +5274,7 @@ void AXObject::GetRelativeBounds(AXObject** out_container,
   if (!explicit_element_rect_.IsEmpty()) {
     *out_container = AXObjectCache().ObjectFromAXID(explicit_container_id_);
     if (*out_container) {
-      out_bounds_in_container = FloatRect(explicit_element_rect_);
+      out_bounds_in_container = gfx::RectF(explicit_element_rect_);
       return;
     }
   }
@@ -5278,7 +5297,7 @@ void AXObject::GetRelativeBounds(AXObject** out_container,
 
   if (IsWebArea()) {
     if (LocalFrameView* view = layout_object->GetFrame()->View()) {
-      out_bounds_in_container.set_size(FloatSize(view->Size()));
+      out_bounds_in_container.set_size(gfx::SizeF(view->Size()));
 
       // If it's a popup, account for the popup window's offset.
       if (view->GetPage()->GetChromeClient().IsPopup()) {
@@ -5347,7 +5366,7 @@ void AXObject::GetRelativeBounds(AXObject** out_container,
   if (layout_object->IsBox() && layout_object->GetNode() &&
       layout_object->GetNode()->IsFrameOwnerElement()) {
     out_bounds_in_container =
-        FloatRect(To<LayoutBox>(layout_object)->PhysicalContentBoxRect());
+        gfx::RectF(To<LayoutBox>(layout_object)->PhysicalContentBoxRect());
   }
 
   // If the container has a scroll offset, subtract that out because we want our
@@ -5370,9 +5389,9 @@ void AXObject::GetRelativeBounds(AXObject** out_container,
   }
 }
 
-FloatRect AXObject::LocalBoundingBoxRectForAccessibility() {
+gfx::RectF AXObject::LocalBoundingBoxRectForAccessibility() {
   if (!GetLayoutObject())
-    return FloatRect();
+    return gfx::RectF();
   DCHECK(GetLayoutObject()->IsText());
   UpdateCachedAttributeValuesIfNeeded();
   return cached_local_bounding_box_rect_for_accessibility_;
@@ -5380,10 +5399,10 @@ FloatRect AXObject::LocalBoundingBoxRectForAccessibility() {
 
 LayoutRect AXObject::GetBoundsInFrameCoordinates() const {
   AXObject* container = nullptr;
-  FloatRect bounds;
+  gfx::RectF bounds;
   skia::Matrix44 transform;
   GetRelativeBounds(&container, bounds, transform);
-  FloatRect computed_bounds(0, 0, bounds.width(), bounds.height());
+  gfx::RectF computed_bounds(0, 0, bounds.width(), bounds.height());
   while (container && container != this) {
     computed_bounds.Offset(bounds.x(), bounds.y());
     if (!container->IsWebArea()) {

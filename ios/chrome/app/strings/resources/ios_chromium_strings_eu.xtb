@@ -31,7 +31,6 @@
 <translation id="2478931088402984578">Hautatu <ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" /></translation>
 <translation id="2567507405773541360">Egin gauza gehiago Chromium-ekin: sinplea, segurua eta inoiz baino bizkorragoa da</translation>
 <translation id="2590893390871230428">Sinkronizatu Chromium-eko datuak</translation>
-<translation id="259094968798709429"><ph name="BEGIN_LINK" />Pasahitz-kudeatzailea<ph name="END_LINK" /> atalean gordetzen dira pasahitzak, edozein gailutan erabili ahal izan ditzazun.</translation>
 <translation id="2650312721222849884">Chromium erabiltzen duzun gailu guztietan zure fitxak eskura izateko, aktibatu sinkronizazioa</translation>
 <translation id="2684230048001240293">Ezarri Chromium arakatzaile lehenetsi gisa fitxak, pasahitzak eta ordainketa-informazioa gailu guztietan sinkronizatzeko</translation>
 <translation id="2730884209570016437">Chromium-ek ezin du erabili kamera, beste aplikazio bat ari delako hura erabiltzen</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">Kontu hau eta gorde gabeko datuak kendu egingo dira Chromium-etik.</translation>
 <translation id="894437814105052438">Saioa amaitzen duzunean, Chromium-ek ez du datu berririk sinkronizatuko Google-ko kontuarekin. Lehendik sinkronizatuta dauden datuak kontuan geratuko dira.</translation>
 <translation id="9022552996538154597">Hasi saioa Chromium-en</translation>
+<translation id="9059693977935746710">Ez duzu pasahitza gogoratu beharko. <ph name="EMAIL" /> kontuko Pasahitz-kudeatzailea atalean gordeko da.</translation>
 <translation id="9089354809943900324">Chromium zaharkituta dago</translation>
 <translation id="9110075932708282655">Erabili Chromium modu lehenetsian</translation>
 <translation id="921174536258924340">Chromium-ek ezin izan ditu egiaztatu pasahitz guztiak. Saiatu berriro bihar edo <ph name="BEGIN_LINK" />egiaztatu pasahitzak Google-ko kontuan<ph name="END_LINK" />.</translation>

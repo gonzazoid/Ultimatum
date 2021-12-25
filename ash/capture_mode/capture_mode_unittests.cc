@@ -37,10 +37,12 @@
 #include "ash/display/output_protection_delegate.h"
 #include "ash/display/screen_orientation_controller_test_api.h"
 #include "ash/display/window_tree_host_manager.h"
+#include "ash/projector/projector_annotation_tray.h"
 #include "ash/projector/projector_controller_impl.h"
 #include "ash/projector/test/mock_projector_client.h"
 #include "ash/public/cpp/capture_mode/capture_mode_test_api.h"
 #include "ash/public/cpp/holding_space/holding_space_test_api.h"
+#include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
 #include "ash/public/cpp/projector/projector_session.h"
 #include "ash/public/cpp/shell_window_ids.h"
 #include "ash/root_window_controller.h"
@@ -90,6 +92,7 @@
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/display/types/display_constants.h"
+#include "ui/events/event_handler.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/gfx/geometry/dip_util.h"
 #include "ui/gfx/geometry/insets.h"
@@ -4929,24 +4932,19 @@ TEST_F(ProjectorCaptureModeIntegrationTests, WithAdvancedSettings) {
   CaptureModeMenuGroup* save_to_menu_group = test_api.GetSaveToMenuGroup();
   EXPECT_FALSE(save_to_menu_group);
 
-  // The audio-off option should be disabled, unchecked and not interactable
-  // (even when clicked).
-  views::View* audio_off_option = test_api.GetAudioOffOption();
-  EXPECT_FALSE(audio_off_option->GetEnabled());
+  // The audio-off option should never be added.
+  EXPECT_FALSE(test_api.GetAudioOffOption());
+
   CaptureModeMenuGroup* audio_input_menu_group =
       test_api.GetAudioInputMenuGroup();
   EXPECT_TRUE(audio_input_menu_group->IsOptionChecked(kAudioMicrophone));
-  EXPECT_FALSE(audio_input_menu_group->IsOptionChecked(kAudioOff));
-  ClickOnView(audio_off_option, event_generator);
-  EXPECT_TRUE(audio_input_menu_group->IsOptionChecked(kAudioMicrophone));
-  EXPECT_FALSE(audio_input_menu_group->IsOptionChecked(kAudioOff));
   EXPECT_TRUE(controller->enable_audio_recording());
 }
 
 // Tests the keyboard navigation for projector mode with advanced capture mode
 // settings enabled. The `image_toggle_button_` in `CaptureModeTypeView` and the
-// `Off` audio input option in `CaptureModeAdvancedSettingsView` are disabled in
-// projector mode, thus they should be skipped while tabbing though.
+// `Off` audio input option in `CaptureModeAdvancedSettingsView` are not
+// available in projector mode.
 TEST_F(ProjectorCaptureModeIntegrationTests,
        KeyboardNavigationWithAdvancedSettings) {
   base::test::ScopedFeatureList scoped_feature_list{
@@ -4961,9 +4959,8 @@ TEST_F(ProjectorCaptureModeIntegrationTests,
   using FocusGroup = CaptureModeSessionFocusCycler::FocusGroup;
   CaptureModeSessionTestApi test_api(controller->capture_mode_session());
 
-  EXPECT_FALSE(GetImageToggleButton()->GetEnabled());
-  // Tab once, check the image toggle button is skipped and the current focused
-  // view is the video toggle button.
+  EXPECT_FALSE(GetImageToggleButton());
+  // Tab once, check the current focused view is the video toggle button.
   auto* event_generator = GetEventGenerator();
   SendKey(ui::VKEY_TAB, event_generator);
   EXPECT_EQ(test_api.GetCurrentFocusedView()->GetView(),
@@ -4979,10 +4976,10 @@ TEST_F(ProjectorCaptureModeIntegrationTests,
   ASSERT_TRUE(settings_menu);
 
   CaptureModeAdvancedSettingsTestApi advanced_settings_test_api;
-  // Tab twice, check the `Off` option is skipped and remains disabled. The
-  // current focused view is the `Microphone` option.
+  // The `Off` option should not be visible.
+  EXPECT_FALSE(advanced_settings_test_api.GetAudioOffOption());
+  // Tab twice, the current focused view is the `Microphone` option.
   SendKey(ui::VKEY_TAB, event_generator, /*shift_down=*/false, /*count=*/2);
-  EXPECT_FALSE(advanced_settings_test_api.GetAudioOffOption()->GetEnabled());
   EXPECT_EQ(test_api.GetCurrentFocusedView()->GetView(),
             advanced_settings_test_api.GetMicrophoneOption());
 }
@@ -4992,10 +4989,9 @@ TEST_F(ProjectorCaptureModeIntegrationTests, BarButtonsState) {
   StartProjectorModeSession();
   EXPECT_TRUE(controller->IsActive());
 
-  // The image toggle button should be disabled, whereas the video toggle button
-  // should be enabled and active.
-  EXPECT_FALSE(GetImageToggleButton()->GetEnabled());
-  EXPECT_FALSE(GetImageToggleButton()->GetToggled());
+  // The image toggle button shouldn't be available, whereas the video toggle
+  // button should be enabled and active.
+  EXPECT_FALSE(GetImageToggleButton());
   EXPECT_TRUE(GetVideoToggleButton()->GetEnabled());
   EXPECT_TRUE(GetVideoToggleButton()->GetToggled());
 }
@@ -5035,6 +5031,17 @@ TEST_F(ProjectorCaptureModeIntegrationTests,
   EXPECT_FALSE(controller->IsActive());
   EXPECT_FALSE(ProjectorSession::Get()->is_active());
   EXPECT_FALSE(controller->is_recording_in_progress());
+}
+
+TEST_F(ProjectorCaptureModeIntegrationTests,
+       ProjectorSessionNeverStartsWhenVideoRecordingIsOnGoing) {
+  auto* controller = StartCaptureSession(CaptureModeSource::kFullscreen,
+                                         CaptureModeType::kVideo);
+  controller->StartVideoRecordingImmediatelyForTesting();
+  EXPECT_TRUE(controller->is_recording_in_progress());
+  EXPECT_FALSE(ProjectorSession::Get()->is_active());
+  EXPECT_NE(ProjectorController::Get()->GetNewScreencastPrecondition().state,
+            NewScreencastPreconditionState::kEnabled);
 }
 
 namespace {
@@ -5197,6 +5204,78 @@ TEST_P(ProjectorCaptureModeIntegrationTests, RecordingOverlayWidgetBounds) {
   EXPECT_FALSE(overlay_controller->is_enabled());
   auto* overlay_window = overlay_controller->GetOverlayNativeWindow();
   VerifyOverlayWindow(overlay_window, capture_source);
+}
+
+namespace {
+
+// Defines a class that intercepts the events at the post-target handling phase
+// and caches the last event target to which the event was routed.
+class EventTargetCatcher : public ui::EventHandler {
+ public:
+  EventTargetCatcher() {
+    Shell::GetPrimaryRootWindow()->AddPostTargetHandler(this);
+  }
+  EventTargetCatcher(const EventTargetCatcher&) = delete;
+  EventTargetCatcher& operator=(const EventTargetCatcher&) = delete;
+  ~EventTargetCatcher() override {
+    Shell::GetPrimaryRootWindow()->RemovePostTargetHandler(this);
+  }
+
+  ui::EventTarget* last_event_target() { return last_event_target_; }
+
+  // ui::EventHandler:
+  void OnEvent(ui::Event* event) override {
+    ui::EventHandler::OnEvent(event);
+    last_event_target_ = event->target();
+  }
+
+ private:
+  ui::EventTarget* last_event_target_ = nullptr;
+};
+
+}  // namespace
+
+TEST_F(ProjectorCaptureModeIntegrationTests, RecordingOverlayWidgetTargeting) {
+  auto* controller = CaptureModeController::Get();
+  controller->SetSource(CaptureModeSource::kFullscreen);
+  StartProjectorModeSession();
+  EXPECT_TRUE(controller->IsActive());
+
+  PressAndReleaseKey(ui::VKEY_RETURN);
+  WaitForRecordingToStart();
+  CaptureModeTestApi test_api;
+  RecordingOverlayController* overlay_controller =
+      test_api.GetRecordingOverlayController();
+
+  auto* projector_controller = ProjectorControllerImpl::Get();
+  projector_controller->OnMarkerPressed();
+  EXPECT_TRUE(overlay_controller->is_enabled());
+  auto* overlay_window = overlay_controller->GetOverlayNativeWindow();
+  VerifyOverlayEnabledState(overlay_window, /*overlay_enabled_state=*/true);
+
+  // Clicking anywhere outside the projector shelf pod should be targeted to the
+  // overlay widget window.
+  EventTargetCatcher event_target_catcher;
+  auto* event_generator = GetEventGenerator();
+  event_generator->set_current_screen_location(gfx::Point(10, 10));
+  event_generator->ClickLeftButton();
+  EXPECT_EQ(overlay_window, event_target_catcher.last_event_target());
+
+  // Now move the mouse over the projector shelf pod, the overlay should not
+  // consume the event, and it should instead go through to that pod.
+  auto* root_window = Shell::GetPrimaryRootWindow();
+  ProjectorAnnotationTray* annotations_tray =
+      RootWindowController::ForWindow(root_window)
+          ->GetStatusAreaWidget()
+          ->projector_annotation_tray();
+  EXPECT_TRUE(annotations_tray->visible_preferred());
+  event_generator->MoveMouseTo(
+      annotations_tray->GetBoundsInScreen().CenterPoint());
+  EXPECT_EQ(annotations_tray->GetWidget()->GetNativeWindow(),
+            event_target_catcher.last_event_target());
+
+  // The overlay status hasn't changed.
+  VerifyOverlayEnabledState(overlay_window, /*overlay_enabled_state=*/true);
 }
 
 // Tests that neither preview notification nor recording in tote is shown if in
@@ -5742,13 +5821,13 @@ TEST_F(CaptureModeAdvancedSettingsTest, SwitchWhichFolderToUserFromOptions) {
   EXPECT_FALSE(capture_folder.is_default_downloads_folder);
 }
 
-// Tests that when capture label widget overlaps with settings widget, hide
-// capture label widget. Show capture label widget after closing settings
-// widget.
+// Tests that when there's no overlap betwwen capture label widget and settings
+// widget, capture label widget is shown/hidden correctly after open/close the
+// folder selection window.
 TEST_F(CaptureModeAdvancedSettingsTest,
-       CaptureLabelViewOverlapsWithSettingsView) {
-  // Update the display size to make sure capture label widget will not overlap
-  // with settings widget
+       CaptureLabelViewNotOverlapsWithSettingsView) {
+  // Update the display size to make sure capture label widget will not
+  // overlap with settings widget
   UpdateDisplay("1200x1000");
 
   auto* controller = StartImageRegionCapture();
@@ -5764,29 +5843,69 @@ TEST_F(CaptureModeAdvancedSettingsTest,
   EXPECT_TRUE(capture_label_widget->IsVisible());
   EXPECT_TRUE(settings_widget->IsVisible());
 
+  // Open folder selection window, check that both capture label widget and
+  // settings widget are invisible.
+  CaptureModeAdvancedSettingsTestApi test_api;
+  auto* dialog_factory = FakeFolderSelectionDialogFactory::Get();
+  ClickOnView(test_api.GetSelectFolderMenuItem(), event_generator);
+  EXPECT_TRUE(IsFolderSelectionDialogShown());
+  EXPECT_FALSE(capture_label_widget->IsVisible());
+  EXPECT_FALSE(settings_widget->IsVisible());
+
+  // Now close folder selection window, check that capture label widget and
+  // settings widget become visible.
+  dialog_factory->CancelDialog();
+  EXPECT_FALSE(IsFolderSelectionDialogShown());
+  EXPECT_TRUE(capture_label_widget->IsVisible());
+  EXPECT_EQ(capture_label_widget->GetLayer()->GetTargetOpacity(), 1.f);
+  EXPECT_TRUE(settings_widget->IsVisible());
+
   // Close settings widget. Capture label widget is visible.
   ClickOnView(GetSettingsButton(), event_generator);
   EXPECT_TRUE(capture_label_widget->IsVisible());
   controller->Stop();
+}
 
+// Tests that when capture label widget overlaps with settings widget, capture
+// label widget is shown/hidden correctly after open/close the folder selection
+// window, open/close settings menu. Regression test for
+// https://crbug.com/1279606.
+TEST_F(CaptureModeAdvancedSettingsTest,
+       CaptureLabelViewOverlapsWithSettingsView) {
   // Update display size to make capture label widget overlap with settings
   // widget.
   UpdateDisplay("1100x700");
-  controller = StartImageRegionCapture();
+  auto* controller = StartImageRegionCapture();
+  auto* event_generator = GetEventGenerator();
 
-  // Tests that capture label widget overlaps with settings widget and is hidden
-  // after setting widget is shown.
-  capture_label_widget = GetCaptureModeLabelWidget();
+  // Tests that capture label widget overlaps with settings widget and is
+  // hidden after setting widget is shown.
+  auto* capture_label_widget = GetCaptureModeLabelWidget();
   ClickOnView(GetSettingsButton(), event_generator);
-  settings_widget = GetCaptureModeSettingsWidget();
+  auto* settings_widget = GetCaptureModeSettingsWidget();
   EXPECT_TRUE(capture_label_widget->GetWindowBoundsInScreen().Intersects(
       settings_widget->GetWindowBoundsInScreen()));
   EXPECT_FALSE(GetCaptureModeLabelWidget()->IsVisible());
   EXPECT_TRUE(settings_widget->IsVisible());
 
-  // Tests that capture label widget is visible after settings widget is closed.
+  // Open folder selection window, capture label widget is invisible.
+  CaptureModeAdvancedSettingsTestApi test_api;
+  auto* dialog_factory = FakeFolderSelectionDialogFactory::Get();
+  ClickOnView(test_api.GetSelectFolderMenuItem(), event_generator);
+  EXPECT_TRUE(IsFolderSelectionDialogShown());
+  EXPECT_FALSE(capture_label_widget->IsVisible());
+
+  // Close folder selection window, capture label widget is invisible.
+  dialog_factory->CancelDialog();
+  EXPECT_FALSE(IsFolderSelectionDialogShown());
+  EXPECT_FALSE(capture_label_widget->IsVisible());
+
+  // Tests that capture label widget is visible after settings widget is
+  // closed.
   ClickOnView(GetSettingsButton(), event_generator);
   EXPECT_TRUE(capture_label_widget->IsVisible());
+  EXPECT_EQ(capture_label_widget->GetLayer()->GetTargetOpacity(), 1.f);
+  controller->Stop();
 }
 
 // Tests the basic keyboard navigation functions for the settings menu.

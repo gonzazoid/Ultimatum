@@ -9,12 +9,14 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/projector/projector_controller.h"
+#include "ash/webui/projector_app/public/cpp/projector_app_constants.h"
 #include "base/bind.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
+#include "chrome/browser/ui/chrome_pages.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/soda/constants.h"
@@ -39,10 +41,11 @@ inline const speech::LanguageCode GetLocaleLanguageCode() {
 void ProjectorAppClientImpl::RegisterProfilePrefs(
     user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(
-      ash::prefs::kProjectorCreationFlowEnabled, false,
+      ash::prefs::kProjectorCreationFlowEnabled, /*default_value=*/false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterStringPref(
-      ash::prefs::kProjectorCreationFlowLanguage, kUsEnglishLocale,
+      ash::prefs::kProjectorCreationFlowLanguage,
+      /*default_value=*/kUsEnglishLocale,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
   registry->RegisterIntegerPref(
       ash::prefs::kProjectorGalleryOnboardingShowCount, 0,
@@ -50,6 +53,8 @@ void ProjectorAppClientImpl::RegisterProfilePrefs(
   registry->RegisterIntegerPref(
       ash::prefs::kProjectorViewerOnboardingShowCount, 0,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(ash::prefs::kProjectorAllowByPolicy,
+                                /*default_value=*/false);
 }
 
 ProjectorAppClientImpl::ProjectorAppClientImpl()
@@ -93,18 +98,18 @@ ProjectorAppClientImpl::GetUrlLoaderFactory() {
 }
 
 void ProjectorAppClientImpl::OnNewScreencastPreconditionChanged(
-    bool can_start) {
+    const ash::NewScreencastPrecondition& precondition) {
   for (auto& observer : observers_)
-    observer.OnNewScreencastPreconditionChanged(can_start);
+    observer.OnNewScreencastPreconditionChanged(precondition);
 }
 
-const std::set<ash::PendingScreencast>&
-ProjectorAppClientImpl::GetPendingScreencasts() const {
+const ash::PendingScreencastSet& ProjectorAppClientImpl::GetPendingScreencasts()
+    const {
   return pending_screencast_manager_.GetPendingScreencasts();
 }
 
 void ProjectorAppClientImpl::NotifyScreencastsPendingStatusChanged(
-    const std::set<ash::PendingScreencast>& pending_screencast) {
+    const ash::PendingScreencastSet& pending_screencast) {
   for (auto& observer : observers_)
     observer.OnScreencastsPendingStatusChanged(pending_screencast);
 }
@@ -140,4 +145,17 @@ bool ProjectorAppClientImpl::IsSpeechRecognitionAvailable() {
   return soda_installation_controller_ &&
          soda_installation_controller_->IsSodaAvailable(
              GetLocaleLanguageCode());
+}
+
+void ProjectorAppClientImpl::OpenFeedbackDialog() {
+  Profile* profile = ProfileManager::GetActiveUserProfile();
+  constexpr char kProjectorAppFeedbackCategoryTag[] = "FromProjectorApp";
+  chrome::ShowFeedbackPage(GURL(ash::kChromeUITrustedProjectorUrl), profile,
+                           chrome::kFeedbackSourceProjectorApp,
+                           /*description_template=*/std::string(),
+                           /*description_placeholder_text=*/std::string(),
+                           kProjectorAppFeedbackCategoryTag,
+                           /*extra_diagnostics=*/std::string());
+  // TODO(crbug/1048368): Communicate the dialog failing to open by returning an
+  // error string. For now, assume that the dialog has opened successfully.
 }

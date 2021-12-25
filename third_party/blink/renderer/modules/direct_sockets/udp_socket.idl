@@ -2,10 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-// https://github.com/WICG/raw-sockets/blob/main/docs/explainer.md#udp
+// https://github.com/WICG/direct-sockets/blob/main/docs/explainer.md#udp
 
 [
     Exposed=Window,
+    ActiveScriptWrappable,
     RuntimeEnabled=DirectSockets,
     DirectSocketEnabled
 ] interface UDPSocket {
@@ -14,4 +15,7 @@
 
   [RaisesException, CallWith=ScriptState]
   Promise<void> close();
+
+  readonly attribute DOMString remoteAddress;
+  readonly attribute unsigned short remotePort;
 };

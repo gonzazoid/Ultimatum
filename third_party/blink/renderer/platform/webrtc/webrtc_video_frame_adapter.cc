@@ -208,10 +208,14 @@ const base::Feature kWebRTCGpuMemoryBufferReadback {
 bool CanUseGpuMemoryBufferReadback(
     media::VideoPixelFormat format,
     media::GpuVideoAcceleratorFactories* gpu_factories) {
-  // GMB readback only works with NV12, so only opaque buffers can be used.
+  // Since ConvertToWebRtcVideoFrameBuffer will always produce an opaque frame
+  // (unless the input is already I420A), we allow using GMB readback from
+  // ABGR/ARGB to NV12.
   return gpu_factories &&
          (format == media::PIXEL_FORMAT_XBGR ||
-          format == media::PIXEL_FORMAT_XRGB) &&
+          format == media::PIXEL_FORMAT_XRGB ||
+          format == media::PIXEL_FORMAT_ABGR ||
+          format == media::PIXEL_FORMAT_ARGB) &&
          base::FeatureList::IsEnabled(kWebRTCGpuMemoryBufferReadback);
 }
 
@@ -244,7 +248,8 @@ WebRtcVideoFrameAdapter::SharedResources::ConstructVideoFrameFromTexture(
     // Expose the color space and pixel format that is backing
     // `image->GetMailboxHolder()`, or, alternatively, expose an accelerated
     // SkImage.
-    auto format = source_frame->format() == media::PIXEL_FORMAT_XBGR
+    auto format = (source_frame->format() == media::PIXEL_FORMAT_XBGR ||
+                   source_frame->format() == media::PIXEL_FORMAT_ABGR)
                       ? viz::ResourceFormat::RGBA_8888
                       : viz::ResourceFormat::BGRA_8888;
 
@@ -270,6 +275,17 @@ WebRtcVideoFrameAdapter::SharedResources::ConstructVideoFrameFromTexture(
 
     // CopyRGBATextureToVideoFrame() operates on mailboxes and not frames, so we
     // must manually copy over properties relevant to the encoder.
+    // TODO(https://crbug.com/1272852): Consider bailing out of this path if
+    // visible_rect or natural_size is much smaller than coded_size, or copying
+    // only the necessary part.
+    if (dst_frame->visible_rect() != source_frame->visible_rect() ||
+        dst_frame->natural_size() != source_frame->natural_size()) {
+      const auto format = dst_frame->format();
+      dst_frame = media::VideoFrame::WrapVideoFrame(
+          std::move(dst_frame), format, source_frame->visible_rect(),
+          source_frame->natural_size());
+      DCHECK(dst_frame);
+    }
     dst_frame->set_timestamp(source_frame->timestamp());
     dst_frame->set_metadata(source_frame->metadata());
 

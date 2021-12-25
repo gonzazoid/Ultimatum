@@ -32,7 +32,7 @@
 #include "third_party/blink/public/mojom/mediastream/media_stream.mojom-shared.h"
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/policy/dlp/mock_dlp_content_manager.h"
+#include "chrome/browser/ash/policy/dlp/mock_dlp_content_manager_ash.h"
 #include "ui/aura/window.h"
 #endif
 
@@ -76,7 +76,8 @@ class DesktopCaptureAccessHandlerTest : public ChromeRenderViewHostTestHarness {
         blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
-        /*request_pan_tilt_zoom_permission=*/false);
+        /*request_pan_tilt_zoom_permission=*/false,
+        /*region_capture_capable=*/false);
     base::RunLoop wait_loop;
     content::MediaResponseCallback callback = base::BindOnce(
         [](base::RunLoop* wait_loop,
@@ -115,7 +116,8 @@ class DesktopCaptureAccessHandlerTest : public ChromeRenderViewHostTestHarness {
         std::string(), audio_type,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
-        /*request_pan_tilt_zoom_permission=*/false);
+        /*request_pan_tilt_zoom_permission=*/false,
+        /*region_capture_capable=*/false);
 
     base::RunLoop wait_loop;
     content::MediaResponseCallback callback = base::BindOnce(
@@ -216,7 +218,8 @@ TEST_F(DesktopCaptureAccessHandlerTest,
       render_process_id, render_frame_id, page_request_id, GURL(kOrigin), false,
       blink::MEDIA_DEVICE_UPDATE, std::string(), std::string(),
       blink::mojom::MediaStreamType::NO_SERVICE, stream_type,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   access_handler_->HandleRequest(web_contents(), request, std::move(callback),
                                  nullptr /* extension */);
@@ -248,7 +251,8 @@ TEST_F(DesktopCaptureAccessHandlerTest, ChangeSourceWebContentsDestroyed) {
       0, 0, 0, GURL(kOrigin), false, blink::MEDIA_DEVICE_UPDATE, std::string(),
       std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
       blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   access_handler_->HandleRequest(web_contents(), request, std::move(callback),
                                  nullptr /* extension */);
@@ -289,7 +293,8 @@ TEST_F(DesktopCaptureAccessHandlerTest, ChangeSourceMultipleRequests) {
         std::string(), std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::GUM_DESKTOP_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
-        /*request_pan_tilt_zoom_permission=*/false);
+        /*request_pan_tilt_zoom_permission=*/false,
+        /*region_capture_capable=*/false);
     content::MediaResponseCallback callback = base::BindOnce(
         [](base::RunLoop* wait_loop,
            blink::mojom::MediaStreamRequestResult* request_result,
@@ -379,8 +384,8 @@ TEST_F(DesktopCaptureAccessHandlerTest, ScreenCaptureAccessSuccess) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 TEST_F(DesktopCaptureAccessHandlerTest, ScreenCaptureAccessDlpRestricted) {
   // Setup Data Leak Prevention restriction.
-  policy::MockDlpContentManager mock_dlp_content_manager;
-  policy::ScopedDlpContentManagerForTesting scoped_dlp_content_manager(
+  policy::MockDlpContentManagerAsh mock_dlp_content_manager;
+  policy::ScopedDlpContentManagerAshForTesting scoped_dlp_content_manager(
       &mock_dlp_content_manager);
   EXPECT_CALL(mock_dlp_content_manager, IsScreenCaptureRestricted(testing::_))
       .Times(1)
@@ -411,8 +416,8 @@ TEST_F(DesktopCaptureAccessHandlerTest, ScreenCaptureAccessDlpRestricted) {
 
 TEST_F(DesktopCaptureAccessHandlerTest, GenerateStreamDlpRestricted) {
   // Setup Data Leak Prevention restriction.
-  policy::MockDlpContentManager mock_dlp_content_manager;
-  policy::ScopedDlpContentManagerForTesting scoped_dlp_content_manager(
+  policy::MockDlpContentManagerAsh mock_dlp_content_manager;
+  policy::ScopedDlpContentManagerAshForTesting scoped_dlp_content_manager(
       &mock_dlp_content_manager);
   EXPECT_CALL(mock_dlp_content_manager, IsScreenCaptureRestricted(testing::_))
       .Times(1)
@@ -440,8 +445,8 @@ TEST_F(DesktopCaptureAccessHandlerTest, GenerateStreamDlpRestricted) {
 
 TEST_F(DesktopCaptureAccessHandlerTest, ChangeSourceDlpRestricted) {
   // Setup Data Leak Prevention restriction.
-  policy::MockDlpContentManager mock_dlp_content_manager;
-  policy::ScopedDlpContentManagerForTesting scoped_dlp_content_manager(
+  policy::MockDlpContentManagerAsh mock_dlp_content_manager;
+  policy::ScopedDlpContentManagerAshForTesting scoped_dlp_content_manager(
       &mock_dlp_content_manager);
   EXPECT_CALL(mock_dlp_content_manager, IsScreenCaptureRestricted(testing::_))
       .Times(1)

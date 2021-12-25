@@ -19,6 +19,14 @@ IdentityDialogController::IdentityDialogController() = default;
 
 IdentityDialogController::~IdentityDialogController() = default;
 
+int IdentityDialogController::GetBrandIconMinimumSize() {
+  return AccountSelectionView::GetBrandIconMinimumSize();
+}
+
+int IdentityDialogController::GetBrandIconIdealSize() {
+  return AccountSelectionView::GetBrandIconIdealSize();
+}
+
 void IdentityDialogController::ShowInitialPermissionDialog(
     content::WebContents* rp_web_contents,
     const GURL& idp_url,
@@ -106,7 +114,7 @@ void IdentityDialogController::ShowAccountsDialog(
   // IDP scheme is expected to always be `https://`.
   CHECK(idp_url.SchemeIs(url::kHttpsScheme));
 #if !defined(OS_ANDROID)
-  std::move(on_selected).Run(accounts[0].sub);
+  std::move(on_selected).Run(accounts[0].account_id);
 #else
   rp_web_contents_ = rp_web_contents;
   on_account_selection_ = std::move(on_selected);
@@ -121,11 +129,14 @@ void IdentityDialogController::ShowAccountsDialog(
 }
 
 void IdentityDialogController::OnAccountSelected(const Account& account) {
-  std::move(on_account_selection_).Run(account.sub);
+  std::move(on_account_selection_).Run(account.account_id);
 }
 
 void IdentityDialogController::OnDismiss() {
-  std::move(on_account_selection_).Run(std::string());
+  // |OnDismiss| can be called after |OnAccountSelected| which sets the callback
+  // to null.
+  if (on_account_selection_)
+    std::move(on_account_selection_).Run(std::string());
 }
 
 gfx::NativeView IdentityDialogController::GetNativeView() {

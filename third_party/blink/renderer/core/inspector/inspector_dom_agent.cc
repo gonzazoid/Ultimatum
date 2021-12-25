@@ -210,6 +210,14 @@ protocol::DOM::PseudoType InspectorDOMAgent::ProtocolPseudoElementType(
       return protocol::DOM::PseudoTypeEnum::Resizer;
     case kPseudoIdInputListButton:
       return protocol::DOM::PseudoTypeEnum::InputListButton;
+    case kPseudoIdTransition:
+      return protocol::DOM::PseudoTypeEnum::Transition;
+    case kPseudoIdTransitionContainer:
+      return protocol::DOM::PseudoTypeEnum::TransitionContainer;
+    case kPseudoIdTransitionNewContent:
+      return protocol::DOM::PseudoTypeEnum::TransitionNewContent;
+    case kPseudoIdTransitionOldContent:
+      return protocol::DOM::PseudoTypeEnum::TransitionOldContent;
     case kAfterLastInternalPseudoId:
     case kPseudoIdNone:
       CHECK(false);
@@ -2451,8 +2459,8 @@ protocol::Response InspectorDOMAgent::scrollIntoViewIfNeeded(
   LayoutObject* layout_object = node->GetLayoutObject();
   if (!layout_object)
     return Response::ServerError("Node does not have a layout object");
-  PhysicalRect rect_to_scroll = PhysicalRect::EnclosingRect(
-      layout_object->AbsoluteBoundingBoxFloatRect());
+  PhysicalRect rect_to_scroll =
+      PhysicalRect::EnclosingRect(layout_object->AbsoluteBoundingBoxRectF());
   if (rect.isJust()) {
     rect_to_scroll.SetX(rect_to_scroll.X() +
                         LayoutUnit(rect.fromJust()->getX()));

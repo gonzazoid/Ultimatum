@@ -46,19 +46,9 @@ void FakeWebState::CloseWebState() {
   is_closed_ = true;
 }
 
-FakeWebState::FakeWebState()
-    : browser_state_(nullptr),
-      web_usage_enabled_(true),
-      is_loading_(false),
-      is_visible_(false),
-      is_crashed_(false),
-      is_evicted_(false),
-      has_opener_(false),
-      can_take_snapshot_(false),
-      is_closed_(false),
-      trust_level_(kAbsolute),
-      content_is_html_(true),
-      web_view_proxy_(nil) {}
+FakeWebState::FakeWebState(NSString* stable_identifier)
+    : stable_identifier_(stable_identifier ? stable_identifier
+                                           : [[NSUUID UUID] UUIDString]) {}
 
 FakeWebState::~FakeWebState() {
   for (auto& observer : observers_)
@@ -84,11 +74,15 @@ WebStateDelegate* FakeWebState::GetDelegate() {
 void FakeWebState::SetDelegate(WebStateDelegate* delegate) {}
 
 bool FakeWebState::IsRealized() const {
-  // FakeWebState cannot be unrealized.
-  return true;
+  return is_realized_;
 }
 
 WebState* FakeWebState::ForceRealized() {
+  if (!is_realized_) {
+    is_realized_ = true;
+    for (auto& observer : observers_)
+      observer.WebStateRealized(this);
+  }
   return this;
 }
 
@@ -155,12 +149,12 @@ FakeWebState::GetSessionCertificatePolicyCache() {
 }
 
 CRWSessionStorage* FakeWebState::BuildSessionStorage() {
-  std::unique_ptr<web::SerializableUserData> serializable_user_data =
-      web::SerializableUserDataManager::FromWebState(this)
-          ->CreateSerializableUserData();
   CRWSessionStorage* session_storage = [[CRWSessionStorage alloc] init];
-  [session_storage setSerializableUserData:std::move(serializable_user_data)];
+  session_storage.userData =
+      web::SerializableUserDataManager::FromWebState(this)
+          ->GetUserDataForSession();
   session_storage.itemStorages = @[ [[CRWNavigationItemStorage alloc] init] ];
+  session_storage.stableIdentifier = stable_identifier_;
   return session_storage;
 }
 
@@ -218,6 +212,10 @@ void FakeWebState::ExecuteJavaScript(const std::u16string& javascript,
 
 void FakeWebState::ExecuteUserJavaScript(NSString* javaScript) {}
 
+NSString* FakeWebState::GetStableIdentifier() const {
+  return stable_identifier_;
+}
+
 const std::string& FakeWebState::GetContentsMimeType() const {
   return mime_type_;
 }
@@ -251,6 +249,10 @@ base::CallbackListSubscription FakeWebState::AddScriptCommandCallback(
 
 void FakeWebState::SetBrowserState(BrowserState* browser_state) {
   browser_state_ = browser_state;
+}
+
+void FakeWebState::SetIsRealized(bool value) {
+  is_realized_ = value;
 }
 
 void FakeWebState::SetJSInjectionReceiver(

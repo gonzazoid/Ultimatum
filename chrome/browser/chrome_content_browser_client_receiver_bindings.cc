@@ -28,6 +28,8 @@
 #include "chrome/browser/ui/search_engines/search_engine_tab_helper.h"
 #include "chrome/common/buildflags.h"
 #include "components/autofill/content/browser/content_autofill_driver_factory.h"
+#include "components/autofill_assistant/content/browser/content_autofill_assistant_driver.h"
+#include "components/autofill_assistant/content/common/autofill_assistant_driver.mojom.h"
 #include "components/content_capture/browser/onscreen_content_provider.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_service.h"
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_params.h"
@@ -54,6 +56,7 @@
 
 #if defined(OS_ANDROID)
 #include "chrome/browser/download/android/available_offline_content_provider.h"
+#include "chrome/browser/plugins/plugin_observer_android.h"
 #elif defined(OS_WIN)
 #include "chrome/browser/win/conflicts/module_database.h"
 #include "chrome/browser/win/conflicts/module_event_sink_impl.h"
@@ -393,6 +396,15 @@ bool ChromeContentBrowserClient::BindAssociatedReceiverFromFrame(
     content::RenderFrameHost* render_frame_host,
     const std::string& interface_name,
     mojo::ScopedInterfaceEndpointHandle* handle) {
+  if (interface_name ==
+      autofill_assistant::mojom::AutofillAssistantDriver::Name_) {
+    autofill_assistant::ContentAutofillAssistantDriver::BindDriver(
+        mojo::PendingAssociatedReceiver<
+            autofill_assistant::mojom::AutofillAssistantDriver>(
+            std::move(*handle)),
+        render_frame_host);
+    return true;
+  }
   if (interface_name == autofill::mojom::AutofillDriver::Name_) {
     autofill::ContentAutofillDriverFactory::BindAutofillDriver(
         mojo::PendingAssociatedReceiver<autofill::mojom::AutofillDriver>(
@@ -453,14 +465,21 @@ bool ChromeContentBrowserClient::BindAssociatedReceiverFromFrame(
         render_frame_host);
     return true;
   }
+#endif
+#if BUILDFLAG(ENABLE_PLUGINS) || defined(OS_ANDROID)
   if (interface_name == chrome::mojom::PluginHost::Name_) {
-    PluginObserver::BindPluginHost(
+#if defined(OS_ANDROID)
+    using PluginObserverImpl = PluginObserverAndroid;
+#else
+    using PluginObserverImpl = PluginObserver;
+#endif
+    PluginObserverImpl::BindPluginHost(
         mojo::PendingAssociatedReceiver<chrome::mojom::PluginHost>(
             std::move(*handle)),
         render_frame_host);
     return true;
   }
-#endif
+#endif  // BUILDFLAG(ENABLE_PLUGINS) || defined(OS_ANDROID)
 #if !defined(OS_ANDROID)
   if (interface_name == chrome::mojom::SyncEncryptionKeysExtension::Name_) {
     SyncEncryptionKeysTabHelper::BindSyncEncryptionKeysExtension(

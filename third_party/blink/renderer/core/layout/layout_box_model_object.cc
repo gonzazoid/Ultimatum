@@ -41,8 +41,6 @@
 #include "third_party/blink/renderer/core/layout/ng/legacy_layout_tree_walking.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_constraint_space.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_layout_result.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/object_paint_invalidator.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -143,14 +141,6 @@ void LayoutBoxModelObject::WillBeDestroyed() {
 void LayoutBoxModelObject::StyleWillChange(StyleDifference diff,
                                            const ComputedStyle& new_style) {
   NOT_DESTROYED();
-  // SPv1:
-  // This object's layer may begin or cease to be stacked or stacking context,
-  // in which case the paint invalidation container of this object and
-  // descendants may change. Thus we need to invalidate paint eagerly for all
-  // such children. PaintLayerCompositor::paintInvalidationOnCompositingChange()
-  // doesn't work for the case because we can only see the new
-  // paintInvalidationContainer during compositing update.
-  // SPv1 and v2:
   // Change of stacked/stacking context status may cause change of this or
   // descendant PaintLayer's CompositingContainer, so we need to eagerly
   // invalidate the current compositing container chain which may have painted
@@ -374,9 +364,7 @@ void LayoutBoxModelObject::StyleDidChange(StyleDifference diff,
   }
 
   if (old_style && HasLayer() && !Layer()->SelfNeedsRepaint() &&
-      diff.TransformChanged() &&
-      (RuntimeEnabledFeatures::CompositeAfterPaintEnabled() ||
-       !Layer()->HasStyleDeterminedDirectCompositingReasons())) {
+      diff.TransformChanged()) {
     // PaintLayerPainter::PaintLayerWithAdjustedRoot skips painting of a layer
     // whose transform is not invertible, so we need to repaint the layer when
     // invertible status changes.
@@ -596,16 +584,16 @@ void LayoutBoxModelObject::QuadsInternal(Vector<FloatQuad>& quads,
   }
 }
 
-FloatRect LayoutBoxModelObject::LocalBoundingBoxFloatRect() const {
+gfx::RectF LayoutBoxModelObject::LocalBoundingBoxRectF() const {
   NOT_DESTROYED();
   Vector<FloatQuad> quads;
   LocalQuads(quads);
 
   wtf_size_t n = quads.size();
   if (n == 0)
-    return FloatRect();
+    return gfx::RectF();
 
-  FloatRect result = quads[0].BoundingBox();
+  gfx::RectF result = quads[0].BoundingBox();
   for (wtf_size_t i = 1; i < n; ++i)
     result.Union(quads[i].BoundingBox());
   return result;

@@ -311,11 +311,10 @@ static CordRep* CordRepFromString(std::string&& src) {
 
 constexpr unsigned char Cord::InlineRep::kMaxInline;
 
-inline void Cord::InlineRep::set_data(const char* data, size_t n,
-                                      bool nullify_tail) {
+inline void Cord::InlineRep::set_data(const char* data, size_t n) {
   static_assert(kMaxInline == 15, "set_data is hard-coded for a length of 15");
 
-  cord_internal::SmallMemmove(data_.as_chars(), data, n, nullify_tail);
+  cord_internal::SmallMemmove<true>(data_.as_chars(), data, n);
   set_inline_size(n);
 }
 
@@ -375,7 +374,8 @@ void Cord::InlineRep::AppendTreeToTree(CordRep* tree, MethodIdentifier method) {
 }
 
 void Cord::InlineRep::AppendTree(CordRep* tree, MethodIdentifier method) {
-  if (tree == nullptr) return;
+  assert(tree != nullptr);
+  assert(tree->length != 0);
   assert(!tree->IsCrc());
   if (data_.is_tree()) {
     AppendTreeToTree(tree, method);
@@ -412,6 +412,7 @@ void Cord::InlineRep::PrependTreeToTree(CordRep* tree,
 
 void Cord::InlineRep::PrependTree(CordRep* tree, MethodIdentifier method) {
   assert(tree != nullptr);
+  assert(tree->length != 0);
   assert(!tree->IsCrc());
   if (data_.is_tree()) {
     PrependTreeToTree(tree, method);
@@ -468,51 +469,6 @@ static inline bool PrepareAppendRegion(CordRep* root, char** region,
   return true;
 }
 
-// Computes the memory side of the provided edge which must be a valid data edge
-// for a btrtee, i.e., a FLAT, EXTERNAL or SUBSTRING of a FLAT or EXTERNAL node.
-static bool RepMemoryUsageDataEdge(const CordRep* rep,
-                                   size_t* total_mem_usage) {
-  size_t maybe_sub_size = 0;
-  if (ABSL_PREDICT_FALSE(rep->IsSubstring())) {
-    maybe_sub_size = sizeof(cord_internal::CordRepSubstring);
-    rep = rep->substring()->child;
-  }
-  if (rep->IsFlat()) {
-    *total_mem_usage += maybe_sub_size + rep->flat()->AllocatedSize();
-    return true;
-  }
-  if (rep->IsExternal()) {
-    // We don't know anything about the embedded / bound data, but we can safely
-    // assume it is 'at least' a word / pointer to data. In the future we may
-    // choose to use the 'data' byte as a tag to identify the types of some
-    // well-known externals, such as a std::string instance.
-    *total_mem_usage += maybe_sub_size +
-                        sizeof(cord_internal::CordRepExternalImpl<intptr_t>) +
-                        rep->length;
-    return true;
-  }
-  return false;
-}
-
-// If the rep is a leaf, this will increment the value at total_mem_usage and
-// will return true.
-static bool RepMemoryUsageLeaf(const CordRep* rep, size_t* total_mem_usage) {
-  if (rep->IsFlat()) {
-    *total_mem_usage += rep->flat()->AllocatedSize();
-    return true;
-  }
-  if (rep->IsExternal()) {
-    // We don't know anything about the embedded / bound data, but we can safely
-    // assume it is 'at least' a word / pointer to data. In the future we may
-    // choose to use the 'data' byte as a tag to identify the types of some
-    // well-known externals, such as a std::string instance.
-    *total_mem_usage +=
-        sizeof(cord_internal::CordRepExternalImpl<intptr_t>) + rep->length;
-    return true;
-  }
-  return false;
-}
-
 void Cord::InlineRep::AssignSlow(const Cord::InlineRep& src) {
   assert(&src != this);
   assert(is_tree() || src.is_tree());
@@ -549,7 +505,7 @@ Cord::Cord(absl::string_view src, MethodIdentifier method)
     : contents_(InlineData::kDefaultInit) {
   const size_t n = src.size();
   if (n <= InlineRep::kMaxInline) {
-    contents_.set_data(src.data(), n, true);
+    contents_.set_data(src.data(), n);
   } else {
     CordRep* rep = NewTree(src.data(), n, 0);
     contents_.EmplaceTree(rep, method);
@@ -559,7 +515,7 @@ Cord::Cord(absl::string_view src, MethodIdentifier method)
 template <typename T, Cord::EnableIfString<T>>
 Cord::Cord(T&& src) : contents_(InlineData::kDefaultInit) {
   if (src.size() <= InlineRep::kMaxInline) {
-    contents_.set_data(src.data(), src.size(), true);
+    contents_.set_data(src.data(), src.size());
   } else {
     CordRep* rep = CordRepFromString(std::forward<T>(src));
     contents_.EmplaceTree(rep, CordzUpdateTracker::kConstructorString);
@@ -610,7 +566,7 @@ Cord& Cord::operator=(absl::string_view src) {
     // - MaybeUntrackCord must be called before set_data() clobbers cordz_info.
     // - set_data() must be called before Unref(tree) as it may reference tree.
     if (tree != nullptr) CordzInfo::MaybeUntrackCord(contents_.cordz_info());
-    contents_.set_data(data, length, true);
+    contents_.set_data(data, length);
     if (tree != nullptr) CordRep::Unref(tree);
     return *this;
   }
@@ -1014,9 +970,7 @@ Cord Cord::Subcord(size_t pos, size_t new_size) const {
 
   CordRep* tree = contents_.tree();
   if (tree == nullptr) {
-    // sub_cord is newly constructed, no need to re-zero-out the tail of
-    // contents_ memory.
-    sub_cord.contents_.set_data(contents_.data() + pos, new_size, false);
+    sub_cord.contents_.set_data(contents_.data() + pos, new_size);
     return sub_cord;
   }
 
@@ -1967,75 +1921,6 @@ static bool VerifyNode(CordRep* root, CordRep* start_node,
     }
   } while (!worklist.empty());
   return true;
-}
-
-// Traverses the tree and computes the total memory allocated.
-/* static */ size_t Cord::MemoryUsageAux(const CordRep* rep) {
-  size_t total_mem_usage = 0;
-
-  if (rep->IsCrc()) {
-    total_mem_usage += sizeof(CordRepCrc);
-    rep = rep->crc()->child;
-  }
-
-  // Allow a quick exit for the common case that the root is a leaf.
-  if (RepMemoryUsageLeaf(rep, &total_mem_usage)) {
-    return total_mem_usage;
-  }
-
-  // Iterate over the tree. cur_node is never a leaf node and leaf nodes will
-  // never be appended to tree_stack. This reduces overhead from manipulating
-  // tree_stack.
-  absl::InlinedVector<const CordRep*, kInlinedVectorSize> tree_stack;
-  const CordRep* cur_node = rep;
-  while (true) {
-    const CordRep* next_node = nullptr;
-
-    if (cur_node->IsConcat()) {
-      total_mem_usage += sizeof(CordRepConcat);
-      const CordRep* left = cur_node->concat()->left;
-      if (!RepMemoryUsageLeaf(left, &total_mem_usage)) {
-        next_node = left;
-      }
-
-      const CordRep* right = cur_node->concat()->right;
-      if (!RepMemoryUsageLeaf(right, &total_mem_usage)) {
-        if (next_node) {
-          tree_stack.push_back(next_node);
-        }
-        next_node = right;
-      }
-    } else if (cur_node->IsBtree()) {
-      total_mem_usage += sizeof(CordRepBtree);
-      const CordRepBtree* node = cur_node->btree();
-      if (node->height() == 0) {
-        for (const CordRep* edge : node->Edges()) {
-          RepMemoryUsageDataEdge(edge, &total_mem_usage);
-        }
-      } else {
-        for (const CordRep* edge : node->Edges()) {
-          tree_stack.push_back(edge);
-        }
-      }
-    } else {
-      // Since cur_node is not a leaf or a concat node it must be a substring.
-      assert(cur_node->IsSubstring());
-      total_mem_usage += sizeof(CordRepSubstring);
-      next_node = cur_node->substring()->child;
-      if (RepMemoryUsageLeaf(next_node, &total_mem_usage)) {
-        next_node = nullptr;
-      }
-    }
-
-    if (!next_node) {
-      if (tree_stack.empty()) {
-        return total_mem_usage;
-      }
-      next_node = tree_stack.back();
-      tree_stack.pop_back();
-    }
-    cur_node = next_node;
-  }
 }
 
 std::ostream& operator<<(std::ostream& out, const Cord& cord) {

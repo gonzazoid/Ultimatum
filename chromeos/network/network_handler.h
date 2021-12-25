@@ -24,6 +24,7 @@ class CellularInhibitor;
 class CellularMetricsLogger;
 class CellularPolicyHandler;
 class ClientCertResolver;
+class ConnectionInfoMetricsLogger;
 class ESimPolicyLoginMetricsLogger;
 class GeolocationHandler;
 class ManagedNetworkConfigurationHandler;
@@ -42,6 +43,7 @@ class NetworkSmsHandler;
 class ProhibitedTechnologiesHandler;
 class StubCellularNetworksProvider;
 class UIProxyConfigService;
+class VpnNetworkMetricsHelper;
 
 // Class for handling initialization and access to chromeos network handlers.
 // This class should NOT be used in unit tests. Instead, construct individual
@@ -110,6 +112,8 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
   ProhibitedTechnologiesHandler* prohibited_technologies_handler();
 
  private:
+  friend class ConnectionInfoMetricsLoggerTest;
+
   NetworkHandler();
   virtual ~NetworkHandler();
 
@@ -134,8 +138,10 @@ class COMPONENT_EXPORT(CHROMEOS_NETWORK) NetworkHandler {
       cellular_esim_uninstall_handler_;
   std::unique_ptr<CellularPolicyHandler> cellular_policy_handler_;
   std::unique_ptr<CellularMetricsLogger> cellular_metrics_logger_;
+  std::unique_ptr<ConnectionInfoMetricsLogger> connection_info_metrics_logger_;
   std::unique_ptr<ESimPolicyLoginMetricsLogger>
       esim_policy_login_metrics_logger_;
+  std::unique_ptr<VpnNetworkMetricsHelper> vpn_network_metrics_helper_;
   std::unique_ptr<NetworkCertMigrator> network_cert_migrator_;
   std::unique_ptr<ClientCertResolver> client_cert_resolver_;
   std::unique_ptr<AutoConnectHandler> auto_connect_handler_;

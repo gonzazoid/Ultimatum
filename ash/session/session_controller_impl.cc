@@ -368,6 +368,11 @@ void SessionControllerImpl::SetUserSessionOrder(
   }
 }
 
+void SessionControllerImpl::PrepareForLock(PrepareForLockCallback callback) {
+  FullscreenController::MaybeExitFullscreen();
+  std::move(callback).Run();
+}
+
 void SessionControllerImpl::StartLock(StartLockCallback callback) {
   DCHECK(start_lock_callback_.is_null());
   start_lock_callback_ = std::move(callback);
@@ -485,14 +490,6 @@ void SessionControllerImpl::SetSessionState(SessionState state) {
       observer.OnLockStateChanged(locked);
 
     session_activation_observer_holder_.NotifyLockStateChanged(locked);
-
-    // We cannot use SessionObserver or SessionManagerObserver because they get
-    // notified before the lock screen widget is destroyed which would mean that
-    // the active window would always be a full screen window and the
-    // FullscreenController would therefore always show the
-    // FullscreenNotificationBubble. We cannot use SessionActivationObserver
-    // because they are always tied to an account.
-    fullscreen_controller_->OnLockStateChanged(locked);
   }
 
   EnsureSigninScreenPrefService();

@@ -7,6 +7,8 @@
 #include <algorithm>
 
 #include "ash/components/audio/sounds.h"
+#include "ash/components/login/auth/authenticator.h"
+#include "ash/components/login/auth/extended_authenticator.h"
 #include "ash/components/login/session/session_termination_manager.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/login_screen.h"
@@ -54,8 +56,6 @@
 #include "chrome/grit/generated_resources.h"
 #include "chromeos/dbus/biod/constants.pb.h"
 #include "chromeos/dbus/session_manager/session_manager_client.h"
-#include "chromeos/login/auth/authenticator.h"
-#include "chromeos/login/auth/extended_authenticator.h"
 #include "components/password_manager/core/browser/hash_password_manager.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/session_manager/core/session_manager.h"
@@ -481,8 +481,7 @@ void ScreenLocker::OnPinAttemptDone(const UserContext& user_context,
   }
 }
 
-void ScreenLocker::ContinueAuthenticate(
-    const chromeos::UserContext& user_context) {
+void ScreenLocker::ContinueAuthenticate(const UserContext& user_context) {
   if (user_context.GetAccountId().GetAccountType() ==
           AccountType::ACTIVE_DIRECTORY &&
       user_context.GetKey()->GetKeyType() == Key::KEY_TYPE_PASSWORD_PLAIN) {
@@ -561,8 +560,7 @@ user_manager::UserList ScreenLocker::GetUsersToShow() const {
   return users_to_show;
 }
 
-void ScreenLocker::SetLoginStatusConsumer(
-    chromeos::AuthStatusConsumer* consumer) {
+void ScreenLocker::SetLoginStatusConsumer(AuthStatusConsumer* consumer) {
   auth_status_consumer_ = consumer;
 }
 
@@ -620,10 +618,12 @@ void ScreenLocker::Show() {
   }
 
   if (!screen_locker_) {
-    ScreenLocker* locker =
-        new ScreenLocker(user_manager::UserManager::Get()->GetUnlockUsers());
-    VLOG(1) << "Created ScreenLocker " << locker;
-    locker->Init();
+    SessionControllerClientImpl::Get()->PrepareForLock(base::BindOnce([]() {
+      ScreenLocker* locker =
+          new ScreenLocker(user_manager::UserManager::Get()->GetUnlockUsers());
+      VLOG(1) << "Created ScreenLocker " << locker;
+      locker->Init();
+    }));
   } else {
     VLOG(1) << "ScreenLocker " << screen_locker_ << " already exists; "
             << " calling session manager's HandleLockScreenShown D-Bus method";
@@ -809,12 +809,10 @@ void ScreenLocker::OnEnrollScanDone(device::mojom::ScanResult scan_result,
                                     int percent_complete) {}
 
 void ScreenLocker::OnAuthScanDone(
-    device::mojom::ScanResult scan_result,
+    const device::mojom::FingerprintMessagePtr msg,
     const base::flat_map<std::string, std::vector<std::string>>& matches) {
   RefreshPinAndFingerprintTimeout();
 
-  VLOG(1) << "Receive fingerprint auth scan result. scan_result="
-          << scan_result;
   unlock_attempt_type_ = AUTH_FINGERPRINT;
   const user_manager::User* primary_user =
       user_manager::UserManager::Get()->GetPrimaryUser();
@@ -841,13 +839,28 @@ void ScreenLocker::OnAuthScanDone(
       primary_user->GetAccountId(),
       LoginAuthRecorder::AuthMethod::kFingerprint);
 
-  if (scan_result != device::mojom::ScanResult::SUCCESS) {
-    LOG(ERROR) << "Fingerprint unlock failed because scan_result="
-               << scan_result;
-    OnFingerprintAuthFailure(*primary_user);
-    quick_unlock_storage->fingerprint_storage()->RecordFingerprintUnlockResult(
-        quick_unlock::FingerprintUnlockResult::kMatchFailed);
-    return;
+  switch (msg->which()) {
+    case device::mojom::FingerprintMessage::Tag::kScanResult:
+      VLOG(1) << "Receive fingerprint auth scan result. scan_result="
+              << msg->get_scan_result();
+      if (msg->get_scan_result() != device::mojom::ScanResult::SUCCESS) {
+        LOG(ERROR) << "Fingerprint unlock failed because scan_result="
+                   << msg->get_scan_result();
+        OnFingerprintAuthFailure(*primary_user);
+        quick_unlock_storage->fingerprint_storage()
+            ->RecordFingerprintUnlockResult(
+                quick_unlock::FingerprintUnlockResult::kMatchFailed);
+        return;
+      }
+      break;
+    case device::mojom::FingerprintMessage::Tag::kFingerprintError:
+      LOG(ERROR) << "Fingerprint unlock failed because error="
+                 << msg->get_fingerprint_error() << " occurred.";
+      OnFingerprintAuthFailure(*primary_user);
+      quick_unlock_storage->fingerprint_storage()
+          ->RecordFingerprintUnlockResult(
+              quick_unlock::FingerprintUnlockResult::kMatchFailed);
+      return;
   }
 
   UserContext user_context(*primary_user);

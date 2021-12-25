@@ -32,6 +32,7 @@
 #include "content/browser/renderer_host/text_input_manager.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/render_frame_host.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-forward.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/android/delegated_frame_host_android.h"
 #include "ui/android/view_android.h"
@@ -166,14 +167,13 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
   blink::mojom::PointerLockResult ChangeMouseLock(
       bool request_unadjusted_movement) override;
   void UnlockMouse() override;
+  void ClearFallbackSurfaceForCommitPending() override;
   void ResetFallbackToFirstNavigationSurface() override;
   bool RequestRepaintForTesting() override;
   void SetIsInVR(bool is_in_vr) override;
   bool IsInVR() const override;
   void DidOverscroll(const ui::DidOverscrollParams& params) override;
   void DidStopFlinging() override;
-  void OnInterstitialPageAttached() override;
-  void OnInterstitialPageGoingAway() override;
   bool CanSynchronizeVisualProperties() override;
   std::unique_ptr<SyntheticGestureTarget> CreateSyntheticGestureTarget()
       override;
@@ -296,9 +296,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
   void MoveCaret(const gfx::Point& point);
   void DismissTextHandles();
   void SetTextHandlesTemporarilyHidden(bool hide_handles);
-  void SelectWordAroundCaretAck(bool did_select,
-                                int start_adjust,
-                                int end_adjust);
+  void SelectAroundCaretAck(blink::mojom::SelectAroundCaretResultPtr result);
 
   // TODO(ericrk): Ideally we'd remove |root_scroll_offset| from this function
   // once we have a reliable way to get it through RenderFrameMetadata.

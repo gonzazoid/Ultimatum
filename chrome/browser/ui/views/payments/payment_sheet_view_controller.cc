@@ -197,8 +197,13 @@ std::unique_ptr<views::View> CreateInlineCurrencyAmountItem(
     bool hint_color,
     bool bold) {
   DCHECK(!bold || !hint_color);
-  return views::Builder<views::BoxLayoutView>()
-      .SetOrientation(views::BoxLayout::Orientation::kHorizontal)
+  return views::Builder<views::TableLayoutView>()
+      .AddColumn(views::LayoutAlignment::kStart, views::LayoutAlignment::kStart,
+                 views::TableLayout::kFixedSize,
+                 views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddColumn(views::LayoutAlignment::kEnd, views::LayoutAlignment::kStart,
+                 1.0, views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddRows(1, views::TableLayout::kFixedSize, 0)
       .AddChildren((bold ? views::Builder<views::Label>(CreateBoldLabel(u""))
                          : (hint_color ? views::Builder<views::Label>(
                                              CreateHintLabel(u""))

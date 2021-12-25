@@ -18,6 +18,8 @@ source_set("mixers") {
     "chrome_color_mixers.h",
     "chrome_color_provider_utils.cc",
     "chrome_color_provider_utils.h",
+    "native_chrome_color_mixer.cc",
+    "native_chrome_color_mixer.h",
     "omnibox_color_mixer.cc",
     "omnibox_color_mixer.h",
   ]
@@ -27,6 +29,10 @@ source_set("mixers") {
     "//ui/color:color",
     "//ui/color:mixers",
   ]
+
+  if (is_win) {
+    sources += [ "win/native_chrome_color_mixer_win.cc" ]
+  }
 }
 
 if (!is_ios && !is_android && !is_chromecast && !is_fuchsia) {
@@ -59,6 +65,9 @@ if (!is_ios && !is_android && !is_chromecast && !is_fuchsia) {
         "//chrome/chrome_elf:test_stubs",
         "//components/crash/core/app:crash_export_thunks",
       ]
+    }
+    if (is_chromeos_ash) {
+      deps += [ "//components/exo/wayland:weston_test_stub" ]
     }
   }
 }

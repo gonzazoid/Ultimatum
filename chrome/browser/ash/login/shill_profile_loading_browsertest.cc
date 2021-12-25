@@ -14,11 +14,13 @@
 // This test case verifies that chrome triggers LoadShillProfile for the
 // unmanaged user case and the managed user with/without network policy cases.
 
+#include "ash/components/login/auth/user_context.h"
 #include "ash/public/cpp/login_screen_test_api.h"
 #include "base/bind.h"
 #include "base/bind_internal.h"
 #include "base/run_loop.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
+#include "chrome/browser/ash/login/startup_utils.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/test/user_policy_mixin.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
@@ -28,7 +30,6 @@
 #include "chromeos/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/shill/fake_shill_profile_client.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/proto/chrome_settings.pb.h"
 #include "components/user_manager/user_names.h"
@@ -233,6 +234,9 @@ IN_PROC_BROWSER_TEST_F(ShillProfileLoadingGuestLoginTest, GuestLogin) {
 
   LoadShillProfileWaiter load_shill_profile_waiter(
       FakeSessionManagerClient::Get());
+
+  // Mark EULA accepted to skip the guest ToS screen.
+  StartupUtils::MarkEulaAccepted();
   ASSERT_TRUE(LoginScreenTestApi::ClickGuestButton());
 
   restart_job_waiter.Run();

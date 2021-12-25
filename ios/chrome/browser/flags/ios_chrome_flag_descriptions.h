@@ -94,6 +94,11 @@ extern const char kDcheckIsFatalDescription[];
 extern const char kDefaultBrowserFullscreenPromoExperimentName[];
 extern const char kDefaultBrowserFullscreenPromoExperimentDescription[];
 
+// Title and description for the flag that is used to let the user choose the
+// default mode (Mobile/Desktop) they would like to use when requesting a page.
+extern const char kAddSettingForDefaultPageModeName[];
+extern const char kAddSettingForDefaultPageModeDescription[];
+
 // Title and description for the flag to use default WebKit context menu in web
 // content.
 extern const char kDefaultWebViewContextMenuName[];
@@ -289,6 +294,11 @@ extern const char kLockBottomToolbarDescription[];
 extern const char kLogBreadcrumbsName[];
 extern const char kLogBreadcrumbsDescription[];
 
+// Title and description for the flag to control camera and/or microphone access
+// for a specific site through site settings during its lifespan.
+extern const char kMediaPermissionsControlName[];
+extern const char kMediaPermissionsControlDescription[];
+
 // Title and description for the flag that controls sending metrickit crash
 // reports.
 extern const char kMetrickitCrashReportName[];
@@ -372,6 +382,10 @@ extern const char kSafeBrowsingAvailableDescription[];
 extern const char kSafeBrowsingRealTimeLookupName[];
 extern const char kSafeBrowsingRealTimeLookupDescription[];
 
+// Title and description for the flag to enable saving one file per webstate.
+extern const char kSaveSessionTabsToSeparateFilesName[];
+extern const char kSaveSessionTabsToSeparateFilesDescription[];
+
 // Title and description for the flag to enable integration with the ScreenTime
 // system.
 extern const char kScreenTimeIntegrationName[];
@@ -442,10 +456,6 @@ extern const char kSyncTrustedVaultPassphrasePromoDescription[];
 extern const char kSyncTrustedVaultPassphraseRecoveryName[];
 extern const char kSyncTrustedVaultPassphraseRecoveryDescription[];
 
-// Title and description for the flag to enable tabs bulk actions feature.
-extern const char kTabsBulkActionsName[];
-extern const char kTabsBulkActionsDescription[];
-
 // Title and description for the flag to enable tabs search feature.
 extern const char kTabsSearchName[];
 extern const char kTabsSearchDescription[];
@@ -469,6 +479,11 @@ extern const char kURLBlocklistIOSDescription[];
 // image from the long press context menu.
 extern const char kUseLensToSearchForImageName[];
 extern const char kUseLensToSearchForImageDescription[];
+
+// Title and description for the flag to enable the replacement of some images
+// by SFSymbols.
+extern const char kUseSFSymbolsSamplesName[];
+extern const char kUseSFSymbolsSamplesDescription[];
 
 // Title and description for the flag to control the maximum wait time (in
 // seconds) for a response from the Account Capabilities API.

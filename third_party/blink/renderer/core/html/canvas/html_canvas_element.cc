@@ -98,7 +98,6 @@
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_dispatcher.h"
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_canvas.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image_to_video_frame_copier.h"
@@ -336,10 +335,9 @@ CanvasRenderingContext* HTMLCanvasElement::GetCanvasRenderingContext(
              !!result)
         .Record(doc.UkmRecorder());
   }
-  if (attributes.color_space != kSRGBCanvasColorSpaceName ||
-      attributes.pixel_format != kUint8CanvasPixelFormatName) {
+
+  if (attributes.color_space != PredefinedColorSpace::kSRGB)
     UseCounter::Count(doc, WebFeature::kCanvasUseColorSpace);
-  }
 
   if (RuntimeEnabledFeatures::NewCanvas2DAPIEnabled(GetExecutionContext()))
     UseCounter::Count(doc, WebFeature::kNewCanvas2DAPI);

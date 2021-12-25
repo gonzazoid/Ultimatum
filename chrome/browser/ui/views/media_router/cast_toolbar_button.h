@@ -53,9 +53,8 @@ class CastToolbarButton : public ToolbarButton,
   void OnIssuesCleared() override;
 
   // media_router::MediaRoutesObserver:
-  void OnRoutesUpdated(const std::vector<media_router::MediaRoute>& routes,
-                       const std::vector<media_router::MediaRoute::Id>&
-                           joinable_route_ids) override;
+  void OnRoutesUpdated(
+      const std::vector<media_router::MediaRoute>& routes) override;
 
   // ToolbarButton:
   bool OnMousePressed(const ui::MouseEvent& event) override;
@@ -86,7 +85,7 @@ class CastToolbarButton : public ToolbarButton,
 
   std::unique_ptr<MediaRouterContextualMenu> context_menu_;
 
-  bool has_local_display_route_ = false;
+  bool has_local_route_ = false;
 
   raw_ptr<const gfx::VectorIcon> icon_ = nullptr;
 

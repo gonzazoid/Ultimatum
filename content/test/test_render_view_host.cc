@@ -189,8 +189,13 @@ gfx::Rect TestRenderWidgetHostView::GetBoundsInRootWindow() {
   return gfx::Rect();
 }
 
+void TestRenderWidgetHostView::ClearFallbackSurfaceForCommitPending() {
+  clear_fallback_surface_for_commit_pending_called_ = true;
+}
+
 void TestRenderWidgetHostView::TakeFallbackContentFrom(
     RenderWidgetHostView* view) {
+  take_fallback_content_from_called_ = true;
   CopyBackgroundColorIfPresentFrom(*view);
 }
 
@@ -228,6 +233,11 @@ void TestRenderWidgetHostView::OnFrameTokenChanged(
     uint32_t frame_token,
     base::TimeTicks activation_time) {
   OnFrameTokenChangedForView(frame_token, activation_time);
+}
+
+void TestRenderWidgetHostView::ClearFallbackSurfaceCalled() {
+  clear_fallback_surface_for_commit_pending_called_ = false;
+  take_fallback_content_from_called_ = false;
 }
 
 std::unique_ptr<SyntheticGestureTarget>
@@ -288,6 +298,31 @@ ui::Compositor* TestRenderWidgetHostView::GetCompositor() {
   return compositor_;
 }
 
+TestRenderWidgetHostViewChildFrame::TestRenderWidgetHostViewChildFrame(
+    RenderWidgetHost* rwh)
+    : RenderWidgetHostViewChildFrame(rwh, display::ScreenInfos()) {
+  Init();
+}
+
+void TestRenderWidgetHostViewChildFrame::Reset() {
+  last_gesture_seen_ = blink::WebInputEvent::Type::kUndefined;
+}
+
+void TestRenderWidgetHostViewChildFrame::SetCompositor(
+    ui::Compositor* compositor) {
+  compositor_ = compositor;
+}
+
+ui::Compositor* TestRenderWidgetHostViewChildFrame::GetCompositor() {
+  return compositor_;
+}
+
+void TestRenderWidgetHostViewChildFrame::ProcessGestureEvent(
+    const blink::WebGestureEvent& event,
+    const ui::LatencyInfo&) {
+  last_gesture_seen_ = event.GetType();
+}
+
 TestRenderViewHost::TestRenderViewHost(
     FrameTree* frame_tree,
     SiteInstance* instance,
@@ -305,10 +340,16 @@ TestRenderViewHost::TestRenderViewHost(
                          swapped_out,
                          false /* has_initialized_audio_host */),
       delete_counter_(nullptr) {
-  // TestRenderWidgetHostView installs itself into this->view_ in its
-  // constructor, and deletes itself when TestRenderWidgetHostView::Destroy() is
-  // called.
-  new TestRenderWidgetHostView(GetWidget());
+  if (frame_tree->type() == FrameTree::Type::kFencedFrame) {
+    // TestRenderWidgetHostViewChildFrame deletes itself in
+    // RenderWidgetHostViewChildFrame::Destroy.
+    new TestRenderWidgetHostViewChildFrame(GetWidget());
+  } else {
+    // TestRenderWidgetHostView installs itself into this->view_ in
+    // its constructor, and deletes itself when
+    // TestRenderWidgetHostView::Destroy() is called.
+    new TestRenderWidgetHostView(GetWidget());
+  }
 }
 
 TestRenderViewHost::~TestRenderViewHost() {

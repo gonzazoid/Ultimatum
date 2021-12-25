@@ -17,6 +17,7 @@ export const untrustedOrigin = 'chrome-untrusted://personalization';
 
 export const trustedOrigin = 'chrome://personalization';
 
+export const kMaximumGooglePhotosPreviews = 4;
 export const kMaximumLocalImagePreviews = 3;
 
 export enum EventType {
@@ -44,12 +45,12 @@ export type SendCollectionsEvent = {
 
 export type SendGooglePhotosCountEvent = {
   type: EventType.SEND_GOOGLE_PHOTOS_COUNT,
-  count: bigint|null,
+  count: number|null,
 };
 
 export type SendGooglePhotosPhotosEvent = {
   type: EventType.SEND_GOOGLE_PHOTOS_PHOTOS,
-  photos: any[]|null,
+  photos: unknown[]|null,
 };
 
 export type SelectCollectionEvent = {
@@ -67,7 +68,7 @@ export type SelectLocalCollectionEvent = {
 
 export type SendImageCountsEvent = {
   type: EventType.SEND_IMAGE_COUNTS,
-  counts: {[key: string]: number},
+  counts: {[key: string]: number|null},
 };
 
 /**
@@ -75,10 +76,9 @@ export type SendImageCountsEvent = {
  * single unit. e.g. Dark/Light wallpaper images.
  */
 export type ImageTile = {
-  assetId: bigint,
-  attribution: string[],
-  unitId: bigint,
-  preview: Url[],
+  assetId?: bigint,
+  attribution?: string[],
+  unitId?: bigint, preview: Url[],
 };
 
 export type SendImageTilesEvent = {

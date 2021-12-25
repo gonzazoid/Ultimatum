@@ -103,19 +103,18 @@ class BackForwardCacheBrowserTestAllowCacheControlNoStore
 }  // namespace
 
 // TODO(https://crbug.com/1231849): flaky on Cast Linux.
-#if defined(OS_LINUX)
-#define MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted \
-  DISABLED_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted
-#else
-#define MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted \
-  PagesWithCacheControlNoStoreEnterBfcacheAndEvicted
-#endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // but does not get restored and gets evicted.
-IN_PROC_BROWSER_TEST_F(
-    BackForwardCacheBrowserTestAllowCacheControlNoStore,
-    MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted) {
+// Turned off on cast for https://crbug.com/1281665 , along with others.
+#if BUILDFLAG(IS_CHROMECAST)
+#define MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted \
+        DISABLED_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted
+#else
+#define MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted \
+        PagesWithCacheControlNoStoreEnterBfcacheAndEvicted
+#endif
+IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTestAllowCacheControlNoStore,
+                       MAYBE_PagesWithCacheControlNoStoreEnterBfcacheAndEvicted) {
   net::test_server::ControllableHttpResponse response(embedded_test_server(),
                                                       "/main_document");
   net::test_server::ControllableHttpResponse response2(embedded_test_server(),
@@ -151,17 +150,17 @@ IN_PROC_BROWSER_TEST_F(
       {}, {}, {}, FROM_HERE);
 }
 
-#if BUILDFLAG(IS_CHROMECAST)
-#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript \
-  DISABLED_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript
-#else
-#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript \
-  PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript
-#endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and if a cookie is modified while it is in bfcache via JavaScript, gets
 // evicted with cookie modified marked.
+// Turned off on cast for https://crbug.com/1281665 .
+#if BUILDFLAG(IS_CHROMECAST)
+#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript \
+        DISABLED_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript
+#else
+#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript \
+        PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript
+#endif
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheBrowserTestAllowCacheControlNoStore,
     MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScript) {
@@ -224,7 +223,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreCookieModifiedBackTwice \
   PagesWithCacheControlNoStoreCookieModifiedBackTwice
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and if a cookie is modified, it gets evicted with cookie changed, but if
 // navigated away again and navigated back, it gets evicted without cookie
@@ -282,18 +280,18 @@ IN_PROC_BROWSER_TEST_F(
       {}, {}, {}, FROM_HERE);
 }
 
-// Disabled due to flakiness on Cast Audio Linux https://crbug.com/1229182
-#if BUILDFLAG(IS_CHROMECAST)
-#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain \
-  DISABLED_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain
-#else
-#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain \
-  PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain
-#endif
-
+// Flaky on Cast Audio Linux https://crbug.com/1229182
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and even if a cookie is modified on a different domain than the entry, the
 // entry is not marked as cookie modified.
+// Turned off on cast for https://crbug.com/1281665 .
+#if BUILDFLAG(IS_CHROMECAST)
+#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain \
+        DISABLED_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain
+#else
+#define MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain \
+        PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain
+#endif
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheBrowserTestAllowCacheControlNoStore,
     MAYBE_PagesWithCacheControlNoStoreCookieModifiedThroughJavaScriptOnDifferentDomain) {
@@ -445,7 +443,6 @@ const char kResponseWithNoCacheWithHTTPOnlyCookie2[] =
 #define MAYBE_PagesWithCacheControlNoStoreSetFromResponseHeader \
   PagesWithCacheControlNoStoreSetFromResponseHeader
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and if a cookie is modified while it is in bfcache via response header, gets
 // evicted with cookie modified marked.
@@ -509,7 +506,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreSetFromResponseHeaderHTTPOnlyCookie \
   PagesWithCacheControlNoStoreSetFromResponseHeaderHTTPOnlyCookie
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and if HTTPOnly cookie is modified while it is in bfcache, gets evicted with
 // HTTPOnly cookie modified marked.
@@ -577,7 +573,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreHTTPOnlyCookieModifiedBackTwice \
   PagesWithCacheControlNoStoreHTTPOnlyCookieModifiedBackTwice
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and if a HTTPOnly cookie is modified, it gets evicted with cookie changed,
 // but if navigated away again and navigated back, it gets evicted without
@@ -667,16 +662,15 @@ class BackForwardCacheBrowserTestRestoreCacheControlNoStoreUnlessCookieChange
 };
 
 // TODO(https://crbug.com/1231849): flaky on Cast Linux.
-#if defined(OS_LINUX)
+// Test that a page with cache-control:no-store enters bfcache with the flag on,
+// and gets restored if cookies do not change.
+#if BUILDFLAG(IS_CHROMECAST)
 #define MAYBE_PagesWithCacheControlNoStoreRestoreFromBackForwardCache \
   DISABLED_PagesWithCacheControlNoStoreRestoreFromBackForwardCache
 #else
 #define MAYBE_PagesWithCacheControlNoStoreRestoreFromBackForwardCache \
   PagesWithCacheControlNoStoreRestoreFromBackForwardCache
 #endif
-
-// Test that a page with cache-control:no-store enters bfcache with the flag on,
-// and gets restored if cookies do not change.
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheBrowserTestRestoreCacheControlNoStoreUnlessCookieChange,
     MAYBE_PagesWithCacheControlNoStoreRestoreFromBackForwardCache) {
@@ -708,15 +702,16 @@ IN_PROC_BROWSER_TEST_F(
 }
 
 // Flaky on Cast: crbug.com/1229182
-#if BUILDFLAG(IS_CHROMECAST)
-#define MAYBE_PagesWithCacheControlNoStoreEvictedIfCookieChange \
-  DISABLED_PagesWithCacheControlNoStoreEvictedIfCookieChange
-#else
-#define MAYBE_PagesWithCacheControlNoStoreEvictedIfCookieChange \
-  PagesWithCacheControlNoStoreEvictedIfCookieChange
-#endif
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // but gets evicted if cookies change.
+// Turned off on cast for https://crbug.com/1281665 .
+#if BUILDFLAG(IS_CHROMECAST)
+#define MAYBE_PagesWithCacheControlNoStoreEvictedIfCookieChange \
+        DISABLED_PagesWithCacheControlNoStoreEvictedIfCookieChange
+#else
+#define MAYBE_PagesWithCacheControlNoStoreEvictedIfCookieChange \
+        PagesWithCacheControlNoStoreEvictedIfCookieChange
+#endif
 IN_PROC_BROWSER_TEST_F(
     BackForwardCacheBrowserTestRestoreCacheControlNoStoreUnlessCookieChange,
     MAYBE_PagesWithCacheControlNoStoreEvictedIfCookieChange) {
@@ -858,7 +853,6 @@ class BackForwardCacheBrowserTestRestoreUnlessHTTPOnlyCookieChange
 #define MAYBE_NoCacheControlNoStoreButHTTPOnlyCookieChange \
   NoCacheControlNoStoreButHTTPOnlyCookieChange
 #endif
-
 // Test that a page without cache-control:no-store can enter BackForwardCache
 // and gets restored if HTTPOnly Cookie changes.
 IN_PROC_BROWSER_TEST_F(
@@ -901,7 +895,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreNotEvictedIfNormalCookieChange \
   PagesWithCacheControlNoStoreNotEvictedIfNormalCookieChange
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and does not get evicted if normal cookies change.
 IN_PROC_BROWSER_TEST_F(
@@ -950,7 +943,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreEvictedIfHTTPOnlyCookieChange \
   PagesWithCacheControlNoStoreEvictedIfHTTPOnlyCookieChange
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and gets evicted if HTTPOnly cookie changes.
 IN_PROC_BROWSER_TEST_F(
@@ -1014,7 +1006,6 @@ IN_PROC_BROWSER_TEST_F(
 #define MAYBE_PagesWithCacheControlNoStoreEvictedIfJSAndHTTPOnlyCookieChange \
   PagesWithCacheControlNoStoreEvictedIfJSAndHTTPOnlyCookieChange
 #endif
-
 // Test that a page with cache-control:no-store enters bfcache with the flag on,
 // and gets evicted if HTTPOnly cookie changes.
 IN_PROC_BROWSER_TEST_F(

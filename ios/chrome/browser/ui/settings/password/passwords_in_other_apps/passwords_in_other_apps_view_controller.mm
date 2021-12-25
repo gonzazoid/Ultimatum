@@ -5,6 +5,7 @@
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_view_controller.h"
 
 #include "base/ios/ios_util.h"
+#include "components/password_manager/core/common/password_manager_features.h"
 #import "ios/chrome/browser/ui/elements/instruction_view.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/constants.h"
 #import "ios/chrome/browser/ui/settings/password/passwords_in_other_apps/passwords_in_other_apps_view_controller_delegate.h"
@@ -35,6 +36,11 @@ CGFloat const kTitleHorizontalMargin = 18;
 CGFloat const kDefaultBannerMultiplier = 0.25;
 CGFloat const kContentWidthMultiplier = 0.65;
 CGFloat const kButtonHorizontalMargin = 4;
+
+BOOL isPasswordManagerBrandingUpdateEnabled() {
+  return base::FeatureList::IsEnabled(
+      password_manager::features::kIOSEnablePasswordManagerBrandingUpdate);
+}
 }  // namespace
 
 @interface PasswordsInOtherAppsViewController ()
@@ -52,8 +58,8 @@ CGFloat const kButtonHorizontalMargin = 4;
 @property(nonatomic, strong) UIView* turnOnInstructionView;
 @property(nonatomic, strong) UIView* turnOffInstructionView;
 @property(nonatomic, strong) UIButton* actionButton;
-@property(nonatomic, strong) UIActivityIndicatorView* spinner;
 
+@property(nonatomic, strong) UIActivityIndicatorView* spinner;
 // Views that are used to format the layout of visible UI components.
 @property(nonatomic, strong) UIScrollView* scrollView;
 @property(nonatomic, strong) UIView* scrollContentView;
@@ -83,11 +89,26 @@ CGFloat const kButtonHorizontalMargin = 4;
   if (self) {
     _titleText =
         l10n_util::GetNSString(IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS);
-    _subtitleText = l10n_util::GetNSString(
-        IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE);
-    _bannerImage =
-        [UIImage imageNamed:@"settings_passwords_in_other_apps_banner"];
     _actionString = l10n_util::GetNSString(IDS_IOS_OPEN_SETTINGS);
+    if (isPasswordManagerBrandingUpdateEnabled()) {
+      UIUserInterfaceIdiom idiom =
+          [[UIDevice currentDevice] userInterfaceIdiom];
+      if (idiom == UIUserInterfaceIdiomPad) {
+        _subtitleText = l10n_util::GetNSString(
+            IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPAD);
+      } else {
+        _subtitleText = l10n_util::GetNSString(
+            IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_IPHONE);
+      }
+
+      _bannerImage =
+          [UIImage imageNamed:@"settings_passwords_in_other_apps_banner"];
+    } else {
+      _subtitleText = l10n_util::GetNSString(
+          IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE);
+      _bannerImage = [UIImage
+          imageNamed:@"legacy_settings_passwords_in_other_apps_banner"];
+    }
   }
   return self;
 }
@@ -576,6 +597,7 @@ CGFloat const kButtonHorizontalMargin = 4;
   [self.specificContentView addSubview:shouldShowTurnOffInstructions
                                            ? self.turnOffInstructionView
                                            : self.turnOnInstructionView];
+
   [NSLayoutConstraint
       activateConstraints:shouldShowTurnOffInstructions
                               ? self.turnOffInstructionViewConstraints

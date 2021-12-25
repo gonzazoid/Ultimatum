@@ -1,8 +1,8 @@
 {
   "comments": [
-    "Runs tests on @3x, @2x, 64-bit phone, tablet, iOS 12."
+    "Runs tests on @3x, @2x, 64-bit phone, tablet, iOS 14."
   ],
-  "xcode build version": "12d4e",
+  "xcode build version": "13a233",
   "gn_args": [
     "enable_run_ios_unittests_with_xctest=true",
     "goma_dir=\"$(goma_dir)\"",
@@ -26,21 +26,21 @@
       "include": "webrtc_tests.json",
       "device type": "iPhone 11",
       "os": "14.4",
-      "host os": "Mac-10.15|Mac-11",
+      "host os": "Mac-11",
       "pool": "chromium.tests"
     },
     {
       "include": "webrtc_tests.json",
       "device type": "iPhone X",
       "os": "14.4",
-      "host os": "Mac-10.15|Mac-11",
+      "host os": "Mac-11",
       "pool": "chromium.tests"
     },
     {
       "include": "webrtc_tests.json",
       "device type": "iPad Air (3rd generation)",
       "os": "14.4",
-      "host os": "Mac-10.15|Mac-11",
+      "host os": "Mac-11",
       "pool": "chromium.tests"
     }
   ]

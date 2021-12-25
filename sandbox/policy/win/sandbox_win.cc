@@ -25,6 +25,7 @@
 #include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/process/launch.h"
+#include "base/process/process.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -463,7 +464,7 @@ typedef BOOL(WINAPI* DuplicateHandleFunctionPtr)(HANDLE source_process_handle,
 
 DuplicateHandleFunctionPtr g_iat_orig_duplicate_handle;
 
-NtQueryObject g_QueryObject = NULL;
+NtQueryObjectFunction g_QueryObject = NULL;
 
 static const char* kDuplicateHandleWarning =
     "You are attempting to duplicate a privileged handle into a sandboxed"
@@ -805,6 +806,8 @@ ResultCode LaunchWithoutSandbox(
   }
 
   *process = base::LaunchProcess(cmd_line, options);
+  if (!process->IsValid())
+    return SBOX_ERROR_CANNOT_LAUNCH_UNSANDBOXED_PROCESS;
   return SBOX_ALL_OK;
 }
 
@@ -1263,6 +1266,8 @@ std::string SandboxWin::GetSandboxTypeInEnglish(Sandbox sandbox_type) {
       return "Media Foundation CDM";
     case Sandbox::kService:
       return "Service";
+    case Sandbox::kServiceWithJit:
+      return "Service With Jit";
     case Sandbox::kIconReader:
       return "Icon Reader";
     case Sandbox::kWindowsSystemProxyResolver:

@@ -14,13 +14,22 @@ enum RequestIdTokenStatus {
   kSuccess,
   kApprovalDeclined,
   kErrorTooManyRequests,
-  kErrorFedCmNotSupportedByProvider,
-  kErrorFetchingWellKnown,
-  kErrorInvalidWellKnown,
+  kErrorFetchingWellKnownHttpNotFound,
+  kErrorFetchingWellKnownNoResponse,
+  kErrorFetchingWellKnownInvalidResponse,
+  kErrorFetchingClientIdMetadataHttpNotFound,
+  kErrorFetchingClientIdMetadataNoResponse,
+  kErrorFetchingClientIdMetadataInvalidResponse,
+  kErrorFetchingAccountsHttpNotFound,
+  kErrorFetchingAccountsNoResponse,
+  kErrorFetchingAccountsInvalidResponse,
+  kErrorFetchingIdTokenHttpNotFound,
+  kErrorFetchingIdTokenNoResponse,
+  kErrorFetchingIdTokenInvalidResponse,
+  kErrorFetchingIdTokenInvalidRequest,
   kErrorFetchingSignin,
   kErrorInvalidSigninResponse,
-  kErrorInvalidAccountsResponse,
-  kErrorInvalidTokenResponse,
+  kErrorCanceled,
   kError,
 };
 
@@ -42,9 +51,9 @@ enum RequestMode {
 
 // The details of a single logout request from an identity provider.
 struct LogoutRequest {
-  // Endpoint to which the request will be sent. The origin is validated to
+  // URL to which the request will be sent. The origin is validated to
   // have an associated active session.
-  url.mojom.Url endpoint;
+  url.mojom.Url url;
 
   // Identifier for the account being logged out. This is used to verify that
   // the logout request correlates to a previous sign-in event, and will
@@ -67,6 +76,9 @@ interface FederatedAuthRequest {
                  RequestMode mode,
                  bool prefer_auto_sign_in) =>
       (RequestIdTokenStatus status, string? id_token);
+
+  // Cancels the pending token request, if any.
+  CancelTokenRequest();
 
   // Revokes a token for the specified |account_id| from |provider| for
   // the RP identified by |client_id|.

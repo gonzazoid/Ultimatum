@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.webauth.authenticator;
 
 import android.Manifest.permission;
-import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.KeyguardManager;
@@ -213,6 +212,12 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
                 mState = State.QR_CONFIRM;
                 break;
         }
+
+        // Reference these strings to avoid an error about them being unused.
+        // They're checked in for translation ahead of the code that uses them.
+        // TODO(agl): remove this.
+        getResources().getString(R.string.cablev2_paask_body);
+        getResources().getString(R.string.cablev2_paask_title);
     }
 
     // This class should not be reachable on Android versions < N (API level 24).
@@ -383,7 +388,6 @@ public class CableAuthenticatorUI extends Fragment implements OnClickListener {
      * Called when the button to scan a QR code is pressed.
      */
     @Override
-    @SuppressLint("SetTextI18n")
     public void onClick(View v) {
         if (v == mErrorCloseButton) {
             getActivity().finish();

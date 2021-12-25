@@ -23,8 +23,8 @@
 #include "chrome/browser/browser_process_platform_part.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/obsolete_system/obsolete_system.h"
-#include "chrome/browser/privacy_sandbox/privacy_sandbox_settings.h"
-#include "chrome/browser/privacy_sandbox/privacy_sandbox_settings_factory.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_service.h"
+#include "chrome/browser/privacy_sandbox/privacy_sandbox_service_factory.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_shortcut_manager.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
@@ -166,7 +166,11 @@ void AddCommonStrings(content::WebUIDataSource* html_source, Profile* profile) {
     {"menu", IDS_MENU},
     {"menuButtonLabel", IDS_SETTINGS_MENU_BUTTON_LABEL},
     {"moreActions", IDS_SETTINGS_MORE_ACTIONS},
+    {"noThanks", IDS_NO_THANKS},
     {"ok", IDS_OK},
+#if !BUILDFLAG(IS_CHROMEOS_ASH)
+    {"relaunchConfirmationDialogTitle", IDS_RELAUNCH_CONFIRMATION_DIALOG_TITLE},
+#endif
     {"restart", IDS_SETTINGS_RESTART},
 #if !BUILDFLAG(IS_CHROMEOS_ASH)
     {"restartToApplyChanges", IDS_SETTINGS_RESTART_TO_APPLY_CHANGES},
@@ -209,7 +213,7 @@ void AddCommonStrings(content::WebUIDataSource* html_source, Profile* profile) {
                           profile->IsGuestSession());
 #endif
 
-  html_source->AddBoolean("isSupervised", profile->IsChild());
+  html_source->AddBoolean("isChildAccount", profile->IsChild());
 }
 
 void AddA11yStrings(content::WebUIDataSource* html_source) {
@@ -922,6 +926,7 @@ void AddAutofillStrings(content::WebUIDataSource* html_source,
       {"editDisclaimerTitle", IDS_SETTINGS_COMPROMISED_EDIT_DISCLAIMER_TITLE},
       {"editDisclaimerDescription",
        IDS_SETTINGS_COMPROMISED_EDIT_DISCLAIMER_DESCRIPTION},
+      {"genericCreditCard", IDS_AUTOFILL_CC_GENERIC},
       {"creditCards", IDS_AUTOFILL_PAYMENT_METHODS},
       {"noPaymentMethodsFound", IDS_SETTINGS_PAYMENT_METHODS_NONE},
       {"googlePayments", IDS_SETTINGS_GOOGLE_PAYMENTS},
@@ -943,6 +948,10 @@ void AddAutofillStrings(content::WebUIDataSource* html_source,
       {"addressEmail", IDS_SETTINGS_AUTOFILL_ADDRESSES_EMAIL},
       {"honorificLabel", IDS_SETTINGS_AUTOFILL_ADDRESS_HONORIFIC_LABEL},
       {"moreActionsForAddress", IDS_SETTINGS_AUTOFILL_MORE_ACTIONS_FOR_ADDRESS},
+      {"moreActionsForCreditCard",
+       IDS_SETTINGS_AUTOFILL_MORE_ACTIONS_FOR_CREDIT_CARD},
+      {"moreActionsCreditCardDescription",
+       IDS_SETTINGS_AUTOFILL_MORE_ACTIONS_CARD_DESCRIPTION},
       {"removeAddress", IDS_SETTINGS_ADDRESS_REMOVE},
       {"removeAddressConfirmationTitle",
        IDS_SETTINGS_ADDRESS_REMOVE_CONFIRMATION_TITLE},
@@ -1090,9 +1099,11 @@ void AddAutofillStrings(content::WebUIDataSource* html_source,
        IDS_SETTINGS_PASSWORDS_MANAGE_PASSWORDS_PLAINTEXT},
       {"savedToThisDeviceOnly",
        IDS_SETTINGS_PAYMENTS_SAVED_TO_THIS_DEVICE_ONLY},
-      {"trustedVaultOptInLabel", IDS_SETTINGS_TRUSTED_VAULT_OPT_IN_LABEL},
-      {"trustedVaultOptInSubLabel",
-       IDS_SETTINGS_TRUSTED_VAULT_OPT_IN_SUB_LABEL},
+      {"trustedVaultBannerLabel", IDS_SETTINGS_TRUSTED_VAULT_BANNER_LABEL},
+      {"trustedVaultBannerSubLabelOfferOptIn",
+       IDS_SETTINGS_TRUSTED_VAULT_BANNER_SUB_LABEL_OFFER_OPT_IN},
+      {"trustedVaultBannerSubLabelOptedIn",
+       IDS_SETTINGS_TRUSTED_VAULT_BANNER_SUB_LABEL_OPTED_IN},
       {"noSearchResults", IDS_SEARCH_NO_RESULTS},
       {"searchResultsPlural", IDS_SEARCH_RESULTS_PLURAL},
       {"searchResultsSingular", IDS_SEARCH_RESULTS_SINGULAR},
@@ -1210,15 +1221,12 @@ void AddSignOutDialogStrings(content::WebUIDataSource* html_source,
                              Profile* profile) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   bool is_dice_enabled = false;
-  bool use_browser_sync_consent =
-      chromeos::features::ShouldUseBrowserSyncConsent();
 #else
   bool is_dice_enabled =
       AccountConsistencyModeManager::IsDiceEnabledForProfile(profile);
-  bool use_browser_sync_consent = false;
 #endif
 
-  if (use_browser_sync_consent || is_dice_enabled) {
+  if (is_dice_enabled) {
     static constexpr webui::LocalizedString kTurnOffStrings[] = {
         {"syncDisconnect", IDS_SETTINGS_PEOPLE_SYNC_TURN_OFF},
         {"syncDisconnectTitle",
@@ -1588,7 +1596,7 @@ void AddPrivacySandboxStrings(content::WebUIDataSource* html_source,
   // one provided by the Privacy Sandbox service, and one with a URL
   // replacement based on a feature parameter.
   std::u16string floc_explanation =
-      PrivacySandboxSettingsFactory::GetForProfile(profile)
+      PrivacySandboxServiceFactory::GetForProfile(profile)
           ->GetFlocDescriptionForDisplay() +
       u" " +  // Whitespace is a valid separator w.r.t l10n.
       l10n_util::GetStringFUTF16(IDS_SETTINGS_PRIVACY_SANDBOX_FLOC_TRIAL_ACTIVE,
@@ -1599,7 +1607,7 @@ void AddPrivacySandboxStrings(content::WebUIDataSource* html_source,
   // profile, and so the relevant string can be injected here, rather than
   // fetched dynamically from JS.
   html_source->AddString("privacySandboxPageFlocResetExplanation",
-                         PrivacySandboxSettingsFactory::GetForProfile(profile)
+                         PrivacySandboxServiceFactory::GetForProfile(profile)
                              ->GetFlocResetExplanationForDisplay());
 }
 
@@ -1607,7 +1615,6 @@ void AddPrivacyReviewStrings(content::WebUIDataSource* html_source) {
   static constexpr webui::LocalizedString kLocalizedStrings[] = {
       {"privacyReviewLabel", IDS_SETTINGS_PRIVACY_REVIEW_LABEL},
       {"privacyReviewSublabel", IDS_SETTINGS_PRIVACY_REVIEW_SUBLABEL},
-      {"privacyReviewPromoTitle", IDS_SETTINGS_PRIVACY_REVIEW_PROMO_TITLE},
       {"privacyReviewPromoBody", IDS_SETTINGS_PRIVACY_REVIEW_PROMO_BODY},
       {"privacyReviewPromoStartButton",
        IDS_SETTINGS_PRIVACY_REVIEW_PROMO_START_BUTTON},
@@ -1972,6 +1979,8 @@ void AddSiteSettingsStrings(content::WebUIDataSource* html_source,
      IDS_SETTINGS_SITE_SETTINGS_ALL_SITES_SORT_METHOD_STORAGE},
     {"siteSettingsAllSitesSortMethodName",
      IDS_SETTINGS_SITE_SETTINGS_ALL_SITES_SORT_METHOD_NAME},
+    {"siteSettingsSiteEntryPartitionedLabel",
+     IDS_SETTINGS_SITE_SETTINGS_SITE_ENTRY_PARTITIONED_LABEL},
     {"siteSettingsSiteRepresentationSeparator",
      IDS_SETTINGS_SITE_SETTINGS_SITE_REPRESENTATION_SEPARATOR},
     {"siteSettingsAppProtocolHandlers",
@@ -2305,6 +2314,8 @@ void AddSiteSettingsStrings(content::WebUIDataSource* html_source,
      IDS_SETTINGS_SITE_SETTINGS_REMOVE_SITE_ORIGIN_DIALOG_TITLE},
     {"siteSettingsRemoveSiteOriginAppDialogTitle",
      IDS_SETTINGS_SITE_SETTINGS_REMOVE_SITE_ORIGIN_APP_DIALOG_TITLE},
+    {"siteSettingsRemoveSiteOriginPartitionedDialogTitle",
+     IDS_SETTINGS_SITE_SETTINGS_REMOVE_SITE_ORIGIN_PARTITIONED_DIALOG_TITLE},
     {"siteSettingsRemoveSiteGroupDialogTitle",
      IDS_SETTINGS_SITE_SETTINGS_REMOVE_SITE_GROUP_DIALOG_TITLE},
     {"siteSettingsRemoveSiteGroupAppDialogTitle",

@@ -30,8 +30,6 @@ source_set("web_applications") {
     "externally_managed_app_manager_impl.h",
     "externally_managed_app_registration_task.cc",
     "externally_managed_app_registration_task.h",
-    "file_handlers_permission_helper.cc",
-    "file_handlers_permission_helper.h",
     "file_utils_wrapper.cc",
     "file_utils_wrapper.h",
     "install_bounce_metric.cc",
@@ -151,6 +149,8 @@ source_set("web_applications") {
     "web_app_system_web_app_data.h",
     "web_app_tab_helper.cc",
     "web_app_tab_helper.h",
+    "web_app_translation_manager.cc",
+    "web_app_translation_manager.h",
     "web_app_ui_manager.h",
     "web_app_uninstall_job.cc",
     "web_app_uninstall_job.h",
@@ -162,6 +162,8 @@ source_set("web_applications") {
     "web_app_utils.h",
     "web_application_info.cc",
     "web_application_info.h",
+    "web_launch_params_helper.cc",
+    "web_launch_params_helper.h",
   ]
 
   if (is_chromeos_ash || is_chromeos_lacros) {
@@ -501,6 +503,7 @@ source_set("web_applications_unit_tests") {
     "web_app_registrar_unittest.cc",
     "web_app_shortcut_unittest.cc",
     "web_app_sync_bridge_unittest.cc",
+    "web_app_translation_manager_unittest.cc",
     "web_app_uninstall_job_unittest.cc",
     "web_app_unittest.cc",
     "web_app_url_loader_unittest.cc",
@@ -554,6 +557,7 @@ source_set("web_applications_unit_tests") {
     "//chrome/app/theme:theme_resources",
     "//chrome/browser",
     "//chrome/browser:browser_process",
+    "//chrome/browser/extensions:test_support",
     "//chrome/browser/profiles:profile",
     "//chrome/browser/web_applications/extensions:extensions",
     "//chrome/common",

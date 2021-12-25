@@ -30,6 +30,11 @@
           'shards': 2,
         },
       },
+      'android-marshmallow-arm64-rel': {
+        'swarming': {
+          'quickrun_shards': 3,
+        },
+      },
       'android-marshmallow-arm64-rel-rts': {
         'swarming': {
           'shards': 2,
@@ -38,6 +43,7 @@
       'android-marshmallow-x86-rel': {
         'swarming': {
           'shards': 2,
+          'quickrun_shards': 6,
         },
       },
       'android-pie-arm64-rel': {
@@ -53,6 +59,7 @@
             },
           ],
           'shards': 2,
+          'quickrun_shards': 6,
         },
       },
       'android-pie-x86-rel': {
@@ -79,8 +86,6 @@
       # TODO(ynovikov) Investigate why the test breaks on older devices.
       'Android FYI Release (Nexus 5)',
       'Android FYI Release (Nexus 9)',
-      # Temporarily disabled due to bad NVIDIA driver upgrade crbug.com/950542
-      'Linux FYI Debug (NVIDIA)',
     ],
     'modifications': {
       # anglebug.com/5328 suspecting blue screen caused by multiprocess
@@ -476,6 +481,10 @@
           "--additional-env-var=LLVM_PROFILE_FILE=${ISOLATED_OUTDIR}/profraw/default-%2m.profraw",
         ],
       },
+      # TODO (crbug.com/1254971) Re-enable once fixed
+      'mac-osxbeta-rel': {
+        'experiment_percentage': 0,
+      },
       'mac10.12-blink-rel-dummy': {
         'swarming': {
           'shards': 20,
@@ -561,6 +570,7 @@
         # crbug.com/794372
         'swarming': {
           'shards': 40,
+          'quickrun_shards': 80
         },
       },
       'Linux ASan Tests (sandboxed)': {
@@ -590,6 +600,9 @@
         'args': [
           '--test-launcher-filter-file=../../testing/buildbot/filters/ozone-linux.wayland_browser_tests.filter',
         ],
+        'swarming': {
+          'quickrun_shards': 24,
+        },
       },
       'Linux Tests (dbg)(1)': {
         # crbug.com/1066161
@@ -665,6 +678,7 @@
           # This is for slow test execution that often becomes a critical path of
           # swarming jobs. crbug.com/868114
           'shards': 15,
+          'quickrun_shards': 30,
         }
       },
       'Win10 Tests x64 20h2': {
@@ -710,6 +724,7 @@
       'linux-chromeos-rel': {
         'swarming': {
           'shards': 20,
+          'quickrun_shards': 40,
           'dimension_sets': [
             {
               'kvm': '1',
@@ -739,6 +754,9 @@
         'args': [
           '--test-launcher-filter-file=../../testing/buildbot/filters/linux-lacros.browser_tests.filter',
         ],
+        'swarming': {
+          'quickrun_shards': 20,
+        },
       },
       'linux-trusty-rel': {
        'args': [
@@ -825,6 +843,11 @@
   },
   'chrome_all_tast_tests': {
     'modifications': {
+      'chromeos-amd64-generic-rel': {
+        'swarming': {
+          'quickrun_shards': 4,
+        },
+      },
       'chromeos-betty-pi-arc-cfi-thin-lto-chrome': {
         'args': [
           # This bot sets symbol_level=2, which doesn't fit inside a normal VM.
@@ -1190,6 +1213,7 @@
       'Linux ASan LSan Tests (1)': {
         'swarming': {
           'shards': 12,
+          'quickrun_shards': 24,
         },
       },
       'Linux ASan Tests (sandboxed)': {
@@ -1281,6 +1305,11 @@
         'swarming': {
           'shards': 20,
         },
+      },
+      'android-pie-arm64-rel': {
+        'swarming': {
+          'quickrun_shards': 40
+        }
       },
       'android-pie-x86-rel': {
         'args': [
@@ -1442,6 +1471,10 @@
         'args': [
           '--test-launcher-filter-file=../../testing/buildbot/filters/android.emulator_12.crashpad_tests.filter',
         ],
+      },
+      # TODO (crbug.com/1254975) Re-enable once fixed
+      'mac-osxbeta-rel': {
+        'experiment_percentage': 100,
       },
     },
   },
@@ -1692,6 +1725,13 @@
       # which isn't instrumented.
       'Linux MSan Tests',
     ],
+    'modifications': {
+      'android-12-x64-fyi-rel': {
+        'args': [
+          '--test-launcher-filter-file=../../testing/buildbot/filters/android.emulator_12.gl_unittests.filter',
+        ],
+      },
+    },
   },
   'gl_unittests_ozone': {
     'remove_from': [
@@ -1800,6 +1840,7 @@
         # These are slow on the ASan trybot for some reason, crbug.com/794372
         'swarming': {
           'shards': 6,
+          'quickrun_shards': 12,
         },
       },
       'Linux ChromiumOS MSan Tests': {
@@ -1823,6 +1864,11 @@
       },
       'Mac ASan 64 Tests (1)': { # https://crbug.com/1251656
         'experiment_percentage': 100,
+      },
+      'Mac11 Tests': {
+        'swarming': {
+          'quickrun_shards': 6,
+        },
       },
       'Mac11 Tests (dbg)': { # https://crbug.com/1265051
         'experiment_percentage': 100,
@@ -1880,6 +1926,10 @@
         'args': [
           '--coverage-continuous-mode=1',
         ],
+      },
+      # TODO (crbug.com/1278617) Re-enable once fixed
+      'mac-osxbeta-rel': {
+        'experiment_percentage': 100,
       },
     },
   },
@@ -2264,6 +2314,11 @@
           '--test-launcher-filter-file=../../testing/buildbot/filters/android.emulator.net_unittests.filter',
         ],
       },
+      'chromeos-amd64-generic-rel': {
+        'swarming': {
+          'quickrun_shards': 6,
+        },
+      },
       'fuchsia-code-coverage': {
         'swarming': {
           'shards': 14,
@@ -2278,6 +2333,10 @@
         'swarming': {
           'shards': 2,
         },
+      },
+      # TODO (crbug.com/1278618) Re-enable once fixed
+      'mac-osxbeta-rel': {
+        'experiment_percentage': 0,
       },
       'win-asan': {
         # TODO(crbug.com/794372): net_unittests is slow under ASan.
@@ -2374,6 +2433,14 @@
     ],
   },
   'perfetto_unittests': {
+    'modifications': {
+      'android-12-x64-fyi-rel': {
+        'args': [
+          # TODO(crbug.com/1260440): Fix the failed test
+          '--gtest_filter=-ScopedDirTest.CloseOutOfScope',
+        ],
+      },
+    },
     'remove_from': [
       # TODO(crbug.com/931138): Fix permission issue when creating tmp files
       'android-arm64-proguard-rel',
@@ -2438,11 +2505,21 @@
           '--extra-browser-args=--disable-wcg-for-test',
         ],
       },
+      'Mac Retina Release (AMD)': {
+        'swarming': {
+          'quickrun_shards': 2,
+        },
+      },
       'Optional Android Release (Pixel 4)': {
         'args': [
           # See above.
           '--extra-browser-args=--disable-wcg-for-test',
         ],
+      },
+      'Win10 x64 Release (NVIDIA)': {
+        'swarming': {
+          'quickrun_shards': 2,
+        },
       },
     },
     'replacements': {
@@ -2626,6 +2703,11 @@
       },
     },
     'modifications': {
+      'Linux ASan LSan Tests (1)': {
+        'swarming': {
+          'quickrun_shards': 2,
+        },
+      },
       'android-11-x86-rel': {
         'args': [
           # TODO(crbug.com/1264654): Fix the failed tests
@@ -3182,11 +3264,22 @@
   },
   'webgl2_conformance_metal_passthrough_tests': {
     'remove_from': [
-      # crbug.com/1270755: failing entire shards on Intel ASAN bot.
-      'Mac FYI ASAN (Intel)',
+      'Mac FYI ASAN (Intel)', # crbug.com/1270755
       # Not enough capacity.
       'Mac FYI Retina Release (NVIDIA)',
     ],
+    'modifications': {
+      'Mac FYI ASAN (Intel)': {
+        'args': [
+          '--extra-browser-args=--disable-metal-shader-cache',
+        ],
+      },
+      'Mac FYI Retina ASAN (AMD)': {
+        'args': [
+          '--extra-browser-args=--disable-metal-shader-cache',
+        ],
+      },
+    },
   },
   'webgl2_conformance_validating_tests': {
     'remove_from': [
@@ -3223,11 +3316,22 @@
   },
   'webgl_conformance_metal_passthrough_tests': {
     'remove_from': [
-      # crbug.com/1270755: failing entire shards on Intel ASAN bot.
-      'Mac FYI ASAN (Intel)',
-      # crbug.com/1158857: re-enable if Metal shader cache workaround is added.
+      'Mac FYI ASAN (Intel)', # crbug.com/1270755
+      # crbug.com/1158857: re-enable when switching to Metal by default.
       'Mac FYI Retina Release (NVIDIA)',
     ],
+    'modifications': {
+      'Mac FYI ASAN (Intel)': {
+        'args': [
+          '--extra-browser-args=--disable-metal-shader-cache',
+        ],
+      },
+      'Mac FYI Retina ASAN (AMD)': {
+        'args': [
+          '--extra-browser-args=--disable-metal-shader-cache',
+        ],
+      },
+    },
   },
   'webgl_conformance_tests': {
     'remove_from': [

@@ -34,11 +34,11 @@
 
 namespace blink {
 
-LayoutSVGBlock::LayoutSVGBlock(Element* element)
-    : LayoutBlockFlow(element),
+LayoutSVGBlock::LayoutSVGBlock(ContainerNode* node)
+    : LayoutBlockFlow(node),
       needs_transform_update_(true),
       transform_uses_reference_box_(false) {
-  DCHECK(IsA<SVGElement>(element));
+  DCHECK(IsA<SVGElement>(node));
 }
 
 SVGElement* LayoutSVGBlock::GetElement() const {
@@ -190,7 +190,7 @@ bool LayoutSVGBlock::MapToVisualRectInAncestorSpaceInternal(
   // Apply other mappings on local SVG coordinates.
   bool retval = SVGLayoutSupport::MapToVisualRectInAncestorSpace(
       *this, ancestor, gfx::RectF(rect), rect);
-  transform_state.SetQuad(FloatQuad(FloatRect(rect)));
+  transform_state.SetQuad(FloatQuad(gfx::RectF(rect)));
   return retval;
 }
 

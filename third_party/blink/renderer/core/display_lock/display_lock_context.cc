@@ -27,7 +27,6 @@
 #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/pre_paint_tree_walk.h"
 #include "third_party/blink/renderer/platform/bindings/microtask.h"
@@ -703,34 +702,9 @@ bool DisplayLockContext::MarkForCompositingUpdatesIfNeeded() {
 
   auto* layout_box = DynamicTo<LayoutBoxModelObject>(layout_object);
   if (layout_box && layout_box->HasSelfPaintingLayer()) {
-    if (needs_compositing_requirements_update_)
-      layout_box->Layer()->SetNeedsCompositingRequirementsUpdate();
-    needs_compositing_requirements_update_ = false;
-
     if (needs_compositing_dependent_flag_update_)
       layout_box->Layer()->SetNeedsCompositingInputsUpdate();
     needs_compositing_dependent_flag_update_ = false;
-
-    if (needs_graphics_layer_rebuild_)
-      layout_box->Layer()->SetNeedsGraphicsLayerRebuild();
-    needs_graphics_layer_rebuild_ = false;
-
-    if (forced_graphics_layer_update_blocked_) {
-      auto* compositing_parent =
-          layout_box->Layer()->EnclosingLayerWithCompositedLayerMapping(
-              kIncludeSelf);
-      if (compositing_parent) {
-        compositing_parent->GetCompositedLayerMapping()
-            ->SetNeedsGraphicsLayerUpdate(kGraphicsLayerUpdateSubtree);
-      } else {
-        // If we don't have a compositing layer mapping ancestor in this frame,
-        // then mark this layer as needing a graphics layer rebuild, since what
-        // we want is to clear any dangling trees in this subtree or composite
-        // the frame again if something in the subtree still needs compositing.
-        layout_box->Layer()->SetNeedsGraphicsLayerRebuild();
-      }
-    }
-    forced_graphics_layer_update_blocked_ = false;
 
     return true;
   }
@@ -765,8 +739,7 @@ bool DisplayLockContext::IsElementDirtyForPrePaint() const {
            PrePaintTreeWalk::ObjectRequiresTreeBuilderContext(*layout_object) ||
            needs_prepaint_subtree_walk_ ||
            needs_effective_allowed_touch_action_update_ ||
-           needs_blocking_wheel_event_handler_update_ ||
-           needs_compositing_requirements_update_;
+           needs_blocking_wheel_event_handler_update_;
   }
   return false;
 }

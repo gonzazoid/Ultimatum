@@ -112,6 +112,7 @@ Jinak to vaše nastavení ochrany soukromí bude blokovat. Povolením umožníte
 <translation id="1308113895091915999">Je k dispozici nabídka</translation>
 <translation id="1312803275555673949">Jaké důkazy to dokládají?</translation>
 <translation id="131405271941274527">Web <ph name="URL" /> chce odesílat a přijímat informace, když se telefonem dotknete zařízení NFC</translation>
+<translation id="1314311879718644478">Zobrazit obsah rozšířené reality</translation>
 <translation id="1314509827145471431">Vazba vpravo</translation>
 <translation id="1318023360584041678">Uloženo do skupiny karet</translation>
 <translation id="1319245136674974084">U této aplikace se již příště neptat</translation>
@@ -215,6 +216,7 @@ Jinak to vaše nastavení ochrany soukromí bude blokovat. Povolením umožníte
 <translation id="1583429793053364125">Při zobrazování této webové stránky došlo k chybě.</translation>
 <translation id="1586541204584340881">Která rozšíření máte nainstalovaná</translation>
 <translation id="1588438908519853928">Normální</translation>
+<translation id="1589050138437146318">Nainstalovat ARCore?</translation>
 <translation id="1592005682883173041">Přístup k místním datům</translation>
 <translation id="1594030484168838125">Zvolit</translation>
 <translation id="160851722280695521">Spustit v Chromu dinosauří hru</translation>
@@ -1249,6 +1251,7 @@ Jinak to vaše nastavení ochrany soukromí bude blokovat. Povolením umožníte
 <translation id="4968522289500246572">Tato aplikace je určena pro mobily a změna velikosti nemusí fungovat správně. V aplikaci může docházet k problémům nebo se může restartovat.</translation>
 <translation id="4969341057194253438">Smazat nahrávku</translation>
 <translation id="4973922308112707173">Dvě díry nahoře</translation>
+<translation id="4976702386844183910">Naposledy navštíveno <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Použít mikrofon?</translation>
 <translation id="4984339528288761049">Prc5 (obálka)</translation>
 <translation id="4989163558385430922">Zobrazit vše</translation>
@@ -1334,6 +1337,7 @@ Jinak to vaše nastavení ochrany soukromí bude blokovat. Povolením umožníte
 <translation id="5215116848420601511">Platební metody a adresy pomocí služby Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Přihrádka 13</translation>
+<translation id="5216942107514965959">Naposledy navštíveno dnes</translation>
 <translation id="5222812217790122047">Je nutné zadat e-mail</translation>
 <translation id="5230733896359313003">Dodací adresa</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1377,6 +1381,7 @@ Jinak to vaše nastavení ochrany soukromí bude blokovat. Povolením umožníte
 <translation id="5333022057423422993">Chrome zjistil, že právě použité heslo bylo vyzrazeno při porušení zabezpečení údajů. Pokud svá hesla chcete zabezpečit, doporučujeme vám zkontrolovat uložená hesla.</translation>
 <translation id="5334013548165032829">Podrobné systémové protokoly</translation>
 <translation id="5334145288572353250">Uložit adresu?</translation>
+<translation id="5335920952954443287">Tlukoucí srdce</translation>
 <translation id="5340250774223869109">Aplikace je blokována</translation>
 <translation id="534295439873310000">Zařízení NFC</translation>
 <translation id="5344579389779391559">Tato stránka se vám může pokusit naúčtovat poplatky</translation>
@@ -1519,6 +1524,7 @@ Kontaktujte administrátora systému.</translation>
 <translation id="5869522115854928033">Uložená hesla</translation>
 <translation id="5873013647450402046">Banka chce potvrdit vaši totožnost.</translation>
 <translation id="5887400589839399685">Karta byla uložena</translation>
+<translation id="5887687176710214216">Naposledy navštíveno včera</translation>
 <translation id="5895138241574237353">Restartovat</translation>
 <translation id="5895187275912066135">Datum vydání</translation>
 <translation id="5901630391730855834">Žlutá</translation>
@@ -1711,6 +1717,7 @@ Kontaktujte administrátora systému.</translation>
 <translation id="6529602333819889595">&amp;Opakovat smazání</translation>
 <translation id="6545864417968258051">Vyhledávání Bluetooth</translation>
 <translation id="6547208576736763147">Dva otvory vlevo</translation>
+<translation id="6554732001434021288">Naposledy navštíveno před <ph name="NUM_DAYS" /> dny</translation>
 <translation id="6556866813142980365">Opakovat</translation>
 <translation id="6569060085658103619">Prohlížíte si stránku rozšíření</translation>
 <translation id="6573200754375280815">Dvě díry vpravo</translation>
@@ -2045,6 +2052,7 @@ Kontaktujte administrátora systému.</translation>
 <translation id="7654909834015434372">Když upravíte poznámky, obnoví se původní orientace tohoto dokumentu</translation>
 <translation id="765676359832457558">Skrýt rozšířená nastavení...</translation>
 <translation id="7658239707568436148">Zrušit</translation>
+<translation id="7659878911471462949">Slzy štěstí</translation>
 <translation id="7662298039739062396">Nastavení je spravováno rozšířením</translation>
 <translation id="7663736086183791259">Certifikát <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Není povoleno v anonymním režimu</translation>
@@ -2145,7 +2153,6 @@ Kontaktujte administrátora systému.</translation>
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Může žádat o použití zařízení a dat pro virtuální realitu</translation>
 <translation id="7984945080620862648">Web <ph name="SITE" /> teď nemůžete navštívit, protože webové stránky odeslaly zakódované identifikační údaje, které Chrome nedokáže zpracovat. Síťové chyby a útoky jsou obvykle dočasné, tato stránka pravděpodobně později bude fungovat.</translation>
-<translation id="79859296434321399">Chcete-li zobrazit obsah pro rozšířenou realitu, nainstalujte ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Vazba</translation>
 <translation id="7992044431894087211">Sdílení obrazovky s aplikací <ph name="APPLICATION_TITLE" /> bylo obnoveno</translation>
@@ -2249,6 +2256,7 @@ Kontaktujte administrátora systému.</translation>
 <translation id="830498451218851433">Přeložení napůl</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Nainstalované aplikace a četnost jejich používání</translation>
+<translation id="8317207217658302555">Aktualizovat ARCore?</translation>
 <translation id="831997045666694187">Večer</translation>
 <translation id="8321476692217554900">oznámení</translation>
 <translation id="8328484624016508118">Po zavření všech anonymních karet smaže Chrome:
@@ -2319,7 +2327,6 @@ Další podrobnosti:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Resetovat oprávnění}few{Resetovat oprávnění}many{Resetovat oprávnění}other{Resetovat oprávnění}}</translation>
 <translation id="8555010941760982128">Při placení použijte tento kód</translation>
 <translation id="8557066899867184262">Kód CVC je uveden na zadní straně karty.</translation>
-<translation id="8558485628462305855">Chcete-li zobrazit obsah pro rozšířenou realitu, aktualizujte ARCore</translation>
 <translation id="8559762987265718583">Soukromé připojení k doméně <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> nelze navázat, protože máte v zařízení nastaveno chybné datum a čas (<ph name="DATE_AND_TIME" />).</translation>
 <translation id="8564182942834072828">Oddělené dokumenty / nekompletované kopie</translation>
 <translation id="8564985650692024650">Pokud jste heslo organizace <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> použili na jiném webu, doporučujeme vám ho resetovat.</translation>

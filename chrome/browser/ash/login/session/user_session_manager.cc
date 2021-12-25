@@ -16,6 +16,9 @@
 
 #include "ash/components/account_manager/account_manager_factory.h"
 #include "ash/components/arc/arc_prefs.h"
+#include "ash/components/login/auth/auth_session_authenticator.h"
+#include "ash/components/login/auth/challenge_response/known_user_pref_utils.h"
+#include "ash/components/login/auth/stub_authenticator_builder.h"
 #include "ash/components/login/session/session_termination_manager.h"
 #include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_features.h"
@@ -88,7 +91,6 @@
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/ash/settings/about_flags.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
-#include "chrome/browser/ash/sync/ash_turn_sync_on_helper.h"
 #include "chrome/browser/ash/sync/os_sync_util.h"
 #include "chrome/browser/ash/tether/tether_service.h"
 #include "chrome/browser/ash/tpm_firmware_update_notification.h"
@@ -124,9 +126,6 @@
 #include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager.pb.h"
 #include "chromeos/dbus/tpm_manager/tpm_manager_client.h"
-#include "chromeos/login/auth/auth_session_authenticator.h"
-#include "chromeos/login/auth/challenge_response/known_user_pref_utils.h"
-#include "chromeos/login/auth/stub_authenticator_builder.h"
 #include "chromeos/network/portal_detector/network_portal_detector.h"
 #include "chromeos/network/portal_detector/network_portal_detector_strategy.h"
 #include "chromeos/tpm/prepare_tpm.h"
@@ -620,7 +619,7 @@ scoped_refptr<Authenticator> UserSessionManager::CreateAuthenticator(
       authenticator_ = injected_authenticator_builder_->Create(consumer);
     } else if (base::FeatureList::IsEnabled(
                    ash::features::kUseAuthsessionAuthentication)) {
-      authenticator_ = new chromeos::AuthSessionAuthenticator(
+      authenticator_ = new AuthSessionAuthenticator(
           consumer, std::make_unique<ChromeSafeModeDelegate>());
     } else {
       authenticator_ =
@@ -1712,11 +1711,6 @@ void UserSessionManager::InitializeBrowser(Profile* profile) {
   // Only allow Quirks downloads after login is finished.
   quirks::QuirksManager::Get()->OnLoginCompleted();
 
-  if (features::ShouldUseBrowserSyncConsent() &&
-      SyncServiceFactory::IsSyncAllowed(profile)) {
-    ash_turn_sync_on_helper_ = std::make_unique<AshTurnSyncOnHelper>(profile);
-  }
-
   // Schedule a flush if profile is not ephemeral.
   if (!ProfileHelper::IsEphemeralUserProfile(profile))
     ProfileHelper::Get()->FlushProfile(profile);
@@ -1730,7 +1724,8 @@ void UserSessionManager::InitializeBrowser(Profile* profile) {
   if (delegate_)
     delegate_->OnProfilePrepared(profile, browser_launched);
 
-  if (OnboardingUserActivityCounter::ShouldStart(profile->GetPrefs())) {
+  if (ProfileHelper::IsPrimaryProfile(profile) &&
+      OnboardingUserActivityCounter::ShouldStart(profile->GetPrefs())) {
     onboarding_user_activity_counter_ =
         std::make_unique<OnboardingUserActivityCounter>(
             profile->GetPrefs(), GetActivityTimeBeforeOnboardingSurvey(),
@@ -2210,7 +2205,7 @@ void UserSessionManager::DoBrowserLaunchInternal(Profile* profile,
 
   // Call this before `RestartToApplyPerSessionFlagsIfNeed()` in the login
   // process.
-  ash::BrowserDataMigrator::ClearMigrationStep(
+  ash::BrowserDataMigratorImpl::ClearMigrationStep(
       g_browser_process->local_state());
 
   if (RestartToApplyPerSessionFlagsIfNeed(profile, false))
@@ -2218,8 +2213,11 @@ void UserSessionManager::DoBrowserLaunchInternal(Profile* profile,
 
   const user_manager::User* user =
       chromeos::ProfileHelper::Get()->GetUserByProfile(profile);
-  ash::BrowserDataMigrator::MaybeRestartToMigrate(user->GetAccountId(),
-                                                  user->username_hash());
+  if (ash::BrowserDataMigratorImpl::MaybeRestartToMigrate(
+          user->GetAccountId(), user->username_hash())) {
+    LOG(WARNING) << "Restarting chrome to run profile migration.";
+    return;
+  }
 
   if (login_host) {
     login_host->SetStatusAreaVisible(true);
@@ -2245,6 +2243,10 @@ void UserSessionManager::DoBrowserLaunchInternal(Profile* profile,
           profile, kHatsGeneralSurvey)) {
     hats_notification_controller_ =
         new HatsNotificationController(profile, kHatsGeneralSurvey);
+  } else if (HatsNotificationController::ShouldShowSurveyToProfile(
+                 profile, kHatsEntSurvey)) {
+    hats_notification_controller_ =
+        new HatsNotificationController(profile, kHatsEntSurvey);
   } else if (HatsNotificationController::ShouldShowSurveyToProfile(
                  profile, kHatsStabilitySurvey)) {
     hats_notification_controller_ =
@@ -2358,7 +2360,6 @@ bool UserSessionManager::TokenHandlesEnabled() {
 }
 
 void UserSessionManager::Shutdown() {
-  ash_turn_sync_on_helper_.reset();
   token_handle_fetcher_.reset();
   token_handle_util_.reset();
   token_observers_.clear();

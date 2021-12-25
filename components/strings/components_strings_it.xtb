@@ -112,6 +112,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="1308113895091915999">Offerta disponibile</translation>
 <translation id="1312803275555673949">Quali prove ci sono a supporto?</translation>
 <translation id="131405271941274527"><ph name="URL" /> vuole inviare e ricevere informazioni su un dispositivo NFC quando tocchi il tuo telefono</translation>
+<translation id="1314311879718644478">Visualizza contenuti di realtà aumentata</translation>
 <translation id="1314509827145471431">Rilegatura a destra</translation>
 <translation id="1318023360584041678">Salvato nel gruppo di schede</translation>
 <translation id="1319245136674974084">Non chiedere più per questa app</translation>
@@ -215,6 +216,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="1583429793053364125">Si è verificato un problema durante la visualizzazione della pagina web.</translation>
 <translation id="1586541204584340881">Le estensioni che hai installato</translation>
 <translation id="1588438908519853928">Normale</translation>
+<translation id="1589050138437146318">Vuoi installare ARCore?</translation>
 <translation id="1592005682883173041">Accesso ai dati locali</translation>
 <translation id="1594030484168838125">Scegli</translation>
 <translation id="160851722280695521">Gioca a Dino in Chrome</translation>
@@ -951,7 +953,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="4072193657607981494">Caricamento criteri in corso…</translation>
 <translation id="4072486802667267160">Si è verificato un errore durante l'elaborazione dell'ordine. Riprova.</translation>
 <translation id="4073797364926776829">Visualizza carta</translation>
-<translation id="4075732493274867456">Il client e il server non supportano un pacchetto di crittografia o una versione del protocollo SSL comuni.</translation>
+<translation id="4075732493274867456">Il client e il server non supportano una suite di crittografia o una versione del protocollo SSL comuni.</translation>
 <translation id="4075941231477579656">Touch ID</translation>
 <translation id="4079302484614802869">L'impostazione della configurazione proxy prevede l'utilizzo di un URL script .pac, non di server proxy fissi.</translation>
 <translation id="4082393374666368382">Impostazioni - Gestione</translation>
@@ -1138,7 +1140,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="4582204425268416675">Carta rimossa</translation>
 <translation id="4587425331216688090">Rimuovere l'indirizzo da Chrome?</translation>
 <translation id="459089498662672729">Il criterio dell'amministratore sconsiglia di incollare da <ph name="ORIGIN_NAME" /> in questa posizione</translation>
-<translation id="4592951414987517459">La connessione a <ph name="DOMAIN" /> è criptata tramite un pacchetto di crittografia moderno.</translation>
+<translation id="4592951414987517459">La connessione a <ph name="DOMAIN" /> è criptata tramite una suite di crittografia moderna.</translation>
 <translation id="4594403342090139922">&amp;Annulla eliminazione</translation>
 <translation id="4597348597567598915">Dimensione 8</translation>
 <translation id="4598556348158889687">Gestione dello spazio di archiviazione</translation>
@@ -1259,6 +1261,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="4968522289500246572">Questa app è stata progettata per dispositivi mobili e il relativo ridimensionamento potrebbe non avvenire correttamente. L'app potrebbe riavviarsi o presentare problemi.</translation>
 <translation id="4969341057194253438">Elimina la registrazione</translation>
 <translation id="4973922308112707173">Perforatura doppia in alto</translation>
+<translation id="4976702386844183910">Ultima visita: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Usare il microfono?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">Mostra tutto</translation>
@@ -1344,6 +1347,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="5215116848420601511">Metodi di pagamento e indirizzi che utilizzano Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Vassoio 13</translation>
+<translation id="5216942107514965959">Ultima visita: oggi</translation>
 <translation id="5222812217790122047">Email obbligatoria</translation>
 <translation id="5230733896359313003">Indirizzo di spedizione</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1387,6 +1391,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="5333022057423422993">Chrome ha rilevato che la password appena usata è stata esposta a una violazione dei dati. Per proteggere i tuoi account, ti consigliamo di controllare le password che hai salvato.</translation>
 <translation id="5334013548165032829">Log di sistema dettagliati</translation>
 <translation id="5334145288572353250">Vuoi salvare l'indirizzo?</translation>
+<translation id="5335920952954443287">Cuore che batte</translation>
 <translation id="5340250774223869109">L'applicazione è bloccata</translation>
 <translation id="534295439873310000">Dispositivi NFC</translation>
 <translation id="5344579389779391559">Questa pagina potrebbe tentare di addebitarti dei costi</translation>
@@ -1511,7 +1516,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="5789643057113097023">.</translation>
 <translation id="5803412860119678065">Vuoi inserire automaticamente <ph name="CARD_DETAIL" />?</translation>
 <translation id="5804241973901381774">Autorizzazioni</translation>
-<translation id="5810442152076338065">La connessione a <ph name="DOMAIN" /> è criptata tramite un pacchetto di crittografia obsoleto.</translation>
+<translation id="5810442152076338065">La connessione a <ph name="DOMAIN" /> è criptata tramite una suite di crittografia obsoleta.</translation>
 <translation id="5812947184178430888">Quando Chrome segnala eventi di sicurezza, i dati corrispondenti agli eventi vengono inviati al tuo amministratore. Tali dati possono includere URL delle pagine visitate in Chrome, metadati o nomi dei file e il nome utente che usi per accedere alle applicazioni basate sul Web, al tuo dispositivo e a Chrome.</translation>
 <translation id="5813119285467412249">&amp;Ripeti aggiunta</translation>
 <translation id="5817918615728894473">Accoppia</translation>
@@ -1529,6 +1534,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="5869522115854928033">Password salvate</translation>
 <translation id="5873013647450402046">La tua banca vuole confermare la tua identità.</translation>
 <translation id="5887400589839399685">Carta salvata</translation>
+<translation id="5887687176710214216">Ultima visita: ieri</translation>
 <translation id="5895138241574237353">Riavvia</translation>
 <translation id="5895187275912066135">Emesso in data</translation>
 <translation id="5901630391730855834">Giallo</translation>
@@ -1721,6 +1727,7 @@ In caso contrario l'uso sarà bloccato dalle impostazioni sulla privacy. I conte
 <translation id="6529602333819889595">&amp;Ripeti eliminazione</translation>
 <translation id="6545864417968258051">Scansione Bluetooth</translation>
 <translation id="6547208576736763147">Perforatura doppia a sinistra</translation>
+<translation id="6554732001434021288">Ultima visita: <ph name="NUM_DAYS" /> giorni fa</translation>
 <translation id="6556866813142980365">Ripeti</translation>
 <translation id="6569060085658103619">È visualizzata la pagina di un'estensione</translation>
 <translation id="6573200754375280815">Perforatura doppia a destra</translation>
@@ -2056,6 +2063,7 @@ Ulteriori dettagli:
 <translation id="7654909834015434372">Quando modifichi le annotazioni, questo documento torna alla sua rotazione originale</translation>
 <translation id="765676359832457558">Nascondi impostazioni avanzate...</translation>
 <translation id="7658239707568436148">Annulla</translation>
+<translation id="7659878911471462949">Lacrime di gioia</translation>
 <translation id="7662298039739062396">Impostazione controllata da un'estensione</translation>
 <translation id="7663736086183791259">Certificato <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Non consentita in incognito</translation>
@@ -2156,7 +2164,6 @@ Ulteriori dettagli:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Può chiedere di usare dati e dispositivi per realtà virtuale</translation>
 <translation id="7984945080620862648">Al momento non puoi visitare il sito web <ph name="SITE" /> perché ha inviato strane credenziali che Chrome non riesce a elaborare. In genere gli errori di rete e gli attacchi sono temporanei, pertanto questa pagina potrebbe funzionare più tardi.</translation>
-<translation id="79859296434321399">Per visualizzare i contenuti di realtà aumentata, installa ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Rilegatura</translation>
 <translation id="7992044431894087211">La condivisione dello schermo con <ph name="APPLICATION_TITLE" /> è stata ripristinata</translation>
@@ -2260,6 +2267,7 @@ Ulteriori dettagli:
 <translation id="830498451218851433">Piegatura a metà</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">App installate e frequenza di utilizzo</translation>
+<translation id="8317207217658302555">Vuoi aggiornare ARCore?</translation>
 <translation id="831997045666694187">Sera</translation>
 <translation id="8321476692217554900">notifiche</translation>
 <translation id="8328484624016508118">Dopo aver chiuso tutte le schede di navigazione in incognito, Chrome cancella:
@@ -2331,7 +2339,6 @@ Ulteriori dettagli:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Reimposta l'autorizzazione}one{Reimposta l'autorizzazione}other{Reimposta le autorizzazioni}}</translation>
 <translation id="8555010941760982128">Utilizza questo codice al momento del pagamento</translation>
 <translation id="8557066899867184262">Il codice CVC si trova sul lato posteriore della carta.</translation>
-<translation id="8558485628462305855">Per visualizzare i contenuti di realtà aumentata, aggiorna ARCore</translation>
 <translation id="8559762987265718583">Impossibile stabilire una connessione privata con il sito <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> perché data e ora del dispositivo (<ph name="DATE_AND_TIME" />) sono sbagliate.</translation>
 <translation id="8564182942834072828">Documenti separati/Copie non fascicolate</translation>
 <translation id="8564985650692024650">Chromium ti consiglia di reimpostare la password di <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, se l'hai utilizzata su altri siti.</translation>

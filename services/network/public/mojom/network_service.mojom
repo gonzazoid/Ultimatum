@@ -96,29 +96,6 @@ struct HttpAuthDynamicParams {
   bool basic_over_http_enabled = true;
 };
 
-// Values for configuring OSCrypt.
-[EnableIf=needs_crypt_config]
-struct CryptConfig {
-  // Force OSCrypt to use a specific linux password store.
-  string store;
-
-  // The product name to use for permission prompts.
-  string product_name;
-
-  // The application name to store the crypto key against. For Chromium/Chrome
-  // builds leave this unset and it will default correctly.  This config option
-  // is for embedders to provide their application name in place of "Chromium".
-  // Only used when the allow_runtime_configurable_key_storage feature is
-  // enabled
-  string application_name;
-
-  // Controls whether preference on using or ignoring backends is used.
-  bool should_use_preference;
-
-  // Preferences are stored in a separate file in the user data directory.
-  mojo_base.mojom.FilePath user_data_path;
-};
-
 // Represents the value of a single environment variable.
 struct EnvironmentVariable {
   string name;
@@ -137,6 +114,10 @@ struct NetworkServiceParams {
   // An URLLoaderFactory can provide its own URLLoaderNetworkServiceObserver
   // but if it does not, this default will be used.
   pending_remote<URLLoaderNetworkServiceObserver> default_observer;
+
+  // A boolean provided by the Browser Process in order to plumb into the
+  // First-Party Sets attribute during NetworkService::Initialize().
+  bool first_party_sets_enabled;
 };
 
 // Information about how logging should be configured.
@@ -197,7 +178,7 @@ interface NetworkService {
   // https://tools.ietf.org/html/rfc1034#section-5.3.1 for definition of a stub
   // resolver.
   //
-  // `dns_over_https_servers` is an optional list of DNS over HTTPS servers.
+  // `dns_over_https_servers` is a list of DNS over HTTPS servers.
   // DnsTransactions will by default follow the behavior of `secure_dns_mode`.
   // In SECURE mode, only DoH lookups will be performed. In AUTOMATIC mode,
   // DoH lookups to available servers will be performed first, and insecure
@@ -218,7 +199,7 @@ interface NetworkService {
   // Secure DNS which always allows additional types.
   ConfigureStubHostResolver(bool insecure_dns_client_enabled,
                             SecureDnsMode secure_dns_mode,
-                            array<DnsOverHttpsServer>? dns_over_https_servers,
+                            array<DnsOverHttpsServer> dns_over_https_servers,
                             bool additional_dns_types_enabled);
 
   // Disables QUIC for the NetworkService. Affects all existing NetworkContexts,
@@ -282,17 +263,7 @@ interface NetworkService {
   // Notification that the certificate database has been modified.
   OnCertDBChanged();
 
-  // Sets up OSCrypt for the network service process. Must be called before
-  // encrypted cookies can be read or set.
-  [EnableIf=needs_crypt_config]
-  SetCryptConfig(CryptConfig crypt_config);
-
   // Send the encryption key to the network service to use for AES encryption.
-  [EnableIf=is_mac]
-  SetEncryptionKey(mojo_base.mojom.ByteString encryption_key);
-
-  // Send the encryption key to the network service to use for AES encryption.
-  [EnableIf=is_win]
   SetEncryptionKey(mojo_base.mojom.ByteString encryption_key);
 
   // Notifies |request_initiator_origin_lock| enforcement code that |process_id|

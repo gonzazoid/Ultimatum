@@ -36,6 +36,7 @@
 #include "third_party/blink/public/common/privacy_budget/identifiability_metric_builder.h"
 #include "third_party/blink/public/common/privacy_budget/identifiability_study_settings.h"
 #include "third_party/blink/public/mojom/scroll/scroll_into_view_params.mojom-blink.h"
+#include "third_party/blink/public/web/web_autofill_state.h"
 #include "third_party/blink/renderer/bindings/core/v8/dictionary.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_get_inner_html_options.h"
@@ -181,6 +182,7 @@
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
 #include "ui/accessibility/ax_mode.h"
+#include "ui/gfx/geometry/rect_conversions.h"
 
 namespace blink {
 
@@ -355,14 +357,6 @@ bool DefinitelyNewFormattingContext(const Node& node,
   return false;
 }
 
-inline bool WillCreateMulticolContainer(const ComputedStyle& style) {
-  // Note that we depend on this returning the truth, i.e. no false positives,
-  // and no false negatives (which is different from the rest of the legacy
-  // fallback detection machinery, where false positives are generally
-  // acceptable). This is an honest attempt to achieve that.
-  return style.SpecifiesColumns() && style.IsDisplayBlockContainer();
-}
-
 inline bool NeedsLegacyBlockFragmentation(const Element& element,
                                           const ComputedStyle& style) {
   if (!style.InsideFragmentationContextWithNondeterministicEngine())
@@ -417,14 +411,14 @@ bool CalculateStyleShouldForceLegacyLayout(const Element& element,
   if (!RuntimeEnabledFeatures::LayoutNGBlockFragmentationEnabled()) {
     // Disable NG for the entire subtree if we're establishing a multicol
     // container.
-    if (WillCreateMulticolContainer(style)) {
+    if (style.SpecifiesColumns()) {
       UseCounter::Count(document, WebFeature::kLegacyLayoutByMultiCol);
       return true;
     }
   }
 
-  // No printing support in LayoutNG yet.
-  if (document.Printing() && element == document.documentElement()) {
+  if (document.Printing() && element == document.documentElement() &&
+      !RuntimeEnabledFeatures::LayoutNGPrintingEnabled()) {
     UseCounter::Count(document, WebFeature::kLegacyLayoutByPrinting);
     return true;
   }
@@ -512,7 +506,10 @@ HeapLinkedHashSet<WeakMember<Element>>* GetExplicitlySetElementsForAttr(
   ExplicitlySetAttrElementsMap* element_attribute_map =
       element->GetDocument().GetExplicitlySetAttrElementsMap(element);
   auto it = element_attribute_map->find(name);
-  return it != element_attribute_map->end() ? it->value : nullptr;
+  if (it == element_attribute_map->end())
+    return nullptr;
+  const auto& elements = it->value;
+  return elements->size() ? elements : nullptr;
 }
 
 // Checks that the given element |candidate| is a descendant of
@@ -1603,7 +1600,7 @@ double Element::scrollTop() {
   // Don't disclose scroll position in preview state. See crbug.com/1261689.
   auto* select_element = DynamicTo<HTMLSelectElement>(this);
   if (select_element && !select_element->UsesMenuList() &&
-      !select_element->SuggestedValue().IsEmpty()) {
+      select_element->GetAutofillState() == WebAutofillState::kPreviewed) {
     return 0;
   }
 
@@ -2017,7 +2014,7 @@ gfx::Rect Element::BoundsInViewport() const {
     // TODO(pdr): This should include stroke.
     if (IsA<SVGGraphicsElement>(svg_element)) {
       quads.push_back(GetLayoutObject()->LocalToAbsoluteQuad(
-          FloatRect(GetLayoutObject()->ObjectBoundingBox())));
+          FloatQuad(GetLayoutObject()->ObjectBoundingBox())));
     }
   } else {
     // Get the bounding rectangle from the box model.
@@ -2070,7 +2067,7 @@ gfx::Rect Element::VisibleBoundsInVisualViewport() const {
   // We don't use absoluteBoundingBoxRect() because it can return an gfx::Rect
   // larger the actual size by 1px. crbug.com/470503
   PhysicalRect rect(
-      RoundedIntRect(GetLayoutObject()->AbsoluteBoundingBoxFloatRect()));
+      gfx::ToRoundedRect(GetLayoutObject()->AbsoluteBoundingBoxRectF()));
   PhysicalRect frame_clip_rect =
       GetDocument().View()->GetLayoutView()->ClippingRect(PhysicalOffset());
   rect.Intersect(frame_clip_rect);
@@ -2128,7 +2125,7 @@ void Element::ClientQuads(Vector<FloatQuad>& quads) const {
     // If stroke is desired, we can update this to use AbsoluteQuads, below.
     if (IsA<SVGGraphicsElement>(svg_element)) {
       quads.push_back(element_layout_object->LocalToAbsoluteQuad(
-          FloatRect(element_layout_object->ObjectBoundingBox())));
+          FloatQuad(element_layout_object->ObjectBoundingBox())));
     }
     return;
   }
@@ -2154,27 +2151,27 @@ DOMRectList* Element::getClientRects() {
   return MakeGarbageCollected<DOMRectList>(quads);
 }
 
-FloatRect Element::GetBoundingClientRectNoLifecycleUpdate() const {
+gfx::RectF Element::GetBoundingClientRectNoLifecycleUpdate() const {
   Vector<FloatQuad> quads;
   ClientQuads(quads);
   if (quads.IsEmpty())
-    return FloatRect();
+    return gfx::RectF();
 
-  FloatRect result = quads[0].BoundingBox();
+  gfx::RectF result = quads[0].BoundingBox();
   for (wtf_size_t i = 1; i < quads.size(); ++i)
     result.Union(quads[i].BoundingBox());
 
   LayoutObject* element_layout_object = GetLayoutObject();
   DCHECK(element_layout_object);
-  GetDocument().AdjustFloatRectForScrollAndAbsoluteZoom(result,
-                                                        *element_layout_object);
+  GetDocument().AdjustRectForScrollAndAbsoluteZoom(result,
+                                                   *element_layout_object);
   return result;
 }
 
 DOMRect* Element::getBoundingClientRect() {
   GetDocument().EnsurePaintLocationDataValidForNode(
       this, DocumentUpdateReason::kJavaScript);
-  return DOMRect::FromFloatRect(GetBoundingClientRectNoLifecycleUpdate());
+  return DOMRect::FromRectF(GetBoundingClientRectNoLifecycleUpdate());
 }
 
 const AtomicString& Element::computedRole() {
@@ -4598,8 +4595,10 @@ void Element::blur() {
     if (doc.GetPage()) {
       doc.GetPage()->GetFocusController().SetFocusedElement(nullptr,
                                                             doc.GetFrame());
-      doc.GetPage()->GetChromeClient().ClearKeyboardTriggeredTooltip(
-          *doc.GetFrame());
+      if (doc.GetFrame()) {
+        doc.GetPage()->GetChromeClient().ClearKeyboardTriggeredTooltip(
+            *doc.GetFrame());
+      }
     } else {
       doc.ClearFocusedElement();
     }
@@ -4827,7 +4826,9 @@ bool Element::UpdateForceLegacyLayout(const ComputedStyle& new_style,
   } else if (old_force) {
     // TODO(mstensho): If we have ancestors that got legacy layout just because
     // of this child, we should clean it up, and switch the subtree back to NG,
-    // rather than being stuck with legacy forever.
+    // rather than being stuck with legacy forever. Also make sure to reattach
+    // the Document, if we want to switch from LayoutView to LayoutNGView (may
+    // happen after printing).
     needs_reattach = true;
   }
   return needs_reattach;
@@ -4838,6 +4839,9 @@ bool Element::ForceLegacyLayoutInFormattingContext(
   bool found_fc = DefinitelyNewFormattingContext(*this, new_style);
   bool needs_reattach = false;
 
+  // TODO(mstensho): Missing call to SetNeedsReattachLayoutTree() on Document
+  // here. We may have to re-attach it if we want to change from LayoutNGView to
+  // LayoutView.
   for (Element* ancestor = this; !found_fc;) {
     ancestor =
         DynamicTo<Element>(LayoutTreeBuilderTraversal::Parent(*ancestor));
@@ -5837,7 +5841,7 @@ const ComputedStyle* Element::CachedStyleForPseudoElement(
 
   const ComputedStyle* style = GetComputedStyle();
 
-  if (!style || (pseudo_id < kFirstInternalPseudoId &&
+  if (!style || (pseudo_id <= kLastTrackedPublicPseudoId &&
                  !style->HasPseudoElementStyle(pseudo_id))) {
     return nullptr;
   }

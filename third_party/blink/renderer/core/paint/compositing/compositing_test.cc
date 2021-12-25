@@ -23,7 +23,6 @@
 #include "third_party/blink/renderer/core/html/html_iframe_element.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/svg_names.h"
@@ -551,32 +550,6 @@ TEST_P(CompositingTest, ContainPaintLayerBounds) {
   auto* layer = CcLayersByDOMElementId(RootCcLayer(), "target")[0];
   ASSERT_TRUE(layer);
   EXPECT_EQ(gfx::Size(200, 100), layer->bounds());
-}
-
-TEST_P(CompositingTest, SVGForeignObjectDirectlyCompositedContainer) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
-  InitializeWithHTML(*WebView()->MainFrameImpl()->GetFrame(), R"HTML(
-    <!doctype html>
-    <div id="container" style="backface-visibility: hidden">
-      <svg>
-        <foreignObject id="foreign">
-          <div id="child" style="position: relative"></div>
-        </foreignObject>
-      </svg>
-    </body>
-  )HTML");
-  UpdateAllLifecyclePhases();
-
-  // PaintInvalidator should use the same directly_composited_container during
-  // PrePaint and should not fail DCHECK.
-  auto* container = GetLayoutObjectById("container");
-  EXPECT_FALSE(container->IsStackingContext());
-  EXPECT_EQ(container,
-            &GetLayoutObjectById("foreign")->DirectlyCompositableContainer());
-  EXPECT_EQ(container,
-            &GetLayoutObjectById("child")->DirectlyCompositableContainer());
 }
 
 class CompositingSimTest : public PaintTestConfigurations, public SimTest {
@@ -1559,9 +1532,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginIframe) {
   Compositor().BeginFrame();
   Document* iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   auto* layer = CcLayerByOwnerNodeId(owner_node);
   EXPECT_TRUE(layer);
   EXPECT_EQ(layer->bounds(), gfx::Size(300, 150));
@@ -1584,9 +1555,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginIframeAfterLoading) {
 
   Document* iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   EXPECT_TRUE(CcLayerByOwnerNodeId(owner_node));
 }
 
@@ -1618,9 +1587,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginToParent) {
   iframe_doc =
       To<HTMLFrameOwnerElement>(iframe_doc->getElementById("child_iframe"))
           ->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   EXPECT_TRUE(CcLayerByOwnerNodeId(owner_node));
 }
 
@@ -1643,9 +1610,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginIframeAfterDomainChange) {
 
   Document* iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   EXPECT_TRUE(CcLayerByOwnerNodeId(owner_node));
 
   NonThrowableExceptionState exception_state;
@@ -1658,9 +1623,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginIframeAfterDomainChange) {
 
   iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  owner_node = iframe_doc->documentElement();
   EXPECT_FALSE(CcLayerByOwnerNodeId(owner_node));
 }
 
@@ -1693,9 +1656,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginToParentIframeAfterDomainChange) {
   iframe_doc =
       To<HTMLFrameOwnerElement>(iframe_doc->getElementById("child_iframe"))
           ->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   EXPECT_TRUE(CcLayerByOwnerNodeId(owner_node));
 
   auto* main_iframe_element =
@@ -1720,9 +1681,7 @@ TEST_P(CompositingSimTest, PromoteCrossOriginToParentIframeAfterDomainChange) {
   iframe_doc =
       To<HTMLFrameOwnerElement>(iframe_doc->getElementById("child_iframe"))
           ->contentDocument();
-  owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  owner_node = iframe_doc->documentElement();
   EXPECT_FALSE(CcLayerByOwnerNodeId(owner_node));
 }
 
@@ -1816,9 +1775,7 @@ TEST_P(CompositingSimTest, FrameAttribution) {
   // containing document.
   Document* iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   auto* iframe_layer = CcLayerByOwnerNodeId(owner_node);
   ASSERT_TRUE(iframe_layer);
   auto* iframe_transform_node = GetTransformNode(iframe_layer);
@@ -1853,9 +1810,7 @@ TEST_P(CompositingSimTest, VisibleFrameRootLayers) {
   // Ensure that the iframe is marked as a visible root.
   Document* iframe_doc =
       To<HTMLFrameOwnerElement>(GetElementById("iframe"))->contentDocument();
-  Node* owner_node = iframe_doc;
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    owner_node = iframe_doc->documentElement();
+  Node* owner_node = iframe_doc->documentElement();
   auto* iframe_layer = CcLayerByOwnerNodeId(owner_node);
   ASSERT_TRUE(iframe_layer);
   auto* iframe_transform_node = GetTransformNode(iframe_layer);
@@ -2048,11 +2003,6 @@ TEST_P(CompositingSimTest, SVGColorChangeUsesRepaintUpdate) {
 }
 
 TEST_P(CompositingSimTest, ChangingOpaquenessRequiresFullUpdate) {
-  // Contents opaque is set in different places in CAP (PAC) vs pre-CAP (CLM)
-  // and we only want to test the PAC update here.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   InitializeWithHTML(R"HTML(
       <!DOCTYPE html>
       <style>
@@ -2088,11 +2038,6 @@ TEST_P(CompositingSimTest, ChangingOpaquenessRequiresFullUpdate) {
 }
 
 TEST_P(CompositingSimTest, ChangingContentsOpaqueForTextRequiresFullUpdate) {
-  // Contents opaque for text is set in different places in CAP (PAC) vs pre-CAP
-  // (CLM) and we only want to test the PAC update here.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   InitializeWithHTML(R"HTML(
       <!DOCTYPE html>
       <style>
@@ -2150,8 +2095,8 @@ TEST_P(CompositingSimTest, ContentsOpaqueForTextWithSubpixelSizeSimpleBg) {
   )HTML");
   Compositor().BeginFrame();
   auto* cc_layer = CcLayerByDOMElementId("target");
-  // In CompositeAfterPaint, we adjust visual rect of the DrawingDisplayItem
-  // with simple painting to the bounds of the painting.
+  // We adjust visual rect of the DrawingDisplayItem with simple painting to the
+  // bounds of the painting.
   EXPECT_EQ(gfx::Size(101, 10), cc_layer->bounds());
   EXPECT_TRUE(cc_layer->contents_opaque());
   EXPECT_TRUE(cc_layer->contents_opaque_for_text());
@@ -2168,23 +2113,12 @@ TEST_P(CompositingSimTest, ContentsOpaqueForTextWithSubpixelSizeComplexBg) {
   )HTML");
   Compositor().BeginFrame();
   auto* cc_layer = CcLayerByDOMElementId("target");
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(gfx::Size(105, 15), cc_layer->bounds());
-    EXPECT_FALSE(cc_layer->contents_opaque());
-  } else {
-    // Pre-CAP always pixel-snaps composited layer bounds, which might be
-    // incorrect in some corner cases where we don't pixel-snap painting.
-    EXPECT_EQ(gfx::Size(105, 14), cc_layer->bounds());
-    EXPECT_TRUE(cc_layer->contents_opaque());
-  }
+  EXPECT_EQ(gfx::Size(105, 15), cc_layer->bounds());
+  EXPECT_FALSE(cc_layer->contents_opaque());
   EXPECT_TRUE(cc_layer->contents_opaque_for_text());
 }
 
 TEST_P(CompositingSimTest, ContentsOpaqueForTextWithPartialBackground) {
-  // This test works only with the new text opaque algorithm.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   InitializeWithHTML(R"HTML(
       <!DOCTYPE html>
       <div id="target" style="will-change: transform; padding: 10px">
@@ -2198,10 +2132,6 @@ TEST_P(CompositingSimTest, ContentsOpaqueForTextWithPartialBackground) {
 }
 
 TEST_P(CompositingSimTest, ContentsOpaqueForTextWithBorderRadiusAndPadding) {
-  // This test works only with the new text opaque algorithm.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   InitializeWithHTML(R"HTML(
       <!DOCTYPE html>
       <div id="target" style="will-change: transform; border-radius: 5px;
@@ -2402,8 +2332,6 @@ TEST_P(CompositingSimTest, FullCompositingUpdateForUncachableChunks) {
 }
 
 TEST_P(CompositingSimTest, DecompositeScrollerInHiddenIframe) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
   SimRequest top_resource("https://example.com/top.html", "text/html");
   SimRequest middle_resource("https://example.com/middle.html", "text/html");
   SimRequest bottom_resource("https://example.com/bottom.html", "text/html");
@@ -2431,12 +2359,13 @@ TEST_P(CompositingSimTest, DecompositeScrollerInHiddenIframe) {
                                           ->getElementById("scroller")
                                           ->GetLayoutObject());
   ASSERT_TRUE(scroller->GetScrollableArea()->NeedsCompositedScrolling());
+  EXPECT_TRUE(CcLayerByDOMElementId("scroller"));
 
   // Hide the iframes. Scroller should be decomposited.
   GetDocument().getElementById("middle")->SetInlineStyleProperty(
       CSSPropertyID::kVisibility, CSSValueID::kHidden);
   Compositor().BeginFrame();
-  EXPECT_FALSE(scroller->GetScrollableArea()->NeedsCompositedScrolling());
+  EXPECT_FALSE(CcLayerByDOMElementId("scroller"));
 }
 
 TEST_P(CompositingSimTest, ForeignLayersInMovedSubsequence) {
@@ -2512,9 +2441,6 @@ TEST_P(CompositingSimTest, SolidColorLayersWithSnapping) {
 }
 
 TEST_P(CompositingSimTest, SolidColorLayerWithSubpixelTransform) {
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   InitializeWithHTML(R"HTML(
       <!DOCTYPE html>
       <style>

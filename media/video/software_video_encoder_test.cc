@@ -39,6 +39,14 @@
 #include "media/video/vpx_video_encoder.h"
 #endif
 
+#if BUILDFLAG(ENABLE_LIBAOM)
+#include "media/video/av1_video_encoder.h"
+#endif
+
+#if BUILDFLAG(ENABLE_DAV1D_DECODER)
+#include "media/filters/dav1d_video_decoder.h"
+#endif
+
 namespace media {
 
 struct SwVideoTestParams {
@@ -85,10 +93,14 @@ class SoftwareVideoEncoderTest
 #if BUILDFLAG(ENABLE_LIBVPX)
       decoder_ = std::make_unique<VpxVideoDecoder>();
 #endif
+    } else if (codec_ == VideoCodec::kAV1) {
+#if BUILDFLAG(ENABLE_DAV1D_DECODER)
+      decoder_ = std::make_unique<Dav1dVideoDecoder>(&media_log_);
+#endif
     }
 
     EXPECT_NE(decoder_, nullptr);
-    decoder_->Initialize(config, false, nullptr, ValidatingStatusCB(),
+    decoder_->Initialize(config, false, nullptr, DecoderStatusCB(),
                          std::move(output_cb), base::NullCallback());
     RunUntilIdle();
   }
@@ -151,6 +163,12 @@ class SoftwareVideoEncoderTest
 
   std::unique_ptr<VideoEncoder> CreateEncoder(VideoCodec codec) {
     switch (codec) {
+      case media::VideoCodec::kAV1:
+#if BUILDFLAG(ENABLE_LIBAOM)
+        return std::make_unique<media::Av1VideoEncoder>();
+#else
+        return nullptr;
+#endif
       case media::VideoCodec::kVP8:
       case media::VideoCodec::kVP9:
 #if BUILDFLAG(ENABLE_LIBVPX)
@@ -169,7 +187,28 @@ class SoftwareVideoEncoderTest
     }
   }
 
-  VideoEncoder::StatusCB ValidatingStatusCB(base::Location loc = FROM_HERE) {
+  VideoEncoder::EncoderStatusCB ValidatingStatusCB(
+      base::Location loc = FROM_HERE) {
+    struct CallEnforcer {
+      bool called = false;
+      std::string location;
+      ~CallEnforcer() {
+        EXPECT_TRUE(called) << "Callback created: " << location;
+      }
+    };
+    auto enforcer = std::make_unique<CallEnforcer>();
+    enforcer->location = loc.ToString();
+    return base::BindLambdaForTesting(
+        [enforcer{std::move(enforcer)}](EncoderStatus s) {
+          EXPECT_TRUE(s.is_ok())
+              << " Callback created: " << enforcer->location
+              << " Code: " << std::hex << static_cast<StatusCodeType>(s.code())
+              << " Error: " << s.message();
+          enforcer->called = true;
+        });
+  }
+
+  VideoDecoder::DecodeCB DecoderStatusCB(base::Location loc = FROM_HERE) {
     struct CallEnforcer {
       bool called = false;
       std::string location;
@@ -385,7 +424,7 @@ TEST_P(SoftwareVideoEncoderTest, EncodeAndDecode) {
             DecoderBuffer::FromArray(std::move(output.data), output.size);
         buffer->set_timestamp(output.timestamp);
         buffer->set_is_key_frame(output.key_frame);
-        decoder_->Decode(std::move(buffer), ValidatingStatusCB());
+        decoder_->Decode(std::move(buffer), DecoderStatusCB());
       });
 
   VideoDecoder::OutputCB decoder_output_cb =
@@ -513,6 +552,107 @@ TEST_P(SVCVideoEncoderTest, EncodeClipTemporalSvc) {
       auto original_frame = frames_to_encode[i * rate_decimator];
       EXPECT_EQ(decoded_frame->timestamp(), original_frame->timestamp());
     }
+  }
+}
+
+TEST_P(H264VideoEncoderTest, ReconfigureWithResize) {
+  VideoEncoder::Options options;
+  gfx::Size size1(320, 200), size2(400, 240);
+  options.frame_size = size1;
+  options.bitrate = Bitrate::ConstantBitrate(1e6);  // 1Mbps
+  options.framerate = 25;
+  if (codec_ == VideoCodec::kH264)
+    options.avc.produce_annexb = true;
+  struct ChunkWithConfig {
+    VideoEncoderOutput output;
+    gfx::Size size;
+  };
+  std::vector<scoped_refptr<VideoFrame>> frames_to_encode;
+  std::vector<scoped_refptr<VideoFrame>> decoded_frames;
+  std::vector<ChunkWithConfig> chunks;
+  size_t total_frames_count = 8;
+  auto frame_duration = base::Seconds(1.0 / options.framerate.value());
+
+  VideoEncoder::OutputCB encoder_output_cb = base::BindLambdaForTesting(
+      [&](VideoEncoderOutput output,
+          absl::optional<VideoEncoder::CodecDescription> desc) {
+        chunks.push_back({std::move(output), options.frame_size});
+      });
+
+  encoder_->Initialize(profile_, options, std::move(encoder_output_cb),
+                       ValidatingStatusCB());
+  RunUntilIdle();
+
+  uint32_t color = 0x0080FF;
+  for (auto frame_index = 0u; frame_index < total_frames_count; frame_index++) {
+    const auto timestamp = frame_index * frame_duration;
+    const bool reconfigure = (frame_index == total_frames_count / 2);
+
+    if (reconfigure) {
+      encoder_->Flush(ValidatingStatusCB());
+      RunUntilIdle();
+
+      // Ask encoder to change encoded resolution, empty output callback
+      // means the encoder should keep the old one.
+      options.frame_size = size2;
+      encoder_->ChangeOptions(options, VideoEncoder::OutputCB(),
+                              ValidatingStatusCB());
+      RunUntilIdle();
+    }
+
+    auto frame =
+        CreateFrame(options.frame_size, pixel_format_, timestamp, color);
+    frames_to_encode.push_back(frame);
+    encoder_->Encode(frame, false, ValidatingStatusCB());
+    RunUntilIdle();
+  }
+  encoder_->Flush(ValidatingStatusCB());
+  RunUntilIdle();
+
+  EXPECT_EQ(chunks.size(), total_frames_count);
+  gfx::Size current_size;
+  for (auto& chunk : chunks) {
+    VideoDecoder::OutputCB decoder_output_cb =
+        base::BindLambdaForTesting([&](scoped_refptr<VideoFrame> frame) {
+          decoded_frames.push_back(frame);
+        });
+
+    if (chunk.size != current_size) {
+      if (decoder_)
+        DecodeAndWaitForStatus(DecoderBuffer::CreateEOSBuffer());
+      PrepareDecoder(chunk.size, std::move(decoder_output_cb));
+      current_size = chunk.size;
+    }
+    auto& output = chunk.output;
+    auto buffer = DecoderBuffer::FromArray(std::move(output.data), output.size);
+    buffer->set_timestamp(output.timestamp);
+    buffer->set_is_key_frame(output.key_frame);
+    DecodeAndWaitForStatus(std::move(buffer));
+  }
+  DecodeAndWaitForStatus(DecoderBuffer::CreateEOSBuffer());
+
+  EXPECT_EQ(decoded_frames.size(), frames_to_encode.size());
+  std::vector<uint8_t> conversion_buffer;
+  for (auto i = 0u; i < decoded_frames.size(); i++) {
+    auto original_frame = frames_to_encode[i];
+    auto decoded_frame = decoded_frames[i];
+    EXPECT_EQ(decoded_frame->timestamp(), original_frame->timestamp());
+    EXPECT_EQ(decoded_frame->visible_rect(), original_frame->visible_rect());
+    if (decoded_frame->format() != original_frame->format()) {
+      // The frame was converted from RGB to YUV, we can't easily compare to
+      // the original frame, so we're going to compare with a new white frame.
+      EXPECT_EQ(decoded_frame->format(), PIXEL_FORMAT_I420);
+      auto size = decoded_frame->visible_rect().size();
+      auto i420_frame =
+          VideoFrame::CreateFrame(PIXEL_FORMAT_I420, size, gfx::Rect(size),
+                                  size, decoded_frame->timestamp());
+      EXPECT_TRUE(
+          ConvertAndScaleFrame(*original_frame, *i420_frame, conversion_buffer)
+              .is_ok());
+      original_frame = i420_frame;
+    }
+    EXPECT_LE(CountDifferentPixels(*decoded_frame, *original_frame),
+              original_frame->visible_rect().width());
   }
 }
 #endif  // ENABLE_FFMPEG_VIDEO_DECODERS
@@ -742,6 +882,17 @@ INSTANTIATE_TEST_SUITE_P(VpxTemporalSvc,
                          ::testing::ValuesIn(kVpxSVCParams),
                          PrintTestParams);
 #endif  // ENABLE_LIBVPX
+
+#if BUILDFLAG(ENABLE_LIBAOM)
+SwVideoTestParams kAv1Params[] = {
+    {VideoCodec::kAV1, AV1PROFILE_PROFILE_MAIN, PIXEL_FORMAT_I420},
+    {VideoCodec::kAV1, AV1PROFILE_PROFILE_MAIN, PIXEL_FORMAT_XRGB}};
+
+INSTANTIATE_TEST_SUITE_P(Av1Generic,
+                         SoftwareVideoEncoderTest,
+                         ::testing::ValuesIn(kAv1Params),
+                         PrintTestParams);
+#endif  // ENABLE_LIBAOM
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(H264VideoEncoderTest);
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(SVCVideoEncoderTest);

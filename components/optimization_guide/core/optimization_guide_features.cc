@@ -96,6 +96,9 @@ const base::Feature kPageTopicsBatchAnnotations{
 const base::Feature kPageVisibilityBatchAnnotations{
     "PageVisibilityBatchAnnotations", base::FEATURE_ENABLED_BY_DEFAULT};
 
+const base::Feature kUseLocalPageEntitiesMetadataProvider{
+    "UseLocalPageEntitiesMetadataProvider", base::FEATURE_DISABLED_BY_DEFAULT};
+
 // The default value here is a bit of a guess.
 // TODO(crbug/1163244): This should be tuned once metrics are available.
 base::TimeDelta PageTextExtractionOutstandingRequestsGracePeriod() {
@@ -230,6 +233,15 @@ base::TimeDelta GetActiveTabsStalenessTolerance() {
       "active_tabs_staleness_tolerance_in_days", 90));
 }
 
+size_t MaxConcurrentBatchUpdateFetches() {
+  // If overridden, this needs to be large enough where we do not thrash the
+  // inflight batch update fetches since if we approach the limit here, we will
+  // abort the oldest batch update fetch that is in flight.
+  return GetFieldTrialParamByFeatureAsInt(kRemoteOptimizationGuideFetching,
+                                          "max_concurrent_batch_update_fetches",
+                                          20);
+}
+
 size_t MaxConcurrentPageNavigationFetches() {
   // If overridden, this needs to be large enough where we do not thrash the
   // inflight page navigations since if we approach the limit here, we will
@@ -255,14 +267,15 @@ base::TimeDelta StoredHostModelFeaturesFreshnessDuration() {
       "max_store_duration_for_host_model_features_in_days", 7));
 }
 
-base::TimeDelta StoredModelsInactiveDuration() {
+base::TimeDelta StoredModelsValidDuration() {
   // TODO(crbug.com/1234054) This field should not be changed without VERY
-  // careful consideration. Any model that is on device and expires will be
-  // removed and triggered to refetch so any feature relying on the model could
-  // have a period of time without a valid model.
+  // careful consideration. This is the default duration for models that do not
+  // specify retention, so changing this can cause models to be removed and
+  // refetch would only apply to newer models. Any feature relying on the model
+  // would have a period of time without a valid model, and would need to push a
+  // new version.
   return base::Days(GetFieldTrialParamByFeatureAsInt(
-      kOptimizationTargetPrediction, "inactive_duration_for_models_in_days",
-      30));
+      kOptimizationTargetPrediction, "valid_duration_for_models_in_days", 30));
 }
 
 base::TimeDelta URLKeyedHintValidCacheDuration() {
@@ -506,6 +519,10 @@ bool PageTopicsBatchAnnotationsEnabled() {
 
 bool PageVisibilityBatchAnnotationsEnabled() {
   return base::FeatureList::IsEnabled(kPageVisibilityBatchAnnotations);
+}
+
+bool UseLocalPageEntitiesMetadataProvider() {
+  return base::FeatureList::IsEnabled(kUseLocalPageEntitiesMetadataProvider);
 }
 
 }  // namespace features

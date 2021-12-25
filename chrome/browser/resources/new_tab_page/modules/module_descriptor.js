@@ -13,8 +13,21 @@ import {WindowProxy} from '../window_proxy.js';
 /** @typedef {function(): !Promise<?HTMLElement>} */
 export let InitializeModuleCallback;
 
+/** @typedef {function(): !Promise<!HTMLElement>} */
+export let InitializeModuleCallbackV2;
+
 /** @typedef {{element: !HTMLElement, descriptor: !ModuleDescriptor}} */
 export let Module;
+
+/**
+ * @enum {number}
+ * @const
+ */
+export const ModuleHeight = {
+  DYNAMIC: -1,
+  SHORT: 166,
+  TALL: 358,
+};
 
 export class ModuleDescriptor {
   /**
@@ -39,6 +52,11 @@ export class ModuleDescriptor {
   /** @return {string} */
   get name() {
     return this.name_;
+  }
+
+  /** @return {number} */
+  get height() {
+    return ModuleHeight.DYNAMIC;
   }
 
   /**
@@ -66,5 +84,35 @@ export class ModuleDescriptor {
     recordDuration('NewTabPage.Modules.LoadDuration', duration);
     recordDuration(`NewTabPage.Modules.LoadDuration.${this.id_}`, duration);
     return element;
+  }
+}
+
+export class ModuleDescriptorV2 extends ModuleDescriptor {
+  /**
+   * @param {string} id
+   * @param {string} name
+   * @param {!ModuleHeight} height
+   * @param {!InitializeModuleCallbackV2} initializeCallback
+   */
+  constructor(id, name, height, initializeCallback) {
+    super(id, name, initializeCallback);
+    /** @private {!ModuleHeight} */
+    this.height_ = height;
+  }
+
+  /** @override */
+  get height() {
+    return this.height_;
+  }
+
+  /**
+   * Like |ModuleDescriptor.initialize()| but returns an empty element on
+   * timeout.
+   * @param {number} timeout
+   * @return {!Promise<!HTMLElement>}
+   */
+  async initialize(timeout) {
+    return (await super.initialize(timeout)) ||
+        /** @type {!HTMLElement} */ (document.createElement('div'));
   }
 }

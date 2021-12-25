@@ -113,8 +113,9 @@ CreatePredictionModel() {
   model_info->add_supported_host_model_features("agg1");
   model_info->set_optimization_target(
       optimization_guide::proto::OPTIMIZATION_TARGET_PAINFUL_PAGE_LOAD);
-  model_info->add_supported_model_types(
-      optimization_guide::proto::ModelType::MODEL_TYPE_DECISION_TREE);
+  model_info->add_supported_model_engine_versions(
+      optimization_guide::proto::ModelEngineVersion::
+          MODEL_ENGINE_VERSION_DECISION_TREE);
   return prediction_model;
 }
 
@@ -841,18 +842,17 @@ IN_PROC_BROWSER_TEST_F(PredictionManagerModelDownloadingBrowserTest,
         "OptimizationGuide.PredictionModelDownloadManager.DownloadStatus",
         PredictionModelDownloadStatus::kSuccess, 1);
   }
+
   {
     base::HistogramTester histogram_tester;
     // Now hook everything up in the guest profile and we should still get the
     // model back but no additional fetches should be made.
     Browser* guest_browser = CreateGuestBrowser();
 
-    // To prevent any race, ensure the store has be initialized. The guest
-    // profiles cause two profiles to be created so the store will be
-    // initialized twice.
+    // To prevent any race, ensure the store has be initialized.
     RetryForHistogramUntilCountReached(
         &histogram_tester,
-        "OptimizationGuide.PredictionManager.StoreInitialized", 2);
+        "OptimizationGuide.PredictionManager.StoreInitialized", 1);
     std::unique_ptr<base::RunLoop> run_loop = std::make_unique<base::RunLoop>();
     ModelFileObserver model_file_observer;
     model_file_observer.set_model_file_received_callback(base::BindOnce(

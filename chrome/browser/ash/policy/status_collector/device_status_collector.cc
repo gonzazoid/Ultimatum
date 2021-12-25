@@ -2334,6 +2334,7 @@ bool DeviceStatusCollector::GetWriteProtectSwitch(
 
 bool DeviceStatusCollector::GetNetworkConfiguration(
     em::DeviceStatusReportRequest* status) {
+  // Note: keep in sync with `::reporting::NetworkInfoSampler`
   static const struct {
     const char* type_string;
     em::NetworkInterface::NetworkDeviceType type_constant;
@@ -2739,6 +2740,7 @@ void DeviceStatusCollector::GetDeviceStatus(
       status->set_boot_mode(*boot_mode);
       anything_reported = true;
     }
+    anything_reported |= GetWriteProtectSwitch(status);
   }
 
   if (report_network_configuration_)
@@ -2766,10 +2768,6 @@ void DeviceStatusCollector::GetDeviceStatus(
 
   if (report_security_status_) {
     state->FetchTpmStatus(tpm_status_fetcher_);
-  }
-
-  if (report_system_info_) {
-    anything_reported |= GetWriteProtectSwitch(status);
   }
 
   // Mark if any of the above functions reported data so that the response is

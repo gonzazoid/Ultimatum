@@ -13,6 +13,10 @@
 # Tests that fail in legacy but pass in NG
 
 # ====== New tests from wpt-importer added here ======
+crbug.com/626703 external/wpt/css/css-overflow/scrollbar-gutter-vertical-lr-002.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-writing-modes/inline-box-orthogonal-child-with-margins.html [ Failure ]
+crbug.com/626703 virtual/system-color-compute/external/wpt/css/css-color/oklch-008.html [ Failure ]
+crbug.com/626703 external/wpt/selection/textcontrols/onselectionchange-content-attribute.html [ Timeout ]
 crbug.com/626703 external/wpt/infrastructure/channels/test_call.html [ Timeout ]
 crbug.com/626703 external/wpt/infrastructure/channels/test_postMessage.html [ Timeout ]
 crbug.com/626703 external/wpt/infrastructure/channels/test_serialize.html [ Timeout ]
@@ -27,6 +31,11 @@ crbug.com/626703 external/wpt/css/css-fonts/palette-values-rule-add-2.html [ Tim
 crbug.com/626703 external/wpt/css/css-fonts/palette-values-rule-delete-2.html [ Timeout ]
 crbug.com/626703 external/wpt/css/css-fonts/palette-values-rule-delete.html [ Timeout ]
 crbug.com/626703 external/wpt/css/css-sizing/dynamic-change-inline-size-002.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-flexbox/flex-basis-intrinsics-001.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-flexbox/abspos/flex-abspos-staticpos-justify-content-003.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-flexbox/abspos/flex-abspos-staticpos-justify-content-004.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-flexbox/abspos/flex-abspos-staticpos-justify-content-007.html [ Failure ]
+crbug.com/626703 external/wpt/css/css-flexbox/abspos/flex-abspos-staticpos-justify-content-008.html [ Failure ]
 
 # accessibility/
 crbug.com/1159730 accessibility/inline-text-box-next-on-line.html [ Failure ]
@@ -698,6 +707,7 @@ crbug.com/591099 external/wpt/css/css-writing-modes/line-box-height-vlr-021.xht 
 crbug.com/591099 external/wpt/css/css-writing-modes/line-box-height-vlr-023.xht [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/ortho-htb-alongside-vrl-floats-006.xht [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/ortho-htb-alongside-vrl-floats-014.xht [ Failure ]
+crbug.com/1281318 external/wpt/css/css-writing-modes/padding-percent-orthogonal-dynamic.html [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/sizing-orthog-htb-in-vlr-001.xht [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/sizing-orthog-htb-in-vlr-004.xht [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/sizing-orthog-prct-htb-in-vlr-001.xht [ Failure ]
@@ -716,7 +726,6 @@ crbug.com/591099 external/wpt/css/css-writing-modes/text-shadow-orientation-upri
 crbug.com/591099 external/wpt/css/css-writing-modes/two-levels-of-orthogonal-flows-percentage.html [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/vertical-alignment-003.xht [ Failure ]
 crbug.com/591099 external/wpt/css/css-writing-modes/vertical-alignment-009.xht [ Failure ]
-
 
 ### external/wpt/css/cssom-view/
 crbug.com/997705 external/wpt/css/cssom-view/getBoundingClientRect-empty-inline.html [ Failure ]
@@ -737,13 +746,13 @@ crbug.com/591099 external/wpt/css/css-content/quotes-033.html [ Failure ]
 crbug.com/886592 external/wpt/css/css-flexbox/abspos/flex-abspos-staticpos-margin-002.html [ Failure ]
 
 ### external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/counter-styles-3/
-crbug.com/591099 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/counter-styles-3/descriptor-pad.html [ Failure ]
-crbug.com/591099 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/counter-styles-3/descriptor-range.html [ Failure ]
-crbug.com/591099 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/counter-styles-3/system-extends.html [ Failure ]
+crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-at-rule/descriptor-pad.html [ Failure ]
+crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-at-rule/descriptor-range.html [ Failure ]
+crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-at-rule/system-extends.html [ Failure ]
 
 ### external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/selectors4/
-crbug.com/576815 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/selectors4/dir-style-01a.html [ Failure ]
-crbug.com/576815 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/selectors4/dir-style-01b.html [ Failure ]
+crbug.com/576815 external/wpt/css/selectors/dir-style-01a.html [ Failure ]
+crbug.com/576815 external/wpt/css/selectors/dir-style-01b.html [ Failure ]
 
 ### external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/sizing/
 crbug.com/591099 external/wpt/css/css-sizing/block-size-with-min-or-max-content-1a.html [ Failure ]
@@ -755,7 +764,7 @@ crbug.com/591099 external/wpt/css/css-sizing/vert-block-size-small-or-larger-tha
 crbug.com/591099 external/wpt/css/css-sizing/vert-block-size-small-or-larger-than-container-with-min-or-max-content-2b.html [ Failure ]
 
 ### external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/writing-modes-3/
-crbug.com/736319 external/wpt/css/vendor-imports/mozilla/mozilla-central-reftests/writing-modes-3/text-combine-upright-break-inside-001a.html [ Failure ]
+crbug.com/736319 external/wpt/css/css-writing-modes/text-combine-upright-break-inside-001a.html [ Failure ]
 
 ### external/wpt/quirks/
 crbug.com/591099 external/wpt/quirks/body-fills-html-quirk-vertical.html [ Failure ]
@@ -790,6 +799,7 @@ crbug.com/591099 fast/selectors/input-with-selection-pseudo-element.html [ Failu
 crbug.com/591099 fast/writing-mode/flipped-blocks-inline-map-local-to-container.html [ Failure ]
 
 ### external/wpt/html/rendering
+crbug.com/591099 external/wpt/html/rendering/non-replaced-elements/the-fieldset-and-legend-elements/fieldset-block-size.html [ Failure ]
 crbug.com/591099 external/wpt/html/rendering/non-replaced-elements/the-fieldset-and-legend-elements/fieldset-containing-block.html [ Failure ]
 crbug.com/880062 external/wpt/html/rendering/non-replaced-elements/the-fieldset-and-legend-elements/fieldset-content-before-legend.html [ Failure ]
 crbug.com/880062 external/wpt/html/rendering/non-replaced-elements/the-fieldset-and-legend-elements/fieldset-generated-content.html [ Failure ]
@@ -1322,6 +1332,9 @@ crbug.com/591099 external/wpt/css/css-grid/grid-items/percentage-size-indefinite
 crbug.com/667785 external/wpt/css/css-grid/table-grid-item-005.html [ Failure ]
 
 ### external/wpt/css/css-highlight-api/
+crbug.com/1274174 external/wpt/css/css-highlight-api/painting/custom-highlight-painting-text-decoration-* [ Failure ]
+
+### external/wpt/css/css-highlight-api/
 crbug.com/591099 virtual/css-highlight-inheritance/external/wpt/css/css-highlight-api/painting/custom-highlight-painting-inheritance-* [ Failure ]
 
 ### external/wpt/css/css-pseudo/
@@ -1349,8 +1362,8 @@ crbug.com/1178754 external/wpt/html/semantics/interactive-elements/the-popup-ele
 crbug.com/591099 virtual/stable/compositing/filters/sw-nested-shadow-overlaps-hw-nested-shadow.html [ Failure ]
 
 ### external/wpt/css/css-counter-styles/
-crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-fallbacks-in-shadow-dom.html [ Failure ]
-crbug.com/591099 external/wpt/css/css-counter-styles/counter-styles-override-in-shadow-dom.html [ Failure ]
+crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-at-rule/fallbacks-in-shadow-dom.html [ Failure ]
+crbug.com/591099 external/wpt/css/css-counter-styles/counter-style-at-rule/override-in-shadow-dom.html [ Failure ]
 
 ### wpt_internal/webcodecs/
 crbug.com/591099 wpt_internal/webcodecs/annexb_decoding.https.any.html [ Failure ]

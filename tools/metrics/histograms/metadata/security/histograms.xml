@@ -56,7 +56,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.DataDecoder.Image.DecodingTime" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>lukasza@chromium.org</owner>
   <owner>rsesek@chromium.org</owner>
   <summary>
@@ -69,7 +69,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.DataDecoder.Image.Isolated.EndToEndTime" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>lukasza@chromium.org</owner>
   <owner>rsesek@chromium.org</owner>
   <summary>
@@ -93,7 +93,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.DataDecoder.Image.Isolated.ProcessOverhead"
-    units="ms" expires_after="2022-04-10">
+    units="ms" expires_after="2022-06-12">
   <owner>lukasza@chromium.org</owner>
   <owner>rsesek@chromium.org</owner>
   <summary>
@@ -116,7 +116,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.DataDecoder.Image.Reusable.EndToEndTime" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>lukasza@chromium.org</owner>
   <owner>rsesek@chromium.org</owner>
   <summary>
@@ -140,7 +140,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.DataDecoder.Image.Reusable.ProcessOverhead"
-    units="ms" expires_after="2022-04-10">
+    units="ms" expires_after="2022-06-12">
   <owner>lukasza@chromium.org</owner>
   <owner>rsesek@chromium.org</owner>
   <summary>
@@ -185,13 +185,24 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.HttpsFirstMode.SettingEnabledAtStartup"
-    enum="BooleanEnabled" expires_after="2022-04-10">
+    enum="BooleanEnabled" expires_after="2022-06-12">
   <owner>cthomp@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
     Records whether the HTTPS-First Mode preference is enabled at profile
     startup. Recorded for regular profiles only (not for Incognito, Guest, or
     Sign-in profiles).
+  </summary>
+</histogram>
+
+<histogram name="Security.JSONParser.ChromiumExtensionUsage"
+    enum="JsonParserExtension" expires_after="2022-04-01">
+  <owner>rsesek@chromium.org</owner>
+  <owner>chrome-platform-security@google.com</owner>
+  <summary>
+    Records the usage of the base::JSONParser's non-RFC-8259-conforming
+    extensions when parsing JSON documents. This histogram is emitted each time
+    an instance of non-conforming syntax is detected in a document.
   </summary>
 </histogram>
 
@@ -372,7 +383,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.PageInfo.TimeOpen" units="units"
-    expires_after="2022-05-22">
+    expires_after="2022-06-19">
   <owner>cthomp@chromium.org</owner>
   <owner>security-enamel@chromium.org</owner>
   <summary>
@@ -397,7 +408,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.PageInfo.TimeOpen.Action" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>cthomp@chromium.org</owner>
   <owner>security-enamel@chromium.org</owner>
   <summary>
@@ -407,7 +418,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.PageInfo.TimeOpen.NoAction" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>cthomp@chromium.org</owner>
   <owner>security-enamel@chromium.org</owner>
   <summary>
@@ -505,7 +516,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SafetyTips.OpenTime.CloseTab" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>jdeblasio@chromium.org</owner>
   <owner>estark@chromium.org</owner>
   <summary>
@@ -515,7 +526,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SafetyTips.OpenTime.Dismiss" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>jdeblasio@chromium.org</owner>
   <owner>estark@chromium.org</owner>
   <summary>
@@ -635,7 +646,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SafetyTips.SafetyTipShown" enum="SafetyTipStatus"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>jdeblasio@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
@@ -691,7 +702,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.DedupeCacheHWM" units="reports"
-    expires_after="2022-02-01">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
@@ -701,7 +712,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportCompletionStatus"
-    enum="SCTAuditingReportCompletionStatus" expires_after="2022-02-01">
+    enum="SCTAuditingReportCompletionStatus" expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
@@ -711,9 +722,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportDeduplicated" enum="Boolean"
-    expires_after="2022-04-17">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
-  <owner>security-enamel@chromium.org</owner>
+  <owner>trusty-transport@chromium.org</owner>
   <summary>
     Records whether a report was deduplicated (i.e., the SCTs were already in
     the cache) or not. Recorded on each new report seen by the SCT auditing
@@ -722,7 +733,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportersHWM" units="reporters"
-    expires_after="2022-02-01">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
@@ -732,9 +743,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportSampled" enum="Boolean"
-    expires_after="2021-12-12">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
-  <owner>security-enamel@chromium.org</owner>
+  <owner>trusty-transport@chromium.org</owner>
   <summary>
     Records whether a report was sampled to be sent to Safe Browsing. Recorded
     for each new report seen by the SCT auditing cache that was not
@@ -743,9 +754,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportSize" units="bytes"
-    expires_after="2021-12-12">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
-  <owner>security-enamel@chromium.org</owner>
+  <owner>trusty-transport@chromium.org</owner>
   <summary>
     Records the size of an SCT auditing report that will be sent to Safe
     Browsing (i.e., was not deduplicated and was sampled).
@@ -753,9 +764,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SCTAuditing.OptIn.ReportSucceeded" enum="Boolean"
-    expires_after="2021-12-12">
+    expires_after="2022-09-01">
   <owner>cthomp@chromium.org</owner>
-  <owner>security-enamel@chromium.org</owner>
+  <owner>trusty-transport@chromium.org</owner>
   <summary>
     Records whether sending an SCT auditing report succeeded or not. This is
     recorded after we receive the headers from the server (or we stop due to a
@@ -813,7 +824,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Security.SecurityLevel.InsecureMainFrameFormSubmission"
-    enum="SecurityLevel" expires_after="2022-04-10">
+    enum="SecurityLevel" expires_after="2022-06-12">
   <owner>estark@chromium.org</owner>
   <owner>trusty-transport@chromium.org</owner>
   <summary>
@@ -913,7 +924,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="Security.TimeOnPage2" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>cthomp@chromium.org</owner>
   <owner>security-enamel@chromium.org</owner>
   <summary>
@@ -1116,7 +1127,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SiteIsolation.OutOfProcessIframes" units="oopifs"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>alexmos@chromium.org</owner>
   <owner>creis@chromium.org</owner>
   <owner>lukasza@chromium.org</owner>
@@ -1139,7 +1150,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SiteIsolation.ProxyCount" units="proxies"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>alexmos@chromium.org</owner>
   <owner>creis@chromium.org</owner>
   <owner>lukasza@chromium.org</owner>
@@ -1172,7 +1183,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="SiteIsolation.ReusePendingOrCommittedSite.TimeSinceReusableProcessDestroyed"
-    units="ms" expires_after="2022-04-10">
+    units="ms" expires_after="2022-06-12">
   <owner>jessemckenna@google.com</owner>
   <owner>olivierli@chromium.org</owner>
   <summary>
@@ -1223,7 +1234,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SiteIsolation.SiteInstancesPerBrowsingInstance" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>alexmos@chromium.org</owner>
   <owner>creis@chromium.org</owner>
   <owner>lukasza@chromium.org</owner>

@@ -10,17 +10,11 @@ import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.autofill_assistant.overlay.AssistantOverlayCoordinator;
-import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
-import org.chromium.chrome.browser.feedback.ScreenshotMode;
-import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
-import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.ui.TabObscuringHandler;
+import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.SheetState;
-import org.chromium.ui.base.ActivityKeyboardVisibilityDelegate;
+import org.chromium.ui.KeyboardVisibilityDelegate;
 import org.chromium.ui.base.ApplicationViewportInsetSupplier;
 import org.chromium.ui.util.AccessibilityUtil;
 
@@ -29,42 +23,33 @@ import org.chromium.ui.util.AccessibilityUtil;
  * sub-components and shutting down the Autofill Assistant.
  */
 public class AssistantCoordinator {
-    public static final String FEEDBACK_CATEGORY_TAG =
-            "com.android.chrome.USER_INITIATED_FEEDBACK_REPORT_AUTOFILL_ASSISTANT";
-
-    private final Activity mActivity;
-
     private final AssistantModel mModel;
     private AssistantBottomBarCoordinator mBottomBarCoordinator;
     private final AssistantKeyboardCoordinator mKeyboardCoordinator;
     private final AssistantOverlayCoordinator mOverlayCoordinator;
-    private final Supplier<Tab> mCurrentTabSupplier;
 
     AssistantCoordinator(Activity activity, BottomSheetController controller,
-            TabObscuringHandler tabObscuringHandler,
+            @Nullable AssistantTabObscuringUtil tabObscuringUtil,
             @Nullable AssistantOverlayCoordinator overlayCoordinator,
             AssistantKeyboardCoordinator.Delegate keyboardCoordinatorDelegate,
-            @NonNull ActivityKeyboardVisibilityDelegate keyboardDelegate, @NonNull View rootView,
-            @NonNull Supplier<Tab> currentTabSupplier,
-            @NonNull BrowserControlsManager browserControlsManager,
+            @NonNull KeyboardVisibilityDelegate keyboardDelegate, @NonNull View rootView,
+            @NonNull BrowserControlsStateProvider browserControls,
             @NonNull ApplicationViewportInsetSupplier applicationBottomInsetProvider,
-            AccessibilityUtil accessibilityUtil) {
-        mActivity = activity;
-        mCurrentTabSupplier = currentTabSupplier;
-
+            AccessibilityUtil accessibilityUtil, AssistantInfoPageUtil infoPageUtil,
+            @Nullable AssistantProfileImageUtil profileImageUtil) {
         if (overlayCoordinator != null) {
             mModel = new AssistantModel(overlayCoordinator.getModel());
             mOverlayCoordinator = overlayCoordinator;
         } else {
             mModel = new AssistantModel();
-            mOverlayCoordinator = new AssistantOverlayCoordinator(activity, browserControlsManager,
+            mOverlayCoordinator = new AssistantOverlayCoordinator(activity, browserControls,
                     rootView, controller.getScrimCoordinator(), mModel.getOverlayModel(),
                     accessibilityUtil);
         }
 
         mBottomBarCoordinator = new AssistantBottomBarCoordinator(activity, mModel,
-                mOverlayCoordinator, controller, applicationBottomInsetProvider,
-                tabObscuringHandler, browserControlsManager, accessibilityUtil);
+                mOverlayCoordinator, controller, applicationBottomInsetProvider, tabObscuringUtil,
+                browserControls, accessibilityUtil, infoPageUtil, profileImageUtil);
         mKeyboardCoordinator = new AssistantKeyboardCoordinator(activity, keyboardDelegate,
                 rootView, mModel, keyboardCoordinatorDelegate, controller);
     }
@@ -93,18 +78,6 @@ public class AssistantCoordinator {
 
     AssistantKeyboardCoordinator getKeyboardCoordinator() {
         return mKeyboardCoordinator;
-    }
-
-    /**
-     * Show the Chrome feedback form.
-     */
-    public void showFeedback(String debugContext, @ScreenshotMode int screenshotMode) {
-        Tab currentTab = mCurrentTabSupplier.get();
-        if (currentTab == null) return;
-        Profile profile = Profile.fromWebContents(currentTab.getWebContents());
-
-        HelpAndFeedbackLauncherImpl.getInstance().showFeedback(mActivity, profile,
-                currentTab.getUrl().getSpec(), FEEDBACK_CATEGORY_TAG, screenshotMode, debugContext);
     }
 
     public void show() {

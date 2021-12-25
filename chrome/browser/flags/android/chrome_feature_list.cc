@@ -139,7 +139,6 @@ const base::Feature* const kFeaturesExposedToJava[] = {
     &feed::kFeedImageMemoryCacheSizePercentage,
     &feed::kFeedInteractiveRefresh,
     &feed::kFeedLoadingPlaceholder,
-    &feed::kFeedSignInPromoDismiss,
     &feed::kInterestFeedContentSuggestions,
     &feed::kInterestFeedSpinnerAlwaysAnimate,
     &feed::kInterestFeedV1ClicksAndViewsConditionalUpload,
@@ -223,7 +222,6 @@ const base::Feature* const kFeaturesExposedToJava[] = {
     &kDynamicColorAndroid,
     &kEnableDangerousDownloadDialog,
     &kEnableDuplicateDownloadDialog,
-    &kEnhancedProtectionPromoCard,
     &kExperimentsForAgsa,
     &kExploreSites,
     &kFixedUmaSessionResumeOrder,
@@ -261,7 +259,6 @@ const base::Feature* const kFeaturesExposedToJava[] = {
     &kServiceManagerForDownload,
     &kShareButtonInTopToolbar,
     &kSharedClipboardUI,
-    &kSharingHubLinkToggle,
     &kSpannableInlineAutocomplete,
     &kSpecialLocaleWrapper,
     &kSpecialUserDecision,
@@ -614,9 +611,6 @@ const base::Feature kEnableDuplicateDownloadDialog{
 const base::Feature kEnableMixedContentDownloadDialog{
     "EnableMixedContentDownloadDialog", base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kEnhancedProtectionPromoCard{
-    "EnhancedProtectionPromoCard", base::FEATURE_DISABLED_BY_DEFAULT};
-
 const base::Feature kExperimentsForAgsa{"ExperimentsForAgsa",
                                         base::FEATURE_ENABLED_BY_DEFAULT};
 
@@ -715,9 +709,6 @@ const base::Feature kServiceManagerForDownload{
 
 const base::Feature kShareButtonInTopToolbar{"ShareButtonInTopToolbar",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kSharingHubLinkToggle{"SharingHubLinkToggle",
-                                          base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kSpannableInlineAutocomplete{
     "SpannableInlineAutocomplete", base::FEATURE_ENABLED_BY_DEFAULT};

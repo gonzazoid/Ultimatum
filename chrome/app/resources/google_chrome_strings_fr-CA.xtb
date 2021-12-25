@@ -60,6 +60,7 @@ Certaines fonctionnalités ne seront peut-être pas disponibles et les modificat
 <translation id="2348335408836342058">Chrome a besoin de votre autorisation pour accéder à votre appareil photo et à votre micro pour ce site</translation>
 <translation id="234869673307233423">Chrome ne peut pas vérifier vos mots de passe. Réessayez plus tard.</translation>
 <translation id="235650106824528204">L'administrateur du profil professionnel peut retirer toutes les données Chrome générées durant l'utilisation de ce profil (comme la création de favoris, l'historique, les mots de passe et d'autres paramètres). <ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">Continuer</translation>
 <translation id="2429317896000329049">Google Chrome ne peut pas synchroniser vos données, car la synchronisation n'est pas offerte pour votre domaine.</translation>
 <translation id="2467438592969358367">Google Chrome veut exporter vos mots de passe. Pour autoriser cette action, entrez votre mot de passe Windows.</translation>
 <translation id="2485422356828889247">Désinstaller</translation>
@@ -144,6 +145,7 @@ Certaines fonctionnalités ne seront peut-être pas disponibles et les modificat
 <translation id="4343195214584226067">L'extension « <ph name="EXTENSION_NAME" /> » a été ajoutée à Chrome</translation>
 <translation id="4384570495110188418">Chrome ne peut pas vérifier vos mots de passe parce que vous n'êtes pas connecté.</translation>
 <translation id="4407807842708586359">Google Chrome OS</translation>
+<translation id="4427306783828095590">La protection renforcée en fait plus pour bloquer l'hameçonnage et les logiciels nuisibles</translation>
 <translation id="4450664632294415862">Chrome – Connexion au réseau – <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">Une autre opération est en cours sur Google Chrome. Veuillez réessayer plus tard.</translation>
 <translation id="4480040274068703980">Chrome OS ne peut pas synchroniser vos données, car une erreur s'est produite lors de la connexion.</translation>
@@ -174,7 +176,6 @@ Certaines fonctionnalités peuvent être inaccessibles. Veuillez spécifier un r
 <translation id="5193136243808726294">Google Chrome OS ne peut pas ouvrir cette page.</translation>
 <translation id="521447420733633466">Si vous partagez un appareil avec vos proches, ceux-ci peuvent configurer Google Chrome comme bon leur semble et naviguer sur le Web de façon autonome.</translation>
 <translation id="5251420635869119124">Les invités peuvent utiliser Google Chrome sans rien laisser derrière eux.</translation>
-<translation id="5251679006894510177">La mise à jour est presque terminée! Redémarrez Chrome pour terminer la mise à jour. Vos fenêtres de navigation privée ne seront pas rouvertes.</translation>
 <translation id="5334487786912937552">Chrome requiert l'autorisation d'accéder à l'espace de stockage pour télécharger des fichiers</translation>
 <translation id="5386244825306882791">Elle règle également la page qui s'affiche lorsque vous démarrez Chrome ou faites une recherche dans l'omnibox.</translation>
 <translation id="5394833366792865639">Partager un onglet de Chrome</translation>
@@ -246,6 +247,7 @@ Google Chrome ne peut pas récupérer vos paramètres.</translation>
 <translation id="7398801000654795464">Vous étiez connecté à Google Chrome en tant que <ph name="USER_EMAIL_ADDRESS" />. Veuillez utiliser le même compte pour vous reconnecter.</translation>
 <translation id="7408085963519505752">Conditions d'utilisation de Chrome OS</translation>
 <translation id="7419046106786626209">Chrome OS n'a pas pu synchroniser vos données, car la synchronisation n'est pas offerte pour votre nom de domaine.</translation>
+<translation id="7481213027396403996">Profitez de la sécurité la plus robuste de Chrome</translation>
 <translation id="7486227612705979895">Chrome accédera à votre Disque pour faire des suggestions dans la barre d'adresse</translation>
 <translation id="7535429826459677826">Google Chrome Dev</translation>
 <translation id="7573289029918943991">Pour voir si votre appareil est à jour, sélectionnez les <ph name="LINK_BEGIN" />paramètres de Chrome OS<ph name="LINK_END" /></translation>
@@ -304,6 +306,8 @@ Google Chrome ne peut pas récupérer vos paramètres.</translation>
 <translation id="8862326446509486874">Vous ne disposez pas des droits requis pour faire une installation sur le système. Relancez l'installation une fois que vous serez connecté comme administrateur.</translation>
 <translation id="8914504000324227558">Relancer Google Chrome</translation>
 <translation id="8922193594870374009">Pour envoyer un numéro de <ph name="ORIGIN" /> vers votre téléphone Android, connectez-vous à Chrome sur les deux appareils.</translation>
+<translation id="8927704157641862988">Personnalisez les choix en matière de confidentialité considérés comme étant les plus importants par Chrome. Ce guide ne comprend pas tous les paramètres ni toutes les options.</translation>
+<translation id="8983720963221508955">Vous avez activé la navigation sécurisée améliorée dans votre compte. Maintenant, activez-la dans Chrome.</translation>
 <translation id="8986207147630327271">Vous ajoutez un profil professionnel à ce navigateur et vous octroyez uniquement le contrôle de ce profil à votre administrateur.</translation>
 <translation id="8999208279178790196">{0,plural, =0{Une mise à jour de Chrome est proposée}=1{Une mise à jour de Chrome est proposée}one{Une mise à jour de Chrome est proposée depuis # jour}other{Une mise à jour de Chrome est proposée depuis # jours}}</translation>
 <translation id="9026991721384951619">Chrome OS n'a pas pu synchroniser vos données, car vos renseignements de connexion ne sont plus à jour.</translation>

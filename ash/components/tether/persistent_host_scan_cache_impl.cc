@@ -13,7 +13,7 @@
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 
-namespace chromeos {
+namespace ash {
 
 namespace tether {
 
@@ -103,7 +103,7 @@ PersistentHostScanCacheImpl::~PersistentHostScanCacheImpl() = default;
 
 std::unordered_map<std::string, HostScanCacheEntry>
 PersistentHostScanCacheImpl::GetStoredCacheEntries() {
-  const base::ListValue* cache_entry_list =
+  const base::Value* cache_entry_list =
       pref_service_->GetList(prefs::kHostScanCache);
   DCHECK(cache_entry_list);
 
@@ -209,4 +209,4 @@ void PersistentHostScanCacheImpl::StoreCacheEntriesToPrefs(
 
 }  // namespace tether
 
-}  // namespace chromeos
+}  // namespace ash

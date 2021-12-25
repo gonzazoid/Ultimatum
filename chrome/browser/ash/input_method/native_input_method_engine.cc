@@ -23,6 +23,7 @@
 #include "chrome/browser/ash/input_method/assistive_suggester_client_filter.h"
 #include "chrome/browser/ash/input_method/assistive_suggester_switch.h"
 #include "chrome/browser/ash/input_method/autocorrect_manager.h"
+#include "chrome/browser/ash/input_method/diacritics_checker.h"
 #include "chrome/browser/ash/input_method/grammar_service_client.h"
 #include "chrome/browser/ash/input_method/input_method_settings.h"
 #include "chrome/browser/ash/input_method/suggestions_service_client.h"
@@ -31,6 +32,7 @@
 #include "chrome/browser/ui/webui/settings/chromeos/constants/routes.mojom.h"
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_service.h"
+#include "ui/base/ime/ash/extension_ime_util.h"
 #include "ui/base/ime/ash/ime_bridge.h"
 #include "ui/base/ime/ash/input_method_manager.h"
 #include "ui/base/ime/ash/input_method_ukm.h"
@@ -43,23 +45,23 @@ namespace {
 
 namespace mojom = ::chromeos::ime::mojom;
 
-// Returns the current input context. This may change during the session, even
-// if the IME engine does not change.
-ui::IMEInputContextHandlerInterface* GetInputContext() {
-  return ui::IMEBridge::Get()->GetInputContextHandler();
-}
+// These are persisted to logs. Entries should not be renumbered. Numeric values
+// should not be reused. Must stay in sync with IMENonAutocorrectDiacriticStatus
+// enum in: tools/metrics/histograms/enums.xml
+enum class NonAutocorrectDiacriticStatus {
+  kWithoutDiacritics = 0,
+  kWithDiacritics = 1,
+  kMaxValue = kWithDiacritics,
+};
 
-// TODO(https://crbug/1166082): Use a separate InputMethodEngine for rule-based.
-bool ShouldRouteToRuleBasedEngine(const std::string& engine_id) {
+bool IsRuleBasedEngine(const std::string& engine_id) {
   return base::StartsWith(engine_id, "vkd_", base::CompareCase::SENSITIVE);
 }
 
-IMECandidateWindowHandlerInterface* GetCandidateWindowHandler() {
-  return ui::IMEBridge::Get()->GetCandidateWindowHandler();
-}
-
 bool IsFstEngine(const std::string& engine_id) {
-  return base::StartsWith(engine_id, "xkb:", base::CompareCase::SENSITIVE);
+  return base::StartsWith(engine_id, "xkb:", base::CompareCase::SENSITIVE) ||
+         base::StartsWith(engine_id, "experimental_",
+                          base::CompareCase::SENSITIVE);
 }
 
 bool IsKoreanEngine(const std::string& engine_id) {
@@ -84,7 +86,7 @@ bool IsUsEnglishEngine(const std::string& engine_id) {
   return engine_id == "xkb:us::eng";
 }
 
-bool ShouldRouteToNativeMojoEngine(const std::string& engine_id) {
+bool CanRouteToNativeMojoEngine(const std::string& engine_id) {
   // To avoid handling tricky cases where the user types with both the virtual
   // and the physical keyboard, only run the native code path if the virtual
   // keyboard is disabled. Otherwise, just let the extension handle any physical
@@ -104,8 +106,12 @@ bool ShouldRouteToNativeMojoEngine(const std::string& engine_id) {
 
 bool IsPhysicalKeyboardAutocorrectEnabled(PrefService* prefs,
                                           const std::string& engine_id) {
-  // The FST Mojo engine is only needed if autocorrect is enabled.
-  const base::DictionaryValue* input_method_settings =
+  if (base::StartsWith(engine_id, "experimental_",
+                       base::CompareCase::SENSITIVE)) {
+    return true;
+  }
+
+  const base::Value* input_method_settings =
       prefs->GetDictionary(::prefs::kLanguageInputMethodSpecificSettings);
   const base::Value* autocorrect_setting = input_method_settings->FindPath(
       engine_id + ".physicalKeyboardAutoCorrectionLevel");
@@ -392,16 +398,6 @@ mojom::PhysicalKeyEventPtr CreatePhysicalKeyEventFromKeyEvent(
       ModifierStateFromEvent(event));
 }
 
-uint32_t Utf8ToCodepoint(const std::string& str) {
-  int32_t index = 0;
-  uint32_t codepoint = 0;
-  base::ReadUnicodeCharacter(str.data(), str.length(), &index, &codepoint);
-
-  // Should only contain a single codepoint.
-  DCHECK_EQ(index, str.length() - 1);
-  return codepoint;
-}
-
 uint32_t Utf16ToCodepoint(const std::u16string& str) {
   int32_t index = 0;
   uint32_t codepoint = 0;
@@ -464,7 +460,18 @@ InputFieldContext CreateInputFieldContext(AssistiveSuggester* suggester) {
 
 }  // namespace
 
-NativeInputMethodEngine::NativeInputMethodEngine() = default;
+NativeInputMethodEngine::NativeInputMethodEngine()
+    : NativeInputMethodEngine(/*use_ime_service=*/true) {}
+
+NativeInputMethodEngine::NativeInputMethodEngine(bool use_ime_service)
+    : use_ime_service_(use_ime_service) {}
+
+// static
+std::unique_ptr<NativeInputMethodEngine>
+NativeInputMethodEngine::CreateForTesting(bool use_ime_service) {
+  return base::WrapUnique<NativeInputMethodEngine>(
+      new NativeInputMethodEngine(use_ime_service));
+}
 
 NativeInputMethodEngine::~NativeInputMethodEngine() = default;
 
@@ -473,7 +480,7 @@ NativeInputMethodEngine::NativeInputMethodEngine(
     : suggester_switch_(std::move(suggester_switch)) {}
 
 void NativeInputMethodEngine::Initialize(
-    std::unique_ptr<InputMethodEngineBase::Observer> observer,
+    std::unique_ptr<InputMethodEngineObserver> observer,
     const char* extension_id,
     Profile* profile) {
   // TODO(crbug/1141231): refactor the mix of unique and raw ptr here.
@@ -508,9 +515,15 @@ void NativeInputMethodEngine::Initialize(
       profile->GetPrefs(), std::move(observer), std::move(assistive_suggester),
       std::move(autocorrect_manager), std::move(suggestions_collector),
       std::make_unique<GrammarManager>(
-          profile, std::make_unique<GrammarServiceClient>(), this));
+          profile, std::make_unique<GrammarServiceClient>(), this),
+      use_ime_service_);
   InputMethodEngine::Initialize(std::move(native_observer), extension_id,
                                 profile);
+}
+
+bool NativeInputMethodEngine::ShouldRouteToNativeMojoEngine(
+    const std::string& engine_id) const {
+  return use_ime_service_ && CanRouteToNativeMojoEngine(engine_id);
 }
 
 void NativeInputMethodEngine::CandidateClicked(uint32_t index) {
@@ -518,9 +531,8 @@ void NativeInputMethodEngine::CandidateClicked(uint32_t index) {
   // The native Mojo engine doesn't use candidate IDs, so we just treat `index`
   // as the ID, without doing a mapping.
   if (ShouldRouteToNativeMojoEngine(GetActiveComponentId())) {
-    GetNativeObserver()->OnCandidateClicked(
-        GetActiveComponentId(), index,
-        InputMethodEngineBase::MOUSE_BUTTON_LEFT);
+    GetNativeObserver()->OnCandidateClicked(GetActiveComponentId(), index,
+                                            MOUSE_BUTTON_LEFT);
   } else {
     InputMethodEngine::CandidateClicked(index);
   }
@@ -561,25 +573,38 @@ NativeInputMethodEngine::GetNativeObserver() const {
 
 NativeInputMethodEngine::ImeObserver::ImeObserver(
     PrefService* prefs,
-    std::unique_ptr<InputMethodEngineBase::Observer> ime_base_observer,
+    std::unique_ptr<InputMethodEngineObserver> ime_base_observer,
     std::unique_ptr<AssistiveSuggester> assistive_suggester,
     std::unique_ptr<AutocorrectManager> autocorrect_manager,
     std::unique_ptr<SuggestionsCollector> suggestions_collector,
-    std::unique_ptr<GrammarManager> grammar_manager)
+    std::unique_ptr<GrammarManager> grammar_manager,
+    bool use_ime_service)
     : prefs_(prefs),
       ime_base_observer_(std::move(ime_base_observer)),
       assistive_suggester_(std::move(assistive_suggester)),
       autocorrect_manager_(std::move(autocorrect_manager)),
       suggestions_collector_(std::move(suggestions_collector)),
-      grammar_manager_(std::move(grammar_manager)) {}
+      grammar_manager_(std::move(grammar_manager)),
+      use_ime_service_(use_ime_service) {}
 
 NativeInputMethodEngine::ImeObserver::~ImeObserver() = default;
+
+bool NativeInputMethodEngine::ImeObserver::ShouldRouteToRuleBasedEngine(
+    const std::string& engine_id) const {
+  return use_ime_service_ && IsRuleBasedEngine(engine_id);
+}
+
+bool NativeInputMethodEngine::ImeObserver::ShouldRouteToNativeMojoEngine(
+    const std::string& engine_id) const {
+  return use_ime_service_ && CanRouteToNativeMojoEngine(engine_id);
+}
 
 void NativeInputMethodEngine::ImeObserver::OnActivate(
     const std::string& engine_id) {
   // TODO(b/181077907): Always launch the IME service and let IME service decide
   // whether it should shutdown or not.
   if (IsFstEngine(engine_id) && ShouldRouteToNativeMojoEngine(engine_id) &&
+      // The FST Mojo engine is only needed if autocorrect is enabled.
       !IsPhysicalKeyboardAutocorrectEnabled(prefs_, engine_id) &&
       !IsPredictiveWritingEnabled(prefs_, engine_id)) {
     remote_manager_.reset();
@@ -836,7 +861,7 @@ void NativeInputMethodEngine::ImeObserver::OnSurroundingTextChanged(
 void NativeInputMethodEngine::ImeObserver::OnCandidateClicked(
     const std::string& component_id,
     int candidate_id,
-    InputMethodEngineBase::MouseButtonEvent button) {
+    MouseButtonEvent button) {
   if (ShouldRouteToNativeMojoEngine(component_id)) {
     if (input_method_.is_bound()) {
       input_method_->OnCandidateSelected(candidate_id);
@@ -922,7 +947,7 @@ void NativeInputMethodEngine::ImeObserver::OnInputMethodOptionsChanged(
 void NativeInputMethodEngine::ImeObserver::CommitText(
     const std::u16string& text,
     mojom::CommitTextCursorBehavior cursor_behavior) {
-  GetInputContext()->CommitText(
+  ui::IMEBridge::Get()->GetInputContextHandler()->CommitText(
       text,
       cursor_behavior == mojom::CommitTextCursorBehavior::kMoveCursorBeforeText
           ? ui::TextInputClient::InsertTextCursorBehavior::kMoveCursorBeforeText
@@ -930,9 +955,20 @@ void NativeInputMethodEngine::ImeObserver::CommitText(
                 kMoveCursorAfterText);
 }
 
-void NativeInputMethodEngine::ImeObserver::SetComposition(
+void NativeInputMethodEngine::ImeObserver::DEPRECATED_SetComposition(
     const std::u16string& text,
     std::vector<mojom::CompositionSpanPtr> spans) {
+  SetComposition(text, std::move(spans), text.length());
+}
+
+void NativeInputMethodEngine::ImeObserver::SetComposition(
+    const std::u16string& text,
+    std::vector<mojom::CompositionSpanPtr> spans,
+    uint32_t new_cursor_position) {
+  if (new_cursor_position > text.length()) {
+    return;
+  }
+
   ui::CompositionText composition;
   composition.text = text;
 
@@ -941,8 +977,9 @@ void NativeInputMethodEngine::ImeObserver::SetComposition(
     composition.ime_text_spans.push_back(CompositionSpanToImeTextSpan(*span));
   }
 
-  GetInputContext()->UpdateCompositionText(
-      std::move(composition), /*cursor_pos=*/composition.text.length(),
+  ui::IMEBridge::Get()->GetInputContextHandler()->UpdateCompositionText(
+      std::move(composition),
+      /*cursor_pos=*/new_cursor_position,
       /*visible=*/true);
 }
 
@@ -951,7 +988,7 @@ void NativeInputMethodEngine::ImeObserver::SetCompositionRange(
     uint32_t end_index) {
   const auto ordered_range = std::minmax(start_index, end_index);
   // TODO(b/151884011): Turn on underlining for composition-based languages.
-  GetInputContext()->SetComposingRange(
+  ui::IMEBridge::Get()->GetInputContextHandler()->SetComposingRange(
       ordered_range.first, ordered_range.second,
       {ui::ImeTextSpan(
           ui::ImeTextSpan::Type::kComposition, /*start_offset=*/0,
@@ -961,14 +998,33 @@ void NativeInputMethodEngine::ImeObserver::SetCompositionRange(
 }
 
 void NativeInputMethodEngine::ImeObserver::FinishComposition() {
-  GetInputContext()->ConfirmCompositionText(/*reset_engine=*/false,
-                                            /*keep_selection=*/true);
+  ui::IMEInputContextHandlerInterface* input_context =
+      ui::IMEBridge::Get()->GetInputContextHandler();
+
+  input_context->ConfirmCompositionText(/*reset_engine=*/false,
+                                        /*keep_selection=*/true);
+
+  auto* manager = InputMethodManager::Get();
+  if (!manager ||
+      !extension_ime_util::IsExperimentalMultilingual(
+          manager->GetActiveIMEState()->GetCurrentInputMethod().id())) {
+    return;
+  }
+
+  std::u16string composition_text = input_context->GetCompositionText();
+  base::TrimWhitespace(composition_text, base::TRIM_ALL, &composition_text);
+  bool has_diacritics = HasDiacritics(composition_text);
+
+  base::UmaHistogramEnumeration(
+      "InputMethod.MultilingualExperiment.NonAutocorrect",
+      has_diacritics ? NonAutocorrectDiacriticStatus::kWithDiacritics
+                     : NonAutocorrectDiacriticStatus::kWithoutDiacritics);
 }
 
 void NativeInputMethodEngine::ImeObserver::DeleteSurroundingText(
     uint32_t num_before_cursor,
     uint32_t num_after_cursor) {
-  GetInputContext()->DeleteSurroundingText(
+  ui::IMEBridge::Get()->GetInputContextHandler()->DeleteSurroundingText(
       /*offset=*/-static_cast<int>(num_before_cursor),
       /*length=*/num_before_cursor + num_after_cursor);
 }
@@ -997,14 +1053,16 @@ void NativeInputMethodEngine::ImeObserver::DisplaySuggestions(
 
 void NativeInputMethodEngine::ImeObserver::UpdateCandidatesWindow(
     chromeos::ime::mojom::CandidatesWindowPtr window) {
-  if (!GetCandidateWindowHandler()) {
+  IMECandidateWindowHandlerInterface* candidate_window_handler =
+      ui::IMEBridge::Get()->GetCandidateWindowHandler();
+  if (!candidate_window_handler) {
     return;
   }
 
   ui::CandidateWindow candidate_window;
   if (!window) {
-    GetCandidateWindowHandler()->UpdateLookupTable(candidate_window,
-                                                   /*visible=*/false);
+    candidate_window_handler->UpdateLookupTable(candidate_window,
+                                                /*visible=*/false);
     return;
   }
 
@@ -1025,14 +1083,16 @@ void NativeInputMethodEngine::ImeObserver::UpdateCandidatesWindow(
   property.auxiliary_text = window->auxiliary_text.value_or("");
   candidate_window.SetProperty(property);
 
-  GetCandidateWindowHandler()->UpdateLookupTable(candidate_window,
-                                                 /*visible=*/true);
+  candidate_window_handler->UpdateLookupTable(candidate_window,
+                                              /*visible=*/true);
 }
 
 void NativeInputMethodEngine::ImeObserver::RecordUkm(mojom::UkmEntryPtr entry) {
   if (entry->is_non_compliant_api()) {
     ui::RecordUkmNonCompliantApi(
-        GetInputContext()->GetClientSourceForMetrics(),
+        ui::IMEBridge::Get()
+            ->GetInputContextHandler()
+            ->GetClientSourceForMetrics(),
         entry->get_non_compliant_api()->non_compliant_operation);
   }
 }

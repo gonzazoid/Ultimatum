@@ -52,8 +52,8 @@ class TestAccessibilityView : public ui::ime::AssistiveAccessibilityView {
 
 class AssistiveWindowControllerTest : public ChromeAshTestBase {
  protected:
-  AssistiveWindowControllerTest() { ui::IMEBridge::Initialize(); }
-  ~AssistiveWindowControllerTest() override { ui::IMEBridge::Shutdown(); }
+  AssistiveWindowControllerTest() = default;
+  ~AssistiveWindowControllerTest() override = default;
 
   void SetUp() override {
     ChromeAshTestBase::SetUp();

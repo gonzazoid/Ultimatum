@@ -7,6 +7,7 @@
 
 #include <set>
 
+#include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
 #include "ash/webui/projector_app/projector_app_client.h"
 #include "ash/webui/projector_app/projector_oauth_token_fetcher.h"
 #include "ash/webui/projector_app/projector_xhr_sender.h"
@@ -30,37 +31,6 @@ enum class ProjectorError {
   kTokenFetchFailure,
 };
 
-// The new screencast button state in the Projector SWA.
-// Ensure that this enum class is synchronized with
-// NewScreencastPreconditionState enum in
-// //ash/webui/projector_app/resources/communication/message_types.js.
-enum class NewScreencastPreconditionState {
-  // The new screencast button is visible but is disabled.
-  kDisabled = 1,
-  // The new screencast button is enabled and the user can create new ones now.
-  kEnabled = 2,
-  // The new screencast button is hidden.
-  kHidden = 3
-};
-
-// The reason for the new screencast button state.
-// Ensure that this enum class is synchronized with
-// NewScreencastPreconditionReason enum in
-// //ash/webui/projector_app/resources/communication/message_types.js.
-enum class NewScreencastPreconditionReason {
-  // Reasons for NewScreenCastPreconditionState.kHidden state:
-  kOnDeviceSpeechRecognitionNotSupported = 1,
-  kUserLocaleNotSupported = 2,
-
-  // Reasons for NewScreenCastPreconditionState.kDisabled state:
-  kInProjectorSession = 3,
-  kScreenRecordingInProgress = 4,
-  kSodaDownloadInProgress = 5,
-  kOutOfDiskSpace = 6,
-  kNoMic = 7,
-  kOthers = 8
-};
-
 // Handles messages from the Projector WebUIs (i.e. chrome://projector).
 class ProjectorMessageHandler : public content::WebUIMessageHandler,
                                 public ProjectorAppClient::Observer {
@@ -76,7 +46,8 @@ class ProjectorMessageHandler : public content::WebUIMessageHandler,
   void RegisterMessages() override;
 
   // ProjectorAppClient:Observer:
-  void OnNewScreencastPreconditionChanged(bool can_start) override;
+  void OnNewScreencastPreconditionChanged(
+      const NewScreencastPrecondition& precondition) override;
 
   void set_web_ui_for_test(content::WebUI* web_ui) { set_web_ui(web_ui); }
 
@@ -84,7 +55,7 @@ class ProjectorMessageHandler : public content::WebUIMessageHandler,
   // Notifies the Projector SWA the pending screencasts' state change and
   // updates the pending list in Projector SWA.
   void OnScreencastsPendingStatusChanged(
-      const std::set<PendingScreencast>& pending_screencast) override;
+      const PendingScreencastSet& pending_screencast) override;
   void OnSodaProgress(int percentage) override;
   void OnSodaError() override;
   void OnSodaInstalled() override;
@@ -125,6 +96,9 @@ class ProjectorMessageHandler : public content::WebUIMessageHandler,
 
   // Requested by the Projector SWA to set the value of a user pref.
   void SetUserPref(const base::Value::ConstListView args);
+
+  // Requested by the Projector SWA to open the Chrome feedback dialog.
+  void OpenFeedbackDialog(const base::Value::ConstListView args);
 
   // Called when OAuth token fetch request is completed by
   // ProjectorOAuthTokenFetcher. Resolves the javascript promise created by

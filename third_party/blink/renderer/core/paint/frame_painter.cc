@@ -14,7 +14,6 @@
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_painter.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/cull_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/loader/fetch/memory_cache.h"
@@ -27,7 +26,7 @@ FloatQuad GetQuadForTraceEvent(const LocalFrameView& frame_view,
                                const CullRect& cull_rect) {
   FloatQuad quad(gfx::RectF(cull_rect.Rect()));
   if (auto* owner = frame_view.GetFrame().OwnerLayoutObject()) {
-    quad.Move(FloatSize(owner->PhysicalContentBoxOffset()));
+    quad.Move(gfx::Vector2dF(owner->PhysicalContentBoxOffset()));
     owner->LocalToAbsoluteQuad(
         quad, kTraverseDocumentBoundaries | kUseGeometryMapperMode);
   }

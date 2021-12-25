@@ -8,6 +8,7 @@
 #include "chromeos/services/bluetooth_config/bluetooth_power_controller.h"
 #include "chromeos/services/bluetooth_config/device_name_manager.h"
 #include "chromeos/services/bluetooth_config/device_operation_handler.h"
+#include "chromeos/services/bluetooth_config/discovered_devices_provider.h"
 #include "chromeos/services/bluetooth_config/discovery_session_manager.h"
 #include "chromeos/services/bluetooth_config/fast_pair_delegate.h"
 #include "chromeos/services/bluetooth_config/initializer.h"
@@ -37,13 +38,16 @@ CrosBluetoothConfig::CrosBluetoothConfig(
               device_cache_.get())),
       bluetooth_device_status_notifier_(
           initializer.CreateBluetoothDeviceStatusNotifier(device_cache_.get())),
+      discovered_devices_provider_(
+          initializer.CreateDiscoveredDevicesProvider(device_cache_.get())),
       discovery_session_manager_(initializer.CreateDiscoverySessionManager(
           adapter_state_controller_.get(),
           bluetooth_adapter,
-          device_cache_.get())),
+          discovered_devices_provider_.get())),
       device_operation_handler_(initializer.CreateDeviceOperationHandler(
           adapter_state_controller_.get(),
-          bluetooth_adapter)),
+          bluetooth_adapter,
+          device_name_manager_.get())),
       fast_pair_delegate_(fast_pair_delegate) {
   if (fast_pair_delegate_)
     fast_pair_delegate_->SetDeviceNameManager(device_name_manager_.get());

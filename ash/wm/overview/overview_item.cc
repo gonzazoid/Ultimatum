@@ -17,6 +17,7 @@
 #include "ash/style/default_color_constants.h"
 #include "ash/style/default_colors.h"
 #include "ash/wm/desks/desks_util.h"
+#include "ash/wm/desks/templates/desks_templates_animations.h"
 #include "ash/wm/drag_window_controller.h"
 #include "ash/wm/overview/delayed_animation_observer_impl.h"
 #include "ash/wm/overview/overview_constants.h"
@@ -187,7 +188,8 @@ OverviewItem::OverviewItem(aura::Window* window,
     : root_window_(window->GetRootWindow()),
       transform_window_(this, window),
       overview_session_(overview_session),
-      overview_grid_(overview_grid) {
+      overview_grid_(overview_grid),
+      animation_disabler_(window) {
   CreateItemWidget();
   window->AddObserver(this);
   WindowState::Get(window)->AddObserver(this);
@@ -208,11 +210,16 @@ bool OverviewItem::Contains(const aura::Window* target) const {
 }
 
 void OverviewItem::HideForDesksTemplatesGrid() {
+  // To hide the window, we will set its layer opacity to 0. This would normally
+  // also hide the window from the mini view, which we don't want. By setting a
+  // property on the window, we can force it to stay visible.
+  GetWindow()->SetProperty(kForceVisibleInMiniViewKey, true);
+
   DCHECK(item_widget_);
   item_widget_->GetLayer()->SetOpacity(0.0f);
 
-  for (aura::Window* transient_child :
-       GetTransientTreeIterator(transform_window_.window())) {
+  for (aura::Window* transient_child : GetTransientTreeIterator(GetWindow())) {
+    transient_child->SetProperty(kForceVisibleInMiniViewKey, true);
     transient_child->layer()->SetOpacity(0.0f);
   }
 
@@ -224,11 +231,11 @@ void OverviewItem::HideForDesksTemplatesGrid() {
 void OverviewItem::RevertHideForDesksTemplatesGrid() {
   // `item_widget_` may be null during shutdown if the window is minimized.
   if (item_widget_)
-    item_widget_->GetLayer()->SetOpacity(1.0f);
+    PerformFadeInLayer(item_widget_->GetLayer());
 
   for (aura::Window* transient_child :
        GetTransientTreeIterator(transform_window_.window())) {
-    transient_child->layer()->SetOpacity(1.0f);
+    PerformFadeInLayer(transient_child->layer());
   }
 
   item_widget_event_blocker_.reset();
@@ -241,7 +248,8 @@ void OverviewItem::OnMovingWindowToAnotherDesk() {
   RestoreWindow(/*reset_transform=*/true);
 }
 
-void OverviewItem::RestoreWindow(bool reset_transform) {
+void OverviewItem::RestoreWindow(bool reset_transform,
+                                 bool was_desks_templates_grid_showing) {
   // TODO(oshima): SplitViewController has its own logic to adjust the
   // target state in |SplitViewController::OnOverviewModeEnding|.
   // Unify the mechanism to control it and remove ifs.
@@ -251,8 +259,14 @@ void OverviewItem::RestoreWindow(bool reset_transform) {
     MaximizeIfSnapped(GetWindow());
   }
 
+  GetWindow()->ClearProperty(kForceVisibleInMiniViewKey);
+  for (aura::Window* transient_child : GetTransientTreeIterator(GetWindow())) {
+    transient_child->ClearProperty(kForceVisibleInMiniViewKey);
+  }
+
   overview_item_view_->OnOverviewItemWindowRestoring();
-  transform_window_.RestoreWindow(reset_transform);
+  transform_window_.RestoreWindow(reset_transform,
+                                  was_desks_templates_grid_showing);
 
   if (transform_window_.IsMinimized()) {
     const auto enter_exit_type = overview_session_->enter_exit_overview_type();

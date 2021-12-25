@@ -36,6 +36,7 @@ Niektoré funkcie nemusia byť k dispozícii a zmeny vykonané v predvoľbách s
 <translation id="2313870531055795960">Kontroluje webové adresy podľa zoznamu nebezpečných webov uloženého v prehliadači Chromium. Ak sa vám určitý web pokúsi ukradnúť heslo alebo stiahnete škodlivý súbor, Chromium môže tiež odoslať webové adresy vrátane častí obsahu stránky Bezpečnému prehliadaniu.</translation>
 <translation id="2343156876103232566">Ak chcete odtiaľto odoslať číslo do svojho telefónu s Androidom, prihláste sa v oboch zariadeniach do prehliadača Chromium.</translation>
 <translation id="2347108572062610441">Toto rozšírenie zmenilo stránku, ktorá sa zobrazí pri spustení prehliadača Chromium.</translation>
+<translation id="2359808026110333948">Pokračovať</translation>
 <translation id="2396765026452590966">Rozšírenie „<ph name="EXTENSION_NAME" />“ zmenilo stránku, ktorá sa zobrazí pri spustení prehliadača Chromium.</translation>
 <translation id="2401032172288869980">Chromium vyžaduje pre tento web povolený prístup ku kamere aj mikrofónu</translation>
 <translation id="2483889755041906834">V prehliadači Chromium</translation>
@@ -110,20 +111,22 @@ Niektoré funkcie nemusia byť k dispozícii a zmeny vykonané v predvoľbách s
 <translation id="4271805377592243930">Pomoc s prehliadačom Chromium</translation>
 <translation id="4285930937574705105">Inštalácia zlyhala kvôli neurčenej chybe. Ak je prehliadač Chromium momentálne spustený, zatvorte ho a skúste znova.</translation>
 <translation id="4407044323746248786">Chcete Chromium napriek tomu ukončiť?</translation>
+<translation id="4414390922528416758">Prispôsobte si možnosti ochrany súkromia, ktoré prehliadač Chromium považuje za najdôležitejšie. Tento sprievodca neobsahuje všetky nastavenia a možnosti.</translation>
 <translation id="4415566066719264597">Povoliť prehliadaču Chromium spustenie na pozadí</translation>
 <translation id="4423735387467980091">Prispôsobiť a spravovať Chromium</translation>
+<translation id="4427306783828095590">Rozšírená ochrana efektívnejšie blokuje phishing aj malvér</translation>
 <translation id="452711251841752011">Vitajte v prehliadači Chromium, otvorilo sa nové okno prehliadača</translation>
 <translation id="4544142686420020088">Chromium sa neaktualizoval. Vyskytol sa problém. <ph name="BEGIN_LINK" />Vyriešiť problémy so sťahovaním aktualizácií prehliadača Chromium a neúspešnými aktualizáciami<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">Chcete pokračovať v novom profile prehliadača Chromium?</translation>
 <translation id="4567424176335768812">Ste prihlásený/-á ako <ph name="USER_EMAIL_ADDRESS" />. Teraz môžete na všetkých zariadeniach, kde ste prihlásený/-á, pristupovať k svojim záložkám, histórii a ďalším nastaveniam.</translation>
 <translation id="459535195905078186">Aplikácie Chromium</translation>
+<translation id="4621240073146040695">Aktualizácia je takmer hotová! Dokončite ju reštartovaním prehliadača Chromium.</translation>
 <translation id="4665829708273112819">Upozornenie: Chromium nemôže zabrániť rozšíreniam v zaznamenávaní vašej histórie prehliadania. Ak chcete rozšírenie v režime inkognito zakázať, zrušte výber tejto možnosti.</translation>
 <translation id="4677944499843243528">Zdá sa, že profil používa ďalší proces prehliadača Chromium (<ph name="PROCESS_ID" />) na inom počítači (<ph name="HOST_NAME" />). Prehliadač Chromium daný profil uzamkol, aby sa nepoškodil. Ak s istotou viete, že tento profil nepoužívajú žiadne iné procesy, môžete ho odomknúť a prehliadač Chromium znova spustiť.</translation>
 <translation id="469338717132742108">Pomoc so systémom Chromium OS</translation>
 <translation id="4708774505295300557">Do prehliadača Chromium sa už na tomto počítači niekto prihlásil pomocou účtu <ph name="ACCOUNT_EMAIL_LAST" />. Ak chcete ponechať svoje informácie oddelené, vytvorte v prehliadači Chromium nového používateľa.</translation>
 <translation id="4746050847053251315">Chcete Chromium napriek tomu ukončiť?</translation>
 <translation id="4748217263233248895">Práve bola použitá mimoriadna bezpečnostná aktualizácia pre prehliadač Chromium. Zmeny sa prejavia až po jeho reštartovaní (vaše karty sa automaticky obnovia).</translation>
-<translation id="4750035648288509542">Takmer aktualizované. Aktualizáciu dokončíte reštartovaním prehliadača Chromium. Okná inkognito sa neotvoria.</translation>
 <translation id="4788777615168560705">Chromium nemôže skontrolovať heslá. Skúste to znova o 24 hodín alebo <ph name="BEGIN_LINK" />skontrolujte heslá vo svojom účte Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Využíva rovnaký nástroj na kontrolu pravopisu, aký sa používa vo Vyhľadávaní Google. Text zadaný do prehliadača sa odošle Googlu. Toto správanie môžete zmeniť v nastaveniach.</translation>
 <translation id="4888717733111232871">Pravidlo pre prichádzajúce prenosy pre prehliadač Chromium, ktoré povoľuje prenos dát mDNS.</translation>
@@ -236,6 +239,7 @@ Prehliadač Chromium nedokáže obnoviť vaše nastavenia.</translation>
 <translation id="7549178288319965365">Informácie o systéme Chromium OS</translation>
 <translation id="7561906087460245826">Tiež vymazať údaje z prehliadača Chromium (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Ak určité nastavenie nevidíte na tejto stránke, skontrolujte <ph name="LINK_BEGIN" />nastavenia operačného systému Chromium<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">V účte ste zapli Zlepšené bezpečné prehliadanie. Povoľte ho aj pre Chromium.</translation>
 <translation id="761356813943268536">Chromium používa vašu kameru a mikrofón.</translation>
 <translation id="7617377681829253106">Prehliadač Chromium bol práve vylepšený</translation>
 <translation id="7686590090926151193">Chromium nie je váš predvolený prehliadač</translation>
@@ -295,5 +299,6 @@ Prehliadač Chromium nedokáže obnoviť vaše nastavenia.</translation>
 <translation id="9214764063801632699">Systém Chromium OS</translation>
 <translation id="93478295209880648">Chromium nemusí fungovať správne, pretože v systémoch Windows XP a Windows Vista už nie je podporovaný</translation>
 <translation id="965162752251293939">Kto používa Chromium?</translation>
+<translation id="967427899662692980">Získajte najsilnejšie zabezpečenie prehliadača Chromium</translation>
 <translation id="985602178874221306">Autori prehliadača Chromium</translation>
 </translationbundle>

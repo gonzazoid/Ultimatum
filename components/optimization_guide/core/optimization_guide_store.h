@@ -179,6 +179,7 @@ class OptimizationGuideStore {
 
   // Removes all models that have not been loaded in the max inactive duration
   // configured. |entry_keys| is updated after the inactive models are removed.
+  // Respects models' |keep_beyond_valid_duration| setting.
   void PurgeInactiveModels();
 
   // Creates and returns a StoreUpdateData object for Prediction Models. This
@@ -196,9 +197,9 @@ class OptimizationGuideStore {
       std::unique_ptr<StoreUpdateData> prediction_models_update_data,
       base::OnceClosure callback);
 
-  // Finds the entry key for the prediction model if it is known to the store.
-  // Returns true if an entry key is found and |out_prediction_model_entry_key|
-  // is populated with the matching key.
+  // Finds the entry key for the prediction model if it is still valid in the
+  // store. Returns true if an entry key is valid and
+  // |out_prediction_model_entry_key| is populated with any matching key.
   // Virtualized for testing.
   virtual bool FindPredictionModelEntryKey(
       proto::OptimizationTarget optimization_target,
@@ -274,6 +275,11 @@ class OptimizationGuideStore {
 
   // Returns true if the current status is Status::kAvailable.
   bool IsAvailable() const;
+
+  // Returns the weak ptr of |this|.
+  base::WeakPtr<OptimizationGuideStore> AsWeakPtr() {
+    return weak_ptr_factory_.GetWeakPtr();
+  }
 
  private:
   friend class OptimizationGuideStoreTest;

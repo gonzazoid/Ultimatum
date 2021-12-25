@@ -17,6 +17,7 @@
 #include "content/browser/attribution_reporting/attribution_report.h"
 #include "content/browser/attribution_reporting/attribution_storage.h"
 #include "content/browser/attribution_reporting/attribution_test_utils.h"
+#include "content/browser/attribution_reporting/send_result.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_ui.h"
 #include "content/public/browser/web_ui_controller.h"
@@ -337,22 +338,22 @@ IN_PROC_BROWSER_TEST_F(AttributionInternalsWebUiBrowserTest,
 
   OverrideWebUIAttributionManager();
 
-  manager_.NotifyReportSent(SentReport(ReportBuilder(SourceBuilder(now).Build())
-                                           .SetReportTime(now + base::Hours(3))
-                                           .Build(),
-                                       SentReport::Status::kSent,
+  manager_.NotifyReportSent(ReportBuilder(SourceBuilder(now).Build())
+                                .SetReportTime(now + base::Hours(3))
+                                .Build(),
+                            SendResult(SendResult::Status::kSent,
                                        /*http_response_code=*/200));
-  manager_.NotifyReportSent(SentReport(ReportBuilder(SourceBuilder(now).Build())
-                                           .SetReportTime(now + base::Hours(4))
-                                           .SetPriority(-1)
-                                           .Build(),
-                                       SentReport::Status::kDropped,
+  manager_.NotifyReportSent(ReportBuilder(SourceBuilder(now).Build())
+                                .SetReportTime(now + base::Hours(4))
+                                .SetPriority(-1)
+                                .Build(),
+                            SendResult(SendResult::Status::kDropped,
                                        /*http_response_code=*/0));
-  manager_.NotifyReportSent(SentReport(ReportBuilder(SourceBuilder(now).Build())
-                                           .SetReportTime(now + base::Hours(5))
-                                           .SetPriority(-2)
-                                           .Build(),
-                                       SentReport::Status::kFailure,
+  manager_.NotifyReportSent(ReportBuilder(SourceBuilder(now).Build())
+                                .SetReportTime(now + base::Hours(5))
+                                .SetPriority(-2)
+                                .Build(),
+                            SendResult(SendResult::Status::kFailure,
                                        /*http_response_code=*/0));
   ON_CALL(manager_, GetPendingReportsForWebUI)
       .WillByDefault(InvokeCallback<std::vector<AttributionReport>>(
@@ -491,9 +492,9 @@ IN_PROC_BROWSER_TEST_F(AttributionInternalsWebUiBrowserTest,
   EXPECT_CALL(manager_, GetPendingReportsForWebUI)
       .WillOnce(InvokeCallback<std::vector<AttributionReport>>({report}));
 
-  report.report_time += base::Hours(1);
-  manager_.NotifyReportSent(SentReport(report, SentReport::Status::kSent,
-                                       /*http_response_code=*/200));
+  report.set_report_time(report.report_time() + base::Hours(1));
+  manager_.NotifyReportSent(report, SendResult(SendResult::Status::kSent,
+                                               /*http_response_code=*/200));
 
   EXPECT_CALL(manager_, ClearData)
       .WillOnce([](base::Time delete_begin, base::Time delete_end,
@@ -522,6 +523,65 @@ IN_PROC_BROWSER_TEST_F(AttributionInternalsWebUiBrowserTest,
   const std::u16string kDeleteTitle = u"Delete";
   TitleWatcher delete_title_watcher(shell()->web_contents(), kDeleteTitle);
   SetTitleOnReportsTableEmpty(kDeleteTitle);
+
+  // Click the button.
+  EXPECT_TRUE(ExecJsInWebUI("document.getElementById('clear-data').click();"));
+  EXPECT_EQ(kDeleteTitle, delete_title_watcher.WaitAndGetTitle());
+}
+
+IN_PROC_BROWSER_TEST_F(AttributionInternalsWebUiBrowserTest,
+                       ClearButton_ClearsSourceTable) {
+  EXPECT_TRUE(NavigateToURL(shell(), GURL(kAttributionInternalsUrl)));
+
+  OverrideWebUIAttributionManager();
+
+  base::Time now = base::Time::Now();
+
+  ON_CALL(manager_, GetActiveSourcesForWebUI)
+      .WillByDefault(InvokeCallback<std::vector<StorableSource>>(
+          {SourceBuilder(now).SetSourceEventId(5).Build()}));
+
+  manager_.NotifySourceDeactivated(DeactivatedSource(
+      SourceBuilder(now + base::Hours(2)).SetSourceEventId(6).Build(),
+      DeactivatedSource::Reason::kReplacedByNewerSource));
+
+  EXPECT_CALL(manager_, ClearData)
+      .WillOnce([](base::Time delete_begin, base::Time delete_end,
+                   base::RepeatingCallback<bool(const url::Origin&)> filter,
+                   base::OnceClosure done) { std::move(done).Run(); });
+
+  // Verify both rows get rendered.
+  static constexpr char wait_script[] = R"(
+    let table = document.querySelector("#source-table-wrapper tbody");
+    let obs = new MutationObserver(() => {
+      if (table.children.length === 2 &&
+          table.children[0].children[0].innerText === "5" &&
+          table.children[1].children[0].innerText === "6") {
+        document.title = $1;
+      }
+    });
+    obs.observe(table, {'childList': true});)";
+  EXPECT_TRUE(ExecJsInWebUI(JsReplace(wait_script, kCompleteTitle)));
+
+  // Wait for the table to rendered.
+  TitleWatcher title_watcher(shell()->web_contents(), kCompleteTitle);
+  ClickRefreshButton();
+  EXPECT_EQ(kCompleteTitle, title_watcher.WaitAndGetTitle());
+
+  // Click the clear storage button and expect that the source table is emptied.
+  const std::u16string kDeleteTitle = u"Delete";
+  TitleWatcher delete_title_watcher(shell()->web_contents(), kDeleteTitle);
+  static constexpr char kObserveEmptySourcesTableScript[] = R"(
+    let table = document.querySelector("#source-table-wrapper tbody");
+    let obs = new MutationObserver(() => {
+      if (table.children.length === 1 &&
+          table.children[0].children[0].innerText === "No sources.") {
+        document.title = $1;
+      }
+    });
+    obs.observe(table, {'childList': true});)";
+  EXPECT_TRUE(
+      ExecJsInWebUI(JsReplace(kObserveEmptySourcesTableScript, kDeleteTitle)));
 
   // Click the button.
   EXPECT_TRUE(ExecJsInWebUI("document.getElementById('clear-data').click();"));

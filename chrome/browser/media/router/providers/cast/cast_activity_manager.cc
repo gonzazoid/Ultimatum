@@ -82,19 +82,6 @@ CastActivityManager::~CastActivityManager() {
   session_tracker_->RemoveObserver(this);
 }
 
-void CastActivityManager::AddRouteQuery(const MediaSource::Id& source) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  route_queries_.insert(source);
-  std::vector<MediaRoute> routes = GetRoutes();
-  if (!routes.empty())
-    NotifyOnRoutesUpdated(source, routes);
-}
-
-void CastActivityManager::RemoveRouteQuery(const MediaSource::Id& source) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-  route_queries_.erase(source);
-}
-
 void CastActivityManager::LaunchSession(
     const CastMediaSource& cast_source,
     const MediaSinkInternal& sink,
@@ -145,7 +132,7 @@ void CastActivityManager::LaunchSessionParsed(
   MediaRoute::Id route_id =
       MediaRoute::GetMediaRouteId(presentation_id, sink_id, source);
   MediaRoute route(route_id, source, sink_id, /* description */ std::string(),
-                   /* is_local */ true, /* for_display */ true);
+                   /* is_local */ true);
   route.set_presentation_id(presentation_id);
   route.set_local_presentation(true);
   route.set_off_the_record(off_the_record);
@@ -730,7 +717,7 @@ void CastActivityManager::AddNonLocalActivity(const MediaSinkInternal& sink,
                    MediaRoute::GetPresentationIdFromMediaRouteId(route_id));
   // Route description is set in SetOrUpdateSession().
   MediaRoute route(route_id, source, sink_id, /* description */ std::string(),
-                   /* is_local */ false, /* for_display */ true);
+                   /* is_local */ false);
   route.set_media_sink_name(sink.sink().name());
 
   CastActivity* activity_ptr = nullptr;
@@ -762,17 +749,7 @@ std::vector<MediaRoute> CastActivityManager::GetRoutes() const {
 
 void CastActivityManager::NotifyAllOnRoutesUpdated() {
   std::vector<MediaRoute> routes = GetRoutes();
-  for (const auto& source_id : route_queries_)
-    NotifyOnRoutesUpdated(source_id, routes);
-}
-
-void CastActivityManager::NotifyOnRoutesUpdated(
-    const MediaSource::Id& source_id,
-    const std::vector<MediaRoute>& routes) {
-  // Note: joinable_route_ids is empty as we are deprecating the join feature
-  // in the Harmony UI.
-  media_router_->OnRoutesUpdated(mojom::MediaRouteProviderId::CAST, routes,
-                                 source_id, std::vector<MediaRoute::Id>());
+  media_router_->OnRoutesUpdated(mojom::MediaRouteProviderId::CAST, routes);
 }
 
 void CastActivityManager::HandleLaunchSessionResponse(

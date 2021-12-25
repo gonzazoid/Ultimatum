@@ -55,6 +55,10 @@ void HpsNotifyController::RegisterProfilePrefs(PrefRegistrySimple* registry) {
       prefs::kSnoopingProtectionEnabled,
       /*default_value=*/false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kSnoopingProtectionNotificationSuppressionEnabled,
+      /*default_value=*/false,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_OS_PREF);
 }
 
 void HpsNotifyController::OnSessionStateChanged(
@@ -62,7 +66,8 @@ void HpsNotifyController::OnSessionStateChanged(
   const bool session_active =
       session_state == session_manager::SessionState::ACTIVE;
   ReconfigureHps(hps_available_, session_active, pref_enabled_);
-  UpdateIconVisibility(session_active, hps_state_, pref_enabled_);
+  UpdateIconVisibility(session_active, hps_state_ && session_active,
+                       pref_enabled_);
 }
 
 void HpsNotifyController::OnActiveUserPrefServiceChanged(
@@ -72,7 +77,8 @@ void HpsNotifyController::OnActiveUserPrefServiceChanged(
   const bool pref_enabled =
       pref_service->GetBoolean(prefs::kSnoopingProtectionEnabled);
   ReconfigureHps(hps_available_, session_active_, pref_enabled);
-  UpdateIconVisibility(session_active_, hps_state_, pref_enabled);
+  UpdateIconVisibility(session_active_, hps_state_ && pref_enabled,
+                       pref_enabled);
 
   // Re-subscribe to pref changes.
   pref_change_registrar_ = std::make_unique<PrefChangeRegistrar>();
@@ -83,11 +89,15 @@ void HpsNotifyController::OnActiveUserPrefServiceChanged(
                           weak_ptr_factory_.GetWeakPtr()));
 }
 
-void HpsNotifyController::OnHpsNotifyChanged(bool hps_state) {
-  UpdateIconVisibility(session_active_, hps_state, pref_enabled_);
+void HpsNotifyController::OnHpsNotifyChanged(hps::HpsResult hps_state) {
+  UpdateIconVisibility(session_active_,
+                       /*hps_state=*/hps_state == hps::HpsResult::POSITIVE,
+                       pref_enabled_);
 }
 
 void HpsNotifyController::OnRestart() {
+  DCHECK(!hps_state_);
+
   ReconfigureHps(/*hps_available_=*/true, session_active_, pref_enabled_);
 }
 
@@ -196,11 +206,15 @@ void HpsNotifyController::StartHpsObservation(bool service_is_available) {
   ReconfigureHps(/*hps_available_=*/true, session_active_, pref_enabled_);
 }
 
-void HpsNotifyController::UpdateHpsState(absl::optional<bool> response) {
+void HpsNotifyController::UpdateHpsState(
+    absl::optional<hps::HpsResult> response) {
   LOG_IF(WARNING, !response.has_value())
       << "Polling the presence daemon failed";
-  UpdateIconVisibility(session_active_, response.value_or(false),
-                       pref_enabled_);
+
+  UpdateIconVisibility(
+      session_active_,
+      response.value_or(hps::HpsResult::NEGATIVE) == hps::HpsResult::POSITIVE,
+      pref_enabled_);
 }
 
 void HpsNotifyController::UpdatePrefState() {
@@ -210,7 +224,8 @@ void HpsNotifyController::UpdatePrefState() {
   const bool pref_enabled = pref_change_registrar_->prefs()->GetBoolean(
       prefs::kSnoopingProtectionEnabled);
   ReconfigureHps(hps_available_, session_active_, pref_enabled);
-  UpdateIconVisibility(session_active_, hps_state_, pref_enabled);
+  UpdateIconVisibility(session_active_, hps_state_ && pref_enabled,
+                       pref_enabled);
 }
 
 }  // namespace ash

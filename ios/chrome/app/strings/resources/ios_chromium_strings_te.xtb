@@ -31,7 +31,6 @@
 <translation id="2478931088402984578"><ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" />ను ఎంచుకోండి</translation>
 <translation id="2567507405773541360">సరళమైన, సురక్షితమైన, మునుపటి కంటే వేగవంతమైన Chromiumతో మరింత ప్రభావవంతంగా పనులు చేసుకోండి</translation>
 <translation id="2590893390871230428">మీ Chromium డేటాను సింక్ చేయండి</translation>
-<translation id="259094968798709429">పాస్‌వర్డ్‌లు <ph name="BEGIN_LINK" />పాస్‌వర్డ్ మేనేజర్‌లో<ph name="END_LINK" /> సేవ్ చేయబడతాయి, కాబట్టి మీరు వాటిని ఏ పరికరంలో అయినా ఉపయోగించవచ్చు.</translation>
 <translation id="2650312721222849884">మీరు Chromiumను ఎక్కడ ఉపయోగించినా, అక్కడి నుండి మీ ట్యాబ్‌లను చూసేందుకు, సింక్‌ను ఆన్ చేయండి</translation>
 <translation id="2684230048001240293">మీ అన్ని పరికరాలలో ట్యాబ్‌లు, పాస్‌వర్డ్‌లు, పేమెంట్ సమాచారాన్ని సింక్ చేయడానికి Chromiumను డిఫాల్ట్‌గా సెట్ చేయండి</translation>
 <translation id="2730884209570016437">మీ కెమెరాను మరొక అప్లికేషన్‌ ఉపయోగిస్తున్నందున Chromium దాన్ని ఉపయోగించలేదు</translation>
@@ -78,6 +77,7 @@
 <translation id="6424492062988593837">Chrome మెరుగుపరచబడింది! కొత్త వెర్షన్ అందుబాటులో ఉంది.</translation>
 <translation id="6752854822223394465">మీ సంస్థ Chromiumను సెటప్ చేస్తోంది...</translation>
 <translation id="6820823224820483452">Chromiumకు అన్ని పాస్‌వర్డ్‌లను చెక్ చేయడం సాధ్యపడలేదు. రేపు మళ్లీ ట్రై చేయండి.</translation>
+<translation id="7006920032187763988">మీరు మీ iPadలోని ఇతర యాప్‌లలో పాస్‌వర్డ్ మేనేజర్‌లో సేవ్ చేసిన పాస్‌వర్డ్‌లను ఉపయోగించవచ్చు.</translation>
 <translation id="7018284295775193585">Chromium అప్‌డేట్ అవ్వడం సాధ్యపడలేదు</translation>
 <translation id="7045244423563602563">Chromiumను మీకు నచ్చిన విధంగా తయారు చేసుకోండి</translation>
 <translation id="7099326575020694068">Chromium విభజన వీక్షణ మోడ్‌లో మీ కెమెరాను ఉపయోగించలేదు</translation>
@@ -104,11 +104,13 @@
 <translation id="8073677936375100957">ఈ పరికరం నుండి మీ Chromium డేటాని తీసివేయాలా?</translation>
 <translation id="8175055321229419309">చిట్కా: <ph name="BEGIN_LINK" />Chromiumను మీ డాక్‌కు తరలించండి<ph name="END_LINK" /></translation>
 <translation id="8240981428553046115">Chromium అప్‌డేట్‌లు ఏమైనా ఉన్నాయో లేదో చెక్ చేయలేకపోయింది. తర్వాత మళ్లీ ట్రై చేయండి.</translation>
+<translation id="858114650497379505">మీరు మీ iPhoneలోని ఇతర యాప్‌లలో పాస్‌వర్డ్ మేనేజర్‌లో సేవ్ చేసిన పాస్‌వర్డ్‌లను ఉపయోగించవచ్చు.</translation>
 <translation id="8586442755830160949">కాపీరైట్ <ph name="YEAR" /> Chromium రచయితలు. అన్ని హ‌క్కులు రిజ‌ర్వ్ చేయ‌బ‌డ్డాయి.</translation>
 <translation id="8663480472502753423">Chromiumను అప్‌డేట్‌గా ఉంచండి</translation>
 <translation id="8776843108004031667">ఈ ఖాతా, ఇంకా ఏదైనా సేవ్ చేయని డేటా Chromium నుండి తీసివేయబడతాయి.</translation>
 <translation id="894437814105052438">మీరు సైన్ అవుట్ చేసినప్పుడు, మీ Google ఖాతాకు ఎలాంటి కొత్త డేటాను Chromium సింక్ చేయదు. ఇంతకుముందు సింక్ చేయబడిన డేటా ఖాతాలో ఉండిపోతుంది.</translation>
 <translation id="9022552996538154597">Chromiumకు సైన్ ఇన్ చేయండి</translation>
+<translation id="9059693977935746710">మీరు ఈ పాస్‌వర్డ్‌ను గుర్తుపెట్టుకోవాల్సిన అవసరం లేదు. ఇది <ph name="EMAIL" /> కోసం పాస్‌వర్డ్ మేనేజర్‌కు సేవ్ చేయబడుతుంది</translation>
 <translation id="9089354809943900324">Chromium కాలం చెల్లినది</translation>
 <translation id="9110075932708282655">ఆటోమేటిక్‌గా Chromiumను ఉపయోగించండి</translation>
 <translation id="921174536258924340">Chromiumకు అన్ని పాస్‌వర్డ్‌లను చెక్ చేయడం సాధ్యపడలేదు. రేపు మళ్లీ ట్రై చేయండి లేదా <ph name="BEGIN_LINK" />మీ Google ఖాతాలో పాస్‌వర్డ్‌లను చెక్ చేయండి.<ph name="END_LINK" /></translation>

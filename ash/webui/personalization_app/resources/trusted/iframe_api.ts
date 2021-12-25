@@ -10,6 +10,7 @@
 
 import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
 import {FilePath} from 'chrome://resources/mojo/mojo/public/mojom/base/file_path.mojom-webui.js';
+import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 
 import * as constants from '../common/constants.js';
 import {isNonEmptyArray} from '../common/utils.js';
@@ -32,7 +33,7 @@ export function sendCollections(
 /**
  * Sends the count of Google Photos photos to untrusted.
  */
-export function sendGooglePhotosCount(target: Window, count: bigint|null) {
+export function sendGooglePhotosCount(target: Window, count: number|null) {
   const event: constants.SendGooglePhotosCountEvent = {
     type: constants.EventType.SEND_GOOGLE_PHOTOS_COUNT,
     count
@@ -44,7 +45,7 @@ export function sendGooglePhotosCount(target: Window, count: bigint|null) {
  * Sends the list of Google Photos photos to untrusted.
  */
 export function sendGooglePhotosPhotos(
-    target: Window, photos: Array<any>|null) {
+    target: Window, photos: Array<Url>|null) {
   const event: constants.SendGooglePhotosPhotosEvent = {
     type: constants.EventType.SEND_GOOGLE_PHOTOS_PHOTOS,
     photos
@@ -58,7 +59,7 @@ export function sendGooglePhotosPhotos(
  * failed to load.
  */
 export function sendImageCounts(
-    target: Window, counts: {[key: string]: number}) {
+    target: Window, counts: {[key: string]: number|null}) {
   const event: constants.SendImageCountsEvent = {
     type: constants.EventType.SEND_IMAGE_COUNTS,
     counts
@@ -146,11 +147,12 @@ export function sendPendingWallpaperAssetId(
  * contains valid data. Ignores messages that are not of the expected type.
  */
 export function validateReceivedSelection(
-    event: MessageEvent, choices: WallpaperCollection[]): WallpaperCollection;
+    event: MessageEvent,
+    choices: WallpaperCollection[]|null): WallpaperCollection;
 export function validateReceivedSelection(
-    event: MessageEvent, choices: WallpaperImage[]): WallpaperImage;
+    event: MessageEvent, choices: WallpaperImage[]|null): WallpaperImage;
 export function validateReceivedSelection(
-    event: MessageEvent, choices: (WallpaperCollection|WallpaperImage)[]):
+    event: MessageEvent, choices: (WallpaperCollection|WallpaperImage)[]|null):
     WallpaperCollection|WallpaperImage {
   assert(isNonEmptyArray(choices), 'choices must be a non-empty array');
 

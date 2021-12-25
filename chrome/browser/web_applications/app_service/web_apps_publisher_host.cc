@@ -174,7 +174,8 @@ void WebAppsPublisherHost::LoadIcon(const std::string& app_id,
 
   std::unique_ptr<apps::IconKey> key =
       apps::ConvertMojomIconKeyToIconKey(icon_key);
-  publisher_helper().LoadIcon(app_id, *key, icon_type, size_hint_in_dip,
+  publisher_helper().LoadIcon(app_id, icon_type, size_hint_in_dip,
+                              static_cast<IconEffects>(icon_key->icon_effects),
                               std::move(callback));
 }
 
@@ -247,7 +248,7 @@ void WebAppsPublisherHost::Launch(crosapi::mojom::LaunchParamsPtr launch_params,
   }
 
   auto params = apps::ConvertCrosapiToLaunchParams(launch_params, profile_);
-  if (!params.launch_files.empty()) {
+  if (!params.launch_files.empty() && !launch_params->intent) {
     // File handling may create the WebContents asynchronously.
     // TODO(crbug/1261263): implement.
     NOTIMPLEMENTED_LOG_ONCE();

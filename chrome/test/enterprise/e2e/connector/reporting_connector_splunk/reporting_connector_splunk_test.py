@@ -2,14 +2,12 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-from absl import flags
 import os
 import re
-import requests  # pylint: disable=import-error
 from datetime import datetime
 
-from infra import ChromeEnterpriseTestCase
 from chrome_ent_test.infra.core import before_all, category, environment, test
+from infra import ChromeEnterpriseTestCase
 from splunk_server import SplunkApiService
 
 
@@ -41,10 +39,11 @@ class ReportingConnectorwithSplunkTest(ChromeEnterpriseTestCase):
     self.RunCommand(self.win_config['client'], 'gpupdate /force')
     testStartTime = datetime.utcnow()
     # trigger malware event & get device id from browser
-    dir = os.path.dirname(os.path.abspath(__file__))
+    localDir = os.path.dirname(os.path.abspath(__file__))
+    commonDir = os.path.dirname(localDir)
     clientId = self.RunUITest(
         self.win_config['client'],
-        os.path.join(dir, 'reporting_connector_ui_test.py'),
+        os.path.join(commonDir, 'common', 'realtime_reporting_ui_test.py'),
         timeout=600)
     clientId = re.search(r'DeviceId:.*$',clientId.strip()).group(0) \
       .replace('DeviceId:','')

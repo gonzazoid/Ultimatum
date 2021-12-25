@@ -35,7 +35,6 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_thread.h"
 #include "third_party/blink/renderer/core/xmlhttprequest/xml_http_request.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/instrumentation/instance_counters.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_load_priority.h"
@@ -392,6 +391,10 @@ const char* PseudoTypeToString(CSSSelector::PseudoType pseudo_type) {
     DEFINE_STRING_MAPPING(PseudoGrammarError)
     DEFINE_STRING_MAPPING(PseudoHas)
     DEFINE_STRING_MAPPING(PseudoRelativeLeftmost)
+    DEFINE_STRING_MAPPING(PseudoTransition)
+    DEFINE_STRING_MAPPING(PseudoTransitionContainer);
+    DEFINE_STRING_MAPPING(PseudoTransitionNewContent);
+    DEFINE_STRING_MAPPING(PseudoTransitionOldContent);
 #undef DEFINE_STRING_MAPPING
   }
 

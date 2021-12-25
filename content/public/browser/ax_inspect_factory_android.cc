@@ -5,7 +5,6 @@
 #include "content/public/browser/ax_inspect_factory.h"
 
 #include "base/notreached.h"
-#include "content/browser/accessibility/accessibility_event_recorder.h"
 #include "content/browser/accessibility/accessibility_tree_formatter_android.h"
 #include "content/browser/accessibility/accessibility_tree_formatter_android_external.h"
 #include "content/browser/accessibility/accessibility_tree_formatter_blink.h"
@@ -48,7 +47,7 @@ std::unique_ptr<ui::AXTreeFormatter> AXInspectFactory::CreateFormatter(
     case ui::AXApiType::kBlink:
       return std::make_unique<AccessibilityTreeFormatterBlink>();
     default:
-      NOTREACHED() << "Unsupported inspect type " << type;
+      NOTREACHED() << "Unsupported API type " << static_cast<std::string>(type);
   }
   return nullptr;
 }
@@ -64,8 +63,13 @@ std::unique_ptr<ui::AXEventRecorder> AXInspectFactory::CreateRecorder(
   // using an inspection tool, e.g. chrome://accessibility.
   BrowserAccessibilityManager::AlwaysFailFast();
 
-  NOTREACHED() << "Unsupported inspect type " << type;
+  NOTREACHED() << "Unsupported API type " << static_cast<std::string>(type);
   return nullptr;
+}
+
+// static
+std::vector<ui::AXApiType::Type> AXInspectFactory::SupportedApis() {
+  return {ui::AXApiType::kBlink, ui::AXApiType::kAndroid};
 }
 
 }  // namespace content

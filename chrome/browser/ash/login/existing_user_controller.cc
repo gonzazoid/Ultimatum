@@ -10,6 +10,7 @@
 
 #include "ash/components/arc/arc_util.h"
 #include "ash/components/arc/enterprise/arc_data_snapshotd_manager.h"
+#include "ash/components/login/auth/key.h"
 #include "ash/components/login/session/session_termination_manager.h"
 #include "ash/components/settings/cros_settings_names.h"
 #include "ash/constants/ash_pref_names.h"
@@ -95,7 +96,6 @@
 #include "chromeos/dbus/power/power_manager_client.h"
 #include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/login/auth/key.h"
 #include "chromeos/strings/grit/chromeos_strings.h"
 #include "components/account_id/account_id.h"
 #include "components/google/core/common/google_util.h"
@@ -1024,7 +1024,7 @@ void ExistingUserController::OnProfilePrepared(Profile* profile,
 
   profile_prepared_ = true;
 
-  chromeos::UserContext user_context =
+  UserContext user_context =
       UserContext(*ProfileHelper::Get()->GetUserByProfile(profile));
   auto* profile_connector = profile->GetProfilePolicyConnector();
   bool is_enterprise_managed =

@@ -13,6 +13,7 @@ import org.chromium.chrome.browser.autofill_assistant.onboarding.OnboardingCoord
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
+import org.chromium.content_public.browser.WebContents;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,7 +41,8 @@ class TestingAutofillAssistantModuleEntryProvider extends AutofillAssistantModul
                 AssistantDependenciesFactory dependenciesFactory) {
             super(new OnboardingCoordinatorFactory(context, bottomSheetController, browserControls,
                           rootView,
-                          dependenciesFactory.createStaticDependencies().getAccessibilityUtil()),
+                          dependenciesFactory.createStaticDependencies().getAccessibilityUtil(),
+                          dependenciesFactory.createStaticDependencies().getInfoPageUtil()),
                     activityTabProvider, dependenciesFactory);
         }
 
@@ -66,7 +68,7 @@ class TestingAutofillAssistantModuleEntryProvider extends AutofillAssistantModul
 
         @Override
         public AssistantOnboardingHelper createOnboardingHelper(
-                AssistantDependencies dependencies) {
+                WebContents webContents, AssistantDependencies dependencies) {
             return null;
         }
 

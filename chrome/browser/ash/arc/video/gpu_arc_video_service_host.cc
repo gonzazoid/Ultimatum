@@ -10,13 +10,16 @@
 
 #include "ash/components/arc/arc_browser_context_keyed_service_factory_base.h"
 #include "ash/components/arc/arc_features.h"
+#include "ash/components/arc/mojom/protected_buffer_manager.mojom.h"
 #include "ash/components/arc/mojom/video_decode_accelerator.mojom.h"
+#include "ash/components/arc/mojom/video_decoder.mojom.h"
 #include "ash/components/arc/mojom/video_encode_accelerator.mojom.h"
 #include "ash/components/arc/mojom/video_protected_buffer_allocator.mojom.h"
 #include "ash/components/arc/session/arc_bridge_service.h"
 #include "base/bind.h"
 #include "base/check_op.h"
 #include "base/location.h"
+#include "base/no_destructor.h"
 #include "base/rand_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_checker.h"
@@ -67,7 +70,10 @@ class VideoAcceleratorFactoryService : public mojom::VideoAcceleratorFactory {
   ~VideoAcceleratorFactoryService() override = default;
 
   void CreateDecodeAccelerator(
-      mojo::PendingReceiver<mojom::VideoDecodeAccelerator> receiver) override {
+      mojo::PendingReceiver<mojom::VideoDecodeAccelerator> receiver,
+      mojo::PendingRemote<
+          mojom::ProtectedBufferManager> /*protected_buffer_manager*/)
+      override {
     if (base::FeatureList::IsEnabled(arc::kOutOfProcessVideoDecoding)) {
       // TODO(b/195769334): we should check if accelerated video decode is
       // disabled by means of a flag/switch or by GPU bug workarounds.
@@ -84,10 +90,24 @@ class VideoAcceleratorFactoryService : public mojom::VideoAcceleratorFactory {
           content::ServiceProcessHost::Options()
               .WithDisplayName("ARC Video Decoder")
               .Pass());
-      oop_video_factory->CreateDecodeAccelerator(std::move(receiver));
+
+      // Version 8 accepts a ProtectedBufferManager.
+      oop_video_factory.RequireVersion(8);
+      mojo::PendingRemote<mojom::ProtectedBufferManager>
+          protected_buffer_manager;
+      content::BindInterfaceInGpuProcess(
+          protected_buffer_manager.InitWithNewPipeAndPassReceiver());
+
+      oop_video_factory->CreateDecodeAccelerator(
+          std::move(receiver), std::move(protected_buffer_manager));
       oop_video_factories_.Add(std::move(oop_video_factory));
       return;
     }
+    content::BindInterfaceInGpuProcess(std::move(receiver));
+  }
+
+  void CreateVideoDecoder(
+      mojo::PendingReceiver<mojom::VideoDecoder> receiver) override {
     content::BindInterfaceInGpuProcess(std::move(receiver));
   }
 

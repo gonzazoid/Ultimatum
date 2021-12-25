@@ -239,6 +239,9 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView {
   virtual void FocusedNodeChanged(bool is_editable_node,
                                   const gfx::Rect& node_bounds_in_screen) {}
 
+  // This method will clear any cached fallback surface. For use in response to
+  // a CommitPending where there is no content for TakeFallbackContentFrom.
+  virtual void ClearFallbackSurfaceForCommitPending() {}
   // This method will reset the fallback to the first surface after navigation.
   virtual void ResetFallbackToFirstNavigationSurface() = 0;
 
@@ -343,15 +346,6 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView {
 
   // Returns true if this view's size have been initialized.
   virtual bool HasSize() const;
-
-  // Informs the view that the assocaited InterstitialPage was attached.
-  virtual void OnInterstitialPageAttached() {}
-
-  // Tells the view that the assocaited InterstitialPage will going away (but is
-  // not yet destroyed, as InterstitialPage destruction is asynchronous). The
-  // view may use this notification to clean up associated resources. This
-  // should be called before the WebContents is fully destroyed.
-  virtual void OnInterstitialPageGoingAway() {}
 
   // Returns true if the visual properties should be sent to the renderer at
   // this time. This function is intended for subclasses to suppress
@@ -660,6 +654,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase : public RenderWidgetHostView {
                            MojoInterfaceReboundOnDisconnect);
   FRIEND_TEST_ALL_PREFIXES(NoCompositingRenderWidgetHostViewBrowserTest,
                            NoFallbackAfterHiddenNavigationFails);
+  FRIEND_TEST_ALL_PREFIXES(NoCompositingRenderWidgetHostViewBrowserTest,
+                           NoFallbackIfSwapFailedBeforeNavigation);
 
   void SynchronizeVisualProperties();
 

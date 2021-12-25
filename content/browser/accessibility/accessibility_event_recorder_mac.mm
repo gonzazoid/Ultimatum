@@ -33,10 +33,9 @@ static void EventReceivedThunk(AXObserverRef observer_ref,
 }
 
 AccessibilityEventRecorderMac::AccessibilityEventRecorderMac(
-    BrowserAccessibilityManager* manager,
     base::ProcessId pid,
     const AXTreeSelector& selector)
-    : AccessibilityEventRecorder(manager), observer_run_loop_source_(nullptr) {
+    : observer_run_loop_source_(nullptr) {
   AXUIElementRef node = nil;
   if (pid) {
     node = AXUIElementCreateApplication(pid);
@@ -70,18 +69,41 @@ AccessibilityEventRecorderMac::AccessibilityEventRecorderMac(
     @"AXLiveRegionCreated",
     @"AXLoadComplete",
     @"AXMenuItemSelected",
-    @"AXRowCollapsed",
-    @"AXRowExpanded",
     (NSString*)kAXMenuClosedNotification,
     (NSString*)kAXMenuOpenedNotification,
+    NSAccessibilityAnnouncementRequestedNotification,
+    NSAccessibilityApplicationActivatedNotification,
+    NSAccessibilityApplicationDeactivatedNotification,
+    NSAccessibilityApplicationHiddenNotification,
+    NSAccessibilityApplicationShownNotification,
+    NSAccessibilityCreatedNotification,
+    NSAccessibilityDrawerCreatedNotification,
     NSAccessibilityFocusedUIElementChangedNotification,
+    NSAccessibilityFocusedWindowChangedNotification,
+    NSAccessibilityHelpTagCreatedNotification,
+    NSAccessibilityLayoutChangedNotification,
+    NSAccessibilityMainWindowChangedNotification,
+    NSAccessibilityMovedNotification,
+    NSAccessibilityResizedNotification,
     NSAccessibilityRowCollapsedNotification,
     NSAccessibilityRowCountChangedNotification,
+    NSAccessibilityRowExpandedNotification,
+    NSAccessibilitySelectedCellsChangedNotification,
     NSAccessibilitySelectedChildrenChangedNotification,
+    NSAccessibilitySelectedChildrenMovedNotification,
+    NSAccessibilitySelectedColumnsChangedNotification,
     NSAccessibilitySelectedRowsChangedNotification,
     NSAccessibilitySelectedTextChangedNotification,
+    NSAccessibilitySheetCreatedNotification,
     NSAccessibilityTitleChangedNotification,
+    NSAccessibilityUIElementDestroyedNotification,
+    NSAccessibilityUnitsChangedNotification,
     NSAccessibilityValueChangedNotification,
+    NSAccessibilityWindowCreatedNotification,
+    NSAccessibilityWindowDeminiaturizedNotification,
+    NSAccessibilityWindowMiniaturizedNotification,
+    NSAccessibilityWindowMovedNotification,
+    NSAccessibilityWindowResizedNotification,
   ] retain];
 
   for (NSString* notification : notifications) {
@@ -110,7 +132,8 @@ void AccessibilityEventRecorderMac::EventReceived(AXUIElementRef element,
   std::string notification_str = base::SysCFStringRefToUTF8(notification);
 
   auto formatter = AccessibilityTreeFormatterMac();
-  formatter.SetPropertyFilters({}, ui::AXTreeFormatter::kFiltersDefaultSet);
+  formatter.SetPropertyFilters(property_filters_,
+                               ui::AXTreeFormatter::kFiltersDefaultSet);
 
   std::string element_str =
       formatter.FormatTree(formatter.BuildNode(static_cast<id>(element)));

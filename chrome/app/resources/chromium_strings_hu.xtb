@@ -34,6 +34,7 @@
 <translation id="2313870531055795960">Ellenőrzi az URL-eket a Chromiumban a nem biztonságos webhelyekről tárolt lista alapján. Ha valamelyik webhely megpróbálja ellopni az Ön jelszavát, illetve ha Ön kártékony fájlt tölt le, akkor a Chromium elküldheti az URL-eket is (az oldal tartalmának részeivel együtt) a Biztonságos Böngészésnek.</translation>
 <translation id="2343156876103232566">Ha innen szeretne számot küldeni Android-telefonjára, jelentkezzen be a Chromiumba mindkét eszközén.</translation>
 <translation id="2347108572062610441">Ez a bővítmény módosította, hogy melyik oldal jelenjen meg a Chromium indításakor.</translation>
+<translation id="2359808026110333948">Tovább</translation>
 <translation id="2396765026452590966">A(z) <ph name="EXTENSION_NAME" /> bővítmény módosította, hogy melyik oldal jelenjen meg a Chromium indításakor.</translation>
 <translation id="2401032172288869980">A Chromiumnak kamera- és mikrofonhasználati engedélyre van szüksége ehhez a webhelyhez</translation>
 <translation id="2483889755041906834">A Chromiumban</translation>
@@ -108,20 +109,22 @@
 <translation id="4271805377592243930">Segítség a Chromium használatával kapcsolatban</translation>
 <translation id="4285930937574705105">A telepítés váratlan hiba miatt nem sikerült. Ha a Chromium jelenleg fut, zárja be, majd próbálkozzon újra.</translation>
 <translation id="4407044323746248786">Biztosan kilép a Chromiumból?</translation>
+<translation id="4414390922528416758">Személyre szabhatja azokat az adatvédelmi lehetőségeket, amelyek a Chromium szerint a legfontosabbak. Ebben az útmutatóban nem szerepel az összes beállítási lehetőség.</translation>
 <translation id="4415566066719264597">A Chromium futhat a háttérben</translation>
 <translation id="4423735387467980091">A Chromium személyre szabása és beállításai</translation>
+<translation id="4427306783828095590">A Speciális védelem még többet tesz annak érdekében, hogy letiltsa az adathalászatot és a rosszindulatú programokat</translation>
 <translation id="452711251841752011">Üdvözöljük a Chromiumban; új böngészőablak megnyitva</translation>
 <translation id="4544142686420020088">Ismeretlen hiba történt, ezért a Chromium nem frissült. <ph name="BEGIN_LINK" />A Chromium frissítési problémáinak megoldása.<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">Biztosan új Chromium-profilban folytatja?</translation>
 <translation id="4567424176335768812">A(z) <ph name="USER_EMAIL_ADDRESS" /> címmel van bejelentkezve. Elérheti könyvjelzőit, előzményeit és más beállításait minden olyan eszközön, amelyen bejelentkezett.</translation>
 <translation id="459535195905078186">Chromium-alkalmazások</translation>
+<translation id="4621240073146040695">Már majdnem naprakész! Indítsa újra a Chromiumot a frissítés befejezéséhez.</translation>
 <translation id="4665829708273112819">Figyelmeztetés: A Chromium nem tudja megakadályozni, hogy a bővítmények rögzítsék a böngészési előzményeit. A bővítmény inkognitó módban való használatának letiltásához törölje e lehetőség bejelölését.</translation>
 <translation id="4677944499843243528">Úgy tűnik, a profilt egy másik Chromium-folyamat (<ph name="PROCESS_ID" />) használja egy másik számítógépen (<ph name="HOST_NAME" />). A Chromium zárolta a profilt, hogy az ne sérülhessen. Ha biztos benne, hogy nem használja másik folyamat a profilt, feloldhatja azt, és újraindíthatja a Chromiumot.</translation>
 <translation id="469338717132742108">Segítség a Chromium OS használatával kapcsolatban</translation>
 <translation id="4708774505295300557">Valaki korábban <ph name="ACCOUNT_EMAIL_LAST" /> néven bejelentkezett a Chromiumba erről a számítógépről. Az adatai elkülönítéséhez hozzon létre új Chromium-felhasználót.</translation>
 <translation id="4746050847053251315">Biztosan kilép a Chromiumból?</translation>
 <translation id="4748217263233248895">A rendszer egy speciális biztonsági frissítést alkalmazott a Chromiumon. Indítsa újra a számítógépet, a lapokat majd mi visszaállítjuk.</translation>
-<translation id="4750035648288509542">Már majdnem naprakész! Indítsa újra a Chromiumot a frissítés befejezéséhez. Az inkognitó ablakok nem fognak újra megnyílni.</translation>
 <translation id="4788777615168560705">A Chromium nem tudja ellenőrizni a jelszavait. Próbálja újra 24 óra múlva, vagy <ph name="BEGIN_LINK" />ellenőrizze jelszavait a Google-fiókjában<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">A szolgáltatás ugyanazt a helyesírás-ellenőrzést használja, mint a Google Kereső. A begépelt szöveget a böngésző elküldi a Google-nak. A beállítások között ezt bármikor módosíthatja.</translation>
 <translation id="4888717733111232871">Bejövő szabály a Chromiumhoz az mDNS forgalom engedélyezése céljából.</translation>
@@ -232,6 +235,7 @@ A Chromium nem tudja visszaállítani a beállításait.</translation>
 <translation id="7549178288319965365">A Chromium OS névjegye</translation>
 <translation id="7561906087460245826">Az adatokat is törölje a Chromiumból (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Ha valamelyik beállítás nem látható ezen az oldalon, keresse a <ph name="LINK_BEGIN" />Chromium OS beállításai<ph name="LINK_END" /> között</translation>
+<translation id="7597596667193879455">Ön bekapcsolta a Biztonságos Böngészés fokozott védelemmel funkciót a fiókjában. Most töltse le Chromiumra is.</translation>
 <translation id="761356813943268536">A Chromium használja a kamerát és a mikrofont.</translation>
 <translation id="7617377681829253106">A Chromium még jobb lett</translation>
 <translation id="7686590090926151193">A Chromium nem az alapértelmezett böngésző</translation>
@@ -291,5 +295,6 @@ A Chromium nem tudja visszaállítani a beállításait.</translation>
 <translation id="9214764063801632699">Chromium OS rendszer</translation>
 <translation id="93478295209880648">Előfordulhat, hogy a Chromium nem működik majd megfelelően, mert a továbbiakban már nem támogatja a következő rendszereket: Windows XP és Windows Vista</translation>
 <translation id="965162752251293939">Ki használja a Chromiumot?</translation>
+<translation id="967427899662692980">Állítsa be a Chromium legerősebb védelmét</translation>
 <translation id="985602178874221306">A Chromium szerzői</translation>
 </translationbundle>

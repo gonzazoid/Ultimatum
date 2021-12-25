@@ -322,6 +322,17 @@ class BASE_EXPORT TaskQueueImpl {
     bool PostDelayedTask(const Location& location,
                          OnceClosure callback,
                          TimeDelta delay) final;
+    bool PostDelayedTaskAt(subtle::PostDelayedTaskPassKey,
+                           const Location& location,
+                           OnceClosure callback,
+                           TimeTicks delayed_run_time,
+                           base::subtle::DelayPolicy delay_policy) final;
+    DelayedTaskHandle PostCancelableDelayedTaskAt(
+        subtle::PostDelayedTaskPassKey,
+        const Location& location,
+        OnceClosure callback,
+        TimeTicks delayed_run_time,
+        base::subtle::DelayPolicy delay_policy) final;
     DelayedTaskHandle PostCancelableDelayedTask(const Location& location,
                                                 OnceClosure callback,
                                                 TimeDelta delay) final;
@@ -333,9 +344,17 @@ class BASE_EXPORT TaskQueueImpl {
    private:
     ~TaskRunner() final;
 
+    bool IsRemoveCanceledTasksInTaskQueueFeatureEnabled();
+
     const scoped_refptr<GuardedTaskPoster> task_poster_;
     const scoped_refptr<AssociatedThreadId> associated_thread_;
     const TaskType task_type_;
+    // Caches whether kRemoveCanceledTasksInTaskQueue is enabled. FeatureList
+    // access is too expensive to be done for each task, costing >1% of total
+    // CPU on the main renderer thread, from field data.
+    // Using an optional since *this can be constructed before the feature
+    // system is initialized.
+    absl::optional<bool> remove_canceled_tasks_in_task_queue_;
   };
 
   // A queue for holding delayed tasks before their delay has expired.

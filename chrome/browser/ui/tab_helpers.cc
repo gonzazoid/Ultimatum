@@ -15,6 +15,8 @@
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/breadcrumbs/breadcrumb_manager_tab_helper.h"
+#include "chrome/browser/breadcrumbs/breadcrumbs_status.h"
+#include "chrome/browser/browser_features.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/buildflags.h"
 #include "chrome/browser/captive_portal/captive_portal_service_factory.h"
@@ -100,7 +102,6 @@
 #include "components/autofill/core/browser/browser_autofill_manager.h"
 #include "components/blocked_content/popup_blocker_tab_helper.h"
 #include "components/blocked_content/popup_opener_tab_helper.h"
-#include "components/breadcrumbs/core/features.h"
 #include "components/captive_portal/core/buildflags.h"
 #include "components/content_settings/browser/page_specific_content_settings.h"
 #include "components/dom_distiller/core/dom_distiller_features.h"
@@ -141,6 +142,7 @@
 #include "chrome/browser/banners/android/chrome_app_banner_manager_android.h"
 #include "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h"
 #include "chrome/browser/flags/android/chrome_feature_list.h"
+#include "chrome/browser/plugins/plugin_observer_android.h"
 #include "chrome/browser/ui/android/context_menu_helper.h"
 #include "chrome/browser/ui/javascript_dialogs/javascript_tab_modal_dialog_manager_delegate_android.h"
 #include "chrome/browser/video_tutorials/video_tutorial_tab_helper.h"
@@ -148,6 +150,7 @@
 #else
 #include "chrome/browser/accuracy_tips/accuracy_service_factory.h"
 #include "chrome/browser/banners/app_banner_manager_desktop.h"
+#include "chrome/browser/prefetch/zero_suggest_prefetch/zero_suggest_prefetch_tab_helper.h"
 #include "chrome/browser/tab_contents/form_interaction_tab_helper.h"
 #include "chrome/browser/ui/bookmarks/bookmark_tab_helper.h"
 #include "chrome/browser/ui/intent_picker_tab_helper.h"
@@ -157,6 +160,7 @@
 #include "chrome/browser/ui/sync/browser_synced_tab_delegate.h"
 #include "chrome/browser/ui/ui_features.h"
 #include "components/accuracy_tips/accuracy_web_contents_observer.h"
+#include "components/omnibox/common/omnibox_features.h"
 #include "components/web_modal/web_contents_modal_dialog_manager.h"
 #include "components/zoom/zoom_controller.h"
 #endif  // defined(OS_ANDROID)
@@ -184,6 +188,10 @@
 
 #if defined(OS_MAC)
 #include "chrome/browser/ui/cocoa/screentime/tab_helper.h"
+#endif
+
+#if defined(OS_WIN)
+#include "chrome/browser/font_prewarmer_tab_helper.h"
 #endif
 
 #if BUILDFLAG(ENABLE_CAPTIVE_PORTAL_DETECTION)
@@ -278,7 +286,7 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
       autofill::ChromeAutofillClient::FromWebContents(web_contents),
       g_browser_process->GetApplicationLocale(),
       autofill::BrowserAutofillManager::ENABLE_AUTOFILL_DOWNLOAD_MANAGER);
-  if (base::FeatureList::IsEnabled(breadcrumbs::kLogBreadcrumbs))
+  if (BreadcrumbsStatus::IsEnabled())
     BreadcrumbManagerTabHelper::CreateForWebContents(web_contents);
   chrome_browser_net::NetErrorTabHelper::CreateForWebContents(web_contents);
   ChromePasswordManagerClient::CreateForWebContentsWithAutofillClient(
@@ -418,6 +426,7 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
   if (OomInterventionTabHelper::IsEnabled()) {
     OomInterventionTabHelper::CreateForWebContents(web_contents);
   }
+  PluginObserverAndroid::CreateForWebContents(web_contents);
   if (performance_hints::features::IsPerformanceHintsObserverEnabled()) {
     performance_hints::PerformanceHintsObserver::CreateForWebContents(
         web_contents);
@@ -455,6 +464,9 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
     ThumbnailTabHelper::CreateForWebContents(web_contents);
   }
   web_modal::WebContentsModalDialogManager::CreateForWebContents(web_contents);
+  if (base::FeatureList::IsEnabled(omnibox::kZeroSuggestPrefetching)) {
+    ZeroSuggestPrefetchTabHelper::CreateForWebContents(web_contents);
+  }
 #endif
 
 #if defined(OS_MAC)
@@ -500,6 +512,11 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
   if (Browser* browser = chrome::FindBrowserWithProfile(profile)) {
     SharedHighlightingPromo::CreateForWebContents(web_contents, browser);
   }
+#endif
+
+#if defined(OS_WIN)
+  if (base::FeatureList::IsEnabled(features::kPrewarmSearchResultsPageFonts))
+    FontPrewarmerTabHelper::CreateForWebContents(web_contents);
 #endif
 
   // --- Section 3: Feature tab helpers behind BUILDFLAGs ---

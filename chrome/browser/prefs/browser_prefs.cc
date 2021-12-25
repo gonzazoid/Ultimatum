@@ -26,6 +26,7 @@
 #include "chrome/browser/enterprise/reporting/prefs.h"
 #include "chrome/browser/enterprise/util/managed_browser_utils.h"
 #include "chrome/browser/external_protocol/external_protocol_handler.h"
+#include "chrome/browser/first_party_sets/first_party_sets_pref_names.h"
 #include "chrome/browser/first_run/first_run.h"
 #include "chrome/browser/gpu/gpu_mode_manager.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
@@ -366,7 +367,6 @@
 #include "chrome/browser/metrics/chromeos_metrics_provider.h"
 #include "chrome/browser/ui/app_list/app_list_syncable_service.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
-#include "chrome/browser/ui/app_list/search/arc/arc_app_reinstall_search_provider.h"
 #include "chrome/browser/ui/ash/shelf/chrome_shelf_prefs.h"
 #include "chrome/browser/ui/webui/chromeos/login/enable_debugging_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
@@ -400,6 +400,7 @@
 
 #if defined(OS_WIN)
 #include "chrome/browser/component_updater/sw_reporter_installer_win.h"
+#include "chrome/browser/font_prewarmer_tab_helper.h"
 #include "chrome/browser/media/cdm_pref_service_helper.h"
 #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
 #include "chrome/browser/win/conflicts/incompatible_applications_updater.h"
@@ -678,6 +679,8 @@ const char kAvailabilityProberTLSCanaryCheck[] =
     "Availability.Prober.cache.IsolatedPrerenderTLSCanaryCheck";
 const char kAvailabilityProberDNSCanaryCheck[] =
     "Availability.Prober.cache.IsolatedPrerenderDNSCanaryCheck";
+const char kStabilityRendererHangCount[] =
+    "user_experience_metrics.stability.renderer_hang_count";
 const char kStabilityIncompleteSessionEndCount[] =
     "user_experience_metrics.stability.incomplete_session_end_count";
 const char kStabilitySessionEndCompleted[] =
@@ -687,6 +690,12 @@ const char kStabilitySessionEndCompleted[] =
 // Deprecated 12/2021.
 const char kEduCoexistenceSecondaryAccountsInvalidationVersion[] =
     "account_manager.edu_coexistence_secondary_accounts_invalidation_version";
+
+// Deprecated 12/2021.
+const char kSyncFirstRunCompleted[] = "sync.first_run_completed";
+
+// Deprecated 12/2021.
+const char kArcAppReinstallState[] = "arc_app_reinstall_state";
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 // Register local state used only for migration (clearing or moving to a new
@@ -730,6 +739,7 @@ void RegisterLocalStatePrefsForMigration(PrefRegistrySimple* registry) {
   registry->RegisterStringPref(kPrivacyBudgetRetiredSurfaces, std::string());
   registry->RegisterUint64Pref(kPrivacyBudgetSeed, 0u);
 
+  registry->RegisterIntegerPref(kStabilityRendererHangCount, 0);
   registry->RegisterIntegerPref(kStabilityIncompleteSessionEndCount, 0);
   registry->RegisterBooleanPref(kStabilitySessionEndCompleted, true);
 }
@@ -890,6 +900,10 @@ void RegisterProfilePrefsForMigration(
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   registry->RegisterStringPref(
       kEduCoexistenceSecondaryAccountsInvalidationVersion, std::string());
+
+  registry->RegisterBooleanPref(kSyncFirstRunCompleted, false);
+
+  registry->RegisterDictionaryPref(kArcAppReinstallState);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 }
 
@@ -915,6 +929,7 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
   enterprise_reporting::RegisterLocalStatePrefs(registry);
   ExternalProtocolHandler::RegisterPrefs(registry);
   flags_ui::PrefServiceFlagsStorage::RegisterPrefs(registry);
+  first_party_sets::RegisterLocalStatePrefs(registry);
   GpuModeManager::RegisterPrefs(registry);
   signin::IdentityManager::RegisterLocalStatePrefs(registry);
   invalidation::FCMInvalidationService::RegisterPrefs(registry);
@@ -1001,7 +1016,7 @@ void RegisterLocalState(PrefRegistrySimple* registry) {
   ash::ChromeUserManagerImpl::RegisterPrefs(registry);
   crosapi::browser_util::RegisterLocalStatePrefs(registry);
   chromeos::CupsPrintersManager::RegisterLocalStatePrefs(registry);
-  ash::BrowserDataMigrator::RegisterLocalStatePrefs(registry);
+  ash::BrowserDataMigratorImpl::RegisterLocalStatePrefs(registry);
   chromeos::bluetooth_config::BluetoothPowerControllerImpl::
       RegisterLocalStatePrefs(registry);
   chromeos::bluetooth_config::DeviceNameManagerImpl::RegisterLocalStatePrefs(
@@ -1320,7 +1335,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   app_list::AppListSyncableService::RegisterProfilePrefs(registry);
-  app_list::ArcAppReinstallSearchProvider::RegisterProfilePrefs(registry);
   apps::AppPlatformMetricsService::RegisterProfilePrefs(registry);
   apps::webapk_prefs::RegisterProfilePrefs(registry);
   arc::prefs::RegisterProfilePrefs(registry);
@@ -1399,6 +1413,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry,
 #if defined(OS_WIN)
   CdmPrefServiceHelper::RegisterProfilePrefs(registry);
   component_updater::RegisterProfilePrefsForSwReporter(registry);
+  FontPrewarmerTabHelper::RegisterProfilePrefs(registry);
   NetworkProfileBubble::RegisterProfilePrefs(registry);
   safe_browsing::SettingsResetPromptPrefsManager::RegisterProfilePrefs(
       registry);
@@ -1522,6 +1537,7 @@ void MigrateObsoleteLocalStatePrefs(PrefService* local_state) {
   local_state->ClearPref(kTabStripStackedLayout);
 
   // Added 12/2021.
+  local_state->ClearPref(kStabilityRendererHangCount);
   local_state->ClearPref(kStabilityIncompleteSessionEndCount);
   local_state->ClearPref(kStabilitySessionEndCompleted);
 
@@ -1755,6 +1771,12 @@ void MigrateObsoleteProfilePrefs(Profile* profile) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // Added 12/2021.
   profile_prefs->ClearPref(kEduCoexistenceSecondaryAccountsInvalidationVersion);
+
+  // Added 12/2021
+  profile_prefs->ClearPref(kSyncFirstRunCompleted);
+
+  // Added 12/2021.
+  profile_prefs->ClearPref(kArcAppReinstallState);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
   // Please don't delete the following line. It is used by PRESUBMIT.py.

@@ -27,7 +27,6 @@
 
 #include "base/gtest_prod_util.h"
 #include "cc/input/event_listener_properties.h"
-#include "cc/input/layer_selection_bound.h"
 #include "cc/input/overscroll_behavior.h"
 #include "cc/paint/paint_image.h"
 #include "cc/trees/paint_holding_commit_trigger.h"
@@ -56,6 +55,7 @@
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "ui/gfx/delegated_ink_metadata.h"
+#include "ui/gfx/geometry/vector2d_f.h"
 
 // To avoid conflicts with the CreateWindow macro from the Windows SDK...
 #undef CreateWindow
@@ -424,9 +424,6 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void AnimateDoubleTapZoom(const gfx::Point& point,
                                     const gfx::Rect& rect) {}
 
-  virtual void ClearLayerSelection(LocalFrame*) {}
-  virtual void UpdateLayerSelection(LocalFrame*, const cc::LayerSelection&) {}
-
   // The client keeps track of which touch/mousewheel event types have handlers,
   // and if they do, whether the handlers are passive and/or blocking. This
   // allows the client to know which optimizations can be used for the
@@ -502,7 +499,7 @@ class CORE_EXPORT ChromeClient : public GarbageCollected<ChromeClient> {
   virtual void UnregisterPopupOpeningObserver(PopupOpeningObserver*) = 0;
   virtual void NotifyPopupOpeningObservers() const = 0;
 
-  virtual FloatSize ElasticOverscroll() const { return FloatSize(); }
+  virtual gfx::Vector2dF ElasticOverscroll() const { return gfx::Vector2dF(); }
 
   virtual void InstallSupplements(LocalFrame&);
 

@@ -30,7 +30,10 @@ namespace safe_browsing {
 
 class SBNavigationObserverTest : public content::RenderViewHostTestHarness {
  public:
-  SBNavigationObserverTest() {}
+  SBNavigationObserverTest() {
+    scoped_feature_list_.InitAndEnableFeature(
+        kOmitNonUserGesturesFromReferrerChain);
+  }
 
   SBNavigationObserverTest(const SBNavigationObserverTest&) = delete;
   SBNavigationObserverTest& operator=(const SBNavigationObserverTest&) = delete;
@@ -50,9 +53,6 @@ class SBNavigationObserverTest : public content::RenderViewHostTestHarness {
     navigation_observer_ =
         new SafeBrowsingNavigationObserver(web_contents(), settings_map_.get(),
                                            navigation_observer_manager_.get());
-
-    scoped_feature_list_.InitAndEnableFeature(
-        kOmitNonUserGesturesFromReferrerChain);
   }
   void TearDown() override {
     delete navigation_observer_;
@@ -185,10 +185,13 @@ class SBNavigationObserverTest : public content::RenderViewHostTestHarness {
   std::unique_ptr<SafeBrowsingNavigationObserverManager>
       navigation_observer_manager_;
   raw_ptr<SafeBrowsingNavigationObserver> navigation_observer_;
+
+ private:
   base::test::ScopedFeatureList scoped_feature_list_;
 };
 
-TEST_F(SBNavigationObserverTest, TestNavigationEventList) {
+// TODO(crbug.com/1279844): Fix test on Linux TSan bot.
+TEST_F(SBNavigationObserverTest, DISABLED_TestNavigationEventList) {
   NavigationEventList events(3);
 
   EXPECT_EQ(-1, static_cast<int>(events.FindNavigationEvent(

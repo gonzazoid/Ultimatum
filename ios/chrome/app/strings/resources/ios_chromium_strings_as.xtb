@@ -31,7 +31,6 @@
 <translation id="2478931088402984578"><ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" /> বাছনি কৰক</translation>
 <translation id="2567507405773541360">সৰল, সুৰক্ষিত আৰু পূৰ্বতকৈ ক্ষিপ্ৰ Chromiumৰ জৰিয়তে অধিক কাম কৰক</translation>
 <translation id="2590893390871230428">আপোনাৰ Chromium ডেটা ছিংক কৰক</translation>
-<translation id="259094968798709429">পাছৱৰ্ডসমূহ <ph name="BEGIN_LINK" />পাছৱৰ্ড পৰিচালক<ph name="END_LINK" />ত ছেভ কৰা হয় যাতে আপুনি সেয়া যিকোনো ডিভাইচত ব্যৱহাৰ কৰিব পাৰে।</translation>
 <translation id="2650312721222849884">আপুনি Chromium ব্যৱহাৰ কৰা সকলো ডিভাইচৰ পৰা নিজৰ টেবসমূহ চাবলৈ ছিংক অন কৰক</translation>
 <translation id="2684230048001240293">আপোনাৰ আটাইবোৰ ডিভাইচত আপোনাৰ টেব, পাছৱৰ্ড আৰু পৰিশোধ বিষয়ক তথ্য ছিংক কৰিবলৈ Chromiumক ডিফ’ল্ট হিচাপে ছেট কৰক</translation>
 <translation id="2730884209570016437">অন্য কোনো এপ্লিকেশ্বনে আপোনাৰ কেমেৰা ব্যৱহাৰ কৰি থকাৰ বাবে Chromiumএ সেয়া ব্যৱহাৰ কৰিব নোৱাৰে</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">এই একাউণ্টটো আৰু যিকোনো ছেভ নকৰা ডেটা Chromiumৰ পৰা আঁতৰোৱা হ’ব।</translation>
 <translation id="894437814105052438">আপুনি ছাইন আউট কৰিলে Chromiumএ আপোনাৰ Google একাউণ্টত কোনো নতুন ডেটা ছিংক নকৰিব। পূৰ্বে ছিংক কৰা ডেটাখিনি একাউণ্টটোতে থাকে।</translation>
 <translation id="9022552996538154597">Chromiumত ছাইন ইন কৰক</translation>
+<translation id="9059693977935746710">আপুনি এই পাছৱৰ্ডটো মনত ৰখাৰ প্ৰয়োজন নাই। এইটো <ph name="EMAIL" />ৰ পাছৱৰ্ড পৰিচালকত ছেভ কৰা হ’ব</translation>
 <translation id="9089354809943900324">Chromiumটো অতি পুৰণি</translation>
 <translation id="9110075932708282655">ডিফ’ল্ট হিচাপে Chromium ব্যৱহাৰ কৰক</translation>
 <translation id="921174536258924340">Chromiumএ সকলো পাছৱৰ্ড পৰীক্ষা কৰিব নোৱাৰিলে। কাইলৈ পুনৰ চেষ্টা কৰক অথবা <ph name="BEGIN_LINK" />আপোনাৰ Google একাউণ্টত পাছৱর্ডসমূহ পৰীক্ষা কৰক।<ph name="END_LINK" /></translation>

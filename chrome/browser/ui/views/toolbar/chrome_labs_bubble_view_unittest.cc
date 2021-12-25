@@ -70,6 +70,15 @@ const flags_ui::FeatureEntry::FeatureParam kTestVariationOther2[] = {
 const flags_ui::FeatureEntry::FeatureVariation kTestVariations2[] = {
     {"Description", kTestVariationOther2, 1, nullptr}};
 
+// Experiment platform to use for feature flags.
+unsigned short GetPlatformToUse() {
+#if BUILDFLAG(IS_CHROMEOS_LACROS)
+  return flags_ui::FlagsState::GetCurrentPlatform() | flags_ui::kOsCrOS;
+#else
+  return flags_ui::FlagsState::GetCurrentPlatform();
+#endif
+}
+
 }  // namespace
 
 class ChromeLabsBubbleTest : public TestWithBrowserView {
@@ -82,11 +91,9 @@ class ChromeLabsBubbleTest : public TestWithBrowserView {
         user_manager_enabler_(base::WrapUnique(user_manager_)),
 #endif
         scoped_feature_entries_(
-            {{kFirstTestFeatureId, "", "",
-              flags_ui::FlagsState::GetCurrentPlatform(),
+            {{kFirstTestFeatureId, "", "", GetPlatformToUse(),
               FEATURE_VALUE_TYPE(kTestFeature1)},
-             {kTestFeatureWithVariationId, "", "",
-              flags_ui::FlagsState::GetCurrentPlatform(),
+             {kTestFeatureWithVariationId, "", "", GetPlatformToUse(),
               FEATURE_WITH_PARAMS_VALUE_TYPE(kTestFeature2,
                                              kTestVariations2,
                                              "TestTrial")},
@@ -94,8 +101,7 @@ class ChromeLabsBubbleTest : public TestWithBrowserView {
              // compatible with the current platform.
              {kThirdTestFeatureId, "", "", 0,
               FEATURE_VALUE_TYPE(kTestFeature3)},
-             {kExpiredFlagTestFeatureId, "", "",
-              flags_ui::FlagsState::GetCurrentPlatform(),
+             {kExpiredFlagTestFeatureId, "", "", GetPlatformToUse(),
               FEATURE_VALUE_TYPE(kExpiredFlagTestFeature)}}) {
     // Set expiration milestone such that the flag is expired.
     flags::testing::SetFlagExpiration(kExpiredFlagTestFeatureId, 0);
@@ -467,17 +473,17 @@ TEST_F(ChromeLabsBubbleTest, NewBadgeTest) {
 // removed from the PrefService when updating new badge prefs.
 TEST_F(ChromeLabsBubbleTest, CleanUpNewBadgePrefsTest) {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
-  const base::DictionaryValue* new_badge_prefs =
+  const base::Value* new_badge_prefs =
       browser_view()->browser()->profile()->GetPrefs()->GetDictionary(
           chrome_labs_prefs::kChromeLabsNewBadgeDictAshChrome);
 #else
-  const base::DictionaryValue* new_badge_prefs =
+  const base::Value* new_badge_prefs =
       g_browser_process->local_state()->GetDictionary(
           chrome_labs_prefs::kChromeLabsNewBadgeDict);
 #endif
 
-  EXPECT_TRUE(new_badge_prefs->HasKey(kFirstTestFeatureId));
-  EXPECT_TRUE(new_badge_prefs->HasKey(kTestFeatureWithVariationId));
+  EXPECT_TRUE(new_badge_prefs->FindKey(kFirstTestFeatureId));
+  EXPECT_TRUE(new_badge_prefs->FindKey(kTestFeatureWithVariationId));
 
   // Remove two experiments.
   std::vector<LabInfo> test_experiments = TestLabInfo();
@@ -492,6 +498,6 @@ TEST_F(ChromeLabsBubbleTest, CleanUpNewBadgePrefsTest) {
 
   UpdateChromeLabsNewBadgePrefs(browser_view()->browser()->profile(),
                                 chrome_labs_model());
-  EXPECT_FALSE(new_badge_prefs->HasKey(kFirstTestFeatureId));
-  EXPECT_FALSE(new_badge_prefs->HasKey(kTestFeatureWithVariationId));
+  EXPECT_FALSE(new_badge_prefs->FindKey(kFirstTestFeatureId));
+  EXPECT_FALSE(new_badge_prefs->FindKey(kTestFeatureWithVariationId));
 }

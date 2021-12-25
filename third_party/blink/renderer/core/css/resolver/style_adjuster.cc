@@ -874,15 +874,13 @@ void StyleAdjuster::AdjustComputedStyle(StyleResolverState& state,
       style.OverflowY() != EOverflow::kVisible)
     AdjustOverflow(style, element);
 
-  // overflow-clip-margin only applies if 'overflow: clip' is set along both
-  // axis or 'contain: paint'.
-  if (!style.ContainsPaint() && !(style.OverflowX() == EOverflow::kClip &&
-                                  style.OverflowY() == EOverflow::kClip)) {
-    style.SetOverflowClipMargin(
-        ComputedStyleInitialValues::InitialOverflowClipMargin());
-  }
-
-  if (StopPropagateTextDecorations(style, element))
+  // TODO(rego): When HighlightInheritance (https://crbug.com/1024156) is
+  // enabled, we're going to inherit the text decorations from the parent
+  // elements, that would cause that we paint the decorations more than once in
+  // the highlight pseudos. This doesn't seem right and there's a spec issue
+  // (https://github.com/w3c/csswg-drafts/issues/6829) about not propagating
+  // text decorations on highlights pseudos.
+  if (StopPropagateTextDecorations(style, element) || state.IsForHighlight())
     style.ClearAppliedTextDecorations();
   else
     style.RestoreParentTextDecorations(layout_parent_style);

@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">پیشنهادهای موجود</translation>
 <translation id="1312803275555673949">چه شواهدی آن را تأیید می‌کند؟</translation>
 <translation id="131405271941274527">‏<ph name="URL" /> می‌خواهد وقتی با تلفنتان روی دستگاه NFC ضربه می‌زنید، اطلاعات را ارسال و دریافت کند</translation>
+<translation id="1314311879718644478">مشاهده محتوای واقعیت افزوده</translation>
 <translation id="1314509827145471431">به‌هم چسباندن از راست</translation>
 <translation id="1318023360584041678">در گروه برگه ذخیره شد</translation>
 <translation id="1319245136674974084">دیگر برای این برنامه سؤال نشود</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">نمایش بیشتر</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">به‌دنبال نسخه مرورگر هستید؟ از این پیوند استفاده کنید:</translation>
 <translation id="1476595624592550506">گذرواژه‌تان را تغییر دهید</translation>
 <translation id="1483493594462132177">ارسال</translation>
 <translation id="1484290072879560759">انتخاب نشانی تحویل کالا</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">هنگام نمایش این صفحه وب مشکلی پیش آمد.</translation>
 <translation id="1586541204584340881">افزونه‌هایی که نصب کرده‌اید</translation>
 <translation id="1588438908519853928">معمولی</translation>
+<translation id="1589050138437146318">‏ARCore نصب شود؟</translation>
 <translation id="1592005682883173041">دسترسی داده محلی</translation>
 <translation id="1594030484168838125">انتخاب</translation>
 <translation id="160851722280695521">‏بازی کردن بازی دویدن دایناسور در Chrome</translation>
@@ -1261,6 +1264,7 @@
 <translation id="4968522289500246572">این برنامه برای تلفن همراه طراحی شده است و ممکن است با تغییر اندازه سازگار نباشد. برنامه ممکن است با مشکلاتی روبرو شود یا بازراه‌اندازی شود.</translation>
 <translation id="4969341057194253438">حذف ویدیوی ضبط‌شده</translation>
 <translation id="4973922308112707173">دو سوراخ در بالا</translation>
+<translation id="4976702386844183910">آخرین بازدید: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">از میکروفون استفاده شود؟</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">دیدن همه</translation>
@@ -1346,6 +1350,7 @@
 <translation id="5215116848420601511">‏روش‌های پرداخت و نشانی‌های مورداستفاده در Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">سینی ۱۳</translation>
+<translation id="5216942107514965959">آخرین بازدید: امروز</translation>
 <translation id="5222812217790122047">ایمیل ضروری است</translation>
 <translation id="5230733896359313003">نشانی تحویل کالا</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@
 <translation id="5333022057423422993">‏Chrome گذرواژه‌ای را که اکنون استفاده کردید در سرقت اطلاعات شبکه پیدا کرده است. برای ایمن کردن حساب‌هایتان، توصیه می‌کنیم گذرواژه‌های ذخیره‌شده‌تان را بررسی کنید.</translation>
 <translation id="5334013548165032829">گزارش دقیق سیستم</translation>
 <translation id="5334145288572353250">نشانی ذخیره شود؟</translation>
+<translation id="5335920952954443287">قلب تپنده</translation>
 <translation id="5340250774223869109">برنامه مسدود شده است</translation>
 <translation id="534295439873310000">‏دستگاه‌های NFC</translation>
 <translation id="5344579389779391559">این صفحه ممکن است تلاش کند از شما پول دریافت کند</translation>
@@ -1531,6 +1537,7 @@
 <translation id="5869522115854928033">گذرواژه‌های ذخیره‌شده</translation>
 <translation id="5873013647450402046">بانکتان می‌خواهد هویت شما را تأیید کند.</translation>
 <translation id="5887400589839399685">کارت ذخیره‌ شد</translation>
+<translation id="5887687176710214216">آخرین بازدید: دیروز</translation>
 <translation id="5895138241574237353">راه‌اندازی مجدد</translation>
 <translation id="5895187275912066135">تاریخ صدور</translation>
 <translation id="5901630391730855834">زرد</translation>
@@ -1724,6 +1731,7 @@
 <translation id="6529602333819889595">&amp;انجام مجدد حذف</translation>
 <translation id="6545864417968258051">اسکن کردن بلوتوث</translation>
 <translation id="6547208576736763147">دو سوراخ در چپ</translation>
+<translation id="6554732001434021288">آخرین بازدید: <ph name="NUM_DAYS" /> روز پیش</translation>
 <translation id="6556866813142980365">انجام مجدد</translation>
 <translation id="6569060085658103619">درحال مشاهده یک صفحه افزونه هستید</translation>
 <translation id="6573200754375280815">دو سوراخ در راست</translation>
@@ -1886,6 +1894,7 @@
 <translation id="7118618213916969306">جستجوی نشانی وب بریده‌دان، <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">برگه‌ها یا برنامه‌های دیگر را ببندید</translation>
 <translation id="7129409597930077180">ارسال به این نشانی ممکن نیست. نشانی دیگری را انتخاب کنید.</translation>
+<translation id="7132939140423847331">سرپرست کپی شدن این داده‌ها را ممنوع کرده است.</translation>
 <translation id="7135130955892390533">نمایش وضعیت</translation>
 <translation id="7138472120740807366">روش تحویل</translation>
 <translation id="7139724024395191329">امارات</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">وقتی یادداشت‌ها را ویرایش می‌کنید، این سند به وضعیت چرخش اصلی برمی‌گردد</translation>
 <translation id="765676359832457558">پنهان کردن تنظیمات پیشرفته…</translation>
 <translation id="7658239707568436148">لغو</translation>
+<translation id="7659878911471462949">اشک شوق</translation>
 <translation id="7662298039739062396">تنظیم توسط افزونه کنترل می‌شود</translation>
 <translation id="7663736086183791259">گواهی <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">در حالت «ناشناس» مجاز نیست</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">می‌تواند برای استفاده از داده‌ها و دستگاه‌های واقعیت مجازی درخواست دهد</translation>
 <translation id="7984945080620862648">‏در حال حاضر نمی‌توانید از <ph name="SITE" /> بازدید کنید زیرا این وب‌سایت اعتبارنامه‌های درهمی ارسال کرده است که Chrome نمی‌تواند پردازش کند. معمولاً خطاهای شبکه و حمله‌ها موقتی هستند، بنابراین احتمالاً این صفحه بعداً کار خواهد کرد.</translation>
-<translation id="79859296434321399">‏برای مشاهده محتوای واقعیت افزوده، ARCore را نصب کنید</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">به‌هم چسباندن</translation>
 <translation id="7992044431894087211">هم‌رسانی صفحه‌نمایش با <ph name="APPLICATION_TITLE" /> ازسر گرفته شد</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">تاخوردگی از وسط</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">برنامه‌های نصب‌شده و میزان استفاده از آن‌ها</translation>
+<translation id="8317207217658302555">‏ARCore به‌روزرسانی شود؟</translation>
 <translation id="831997045666694187">شب</translation>
 <translation id="8321476692217554900">اعلان‌ها</translation>
 <translation id="8328484624016508118">‏بعداز بستن برگه‌های «ناشناس»، Chrome این‌ها را پاک می‌کند:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{بازنشانی اجازه}one{بازنشانی اجازه}other{بازنشانی اجازه‌ها}}</translation>
 <translation id="8555010941760982128">هنگام تسویه‌حساب، از این کد استفاده کنید</translation>
 <translation id="8557066899867184262">‏CVC در پشت کارتتان قرار گرفته است.</translation>
-<translation id="8558485628462305855">‏برای مشاهده محتوای واقعیت افزوده، ARCore را به‌روزرسانی کنید</translation>
 <translation id="8559762987265718583">اتصال خصوصی به <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> انجام نمی‌شود، زیرا تاریخ و زمان دستگاه شما (<ph name="DATE_AND_TIME" />) نادرست است.</translation>
 <translation id="8564182942834072828">اسناد جداگانه/کپی‌های تلفیق‌نشده</translation>
 <translation id="8564985650692024650">‏Chromium توصیه می‌کند اگر از گذرواژه <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> خود در سایت دیگری استفاده کردید آن را بازنشانی کنید.</translation>
@@ -2444,6 +2453,7 @@
 <translation id="8987245424886630962">‏<ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />؛ برای مشاهده سابقه مرور در تنظیمات Chrome، کلید «جهش» و سپس «ورود» را فشار دهید</translation>
 <translation id="8987927404178983737">ماه</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">به‌دنبال نسخه سیستم هستید؟ از این پیوند استفاده کنید:</translation>
 <translation id="899688752321268742"><ph name="URL" /> می‌خواهد بداند چه زمانی به‌صورت فعال از این دستگاه استفاده می‌کنید</translation>
 <translation id="8996941253935762404">سایت در پیش‌رو حاوی برنامه‌های خطرناک است</translation>
 <translation id="8997023839087525404">سرور گواهی‌ای را ارائه کرده است که با استفاده از خط‌مشی شفافیت گواهینامه به‌صورت عمومی نشان داده نشده است. برای برخی گواهی‌ها این یک مسئله ضروری است تا از قابل اعتماد بودن آن‌ها و محافظت دربرابر مهاجمین اطمینان حاصل شود.</translation>

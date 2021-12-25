@@ -4,11 +4,11 @@
 
 #include "chrome/browser/nearby_sharing/nearby_share_metrics_logger.h"
 
+#include "ash/services/nearby/public/mojom/nearby_connections_types.mojom.h"
+#include "ash/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/numerics/safe_conversions.h"
 #include "chrome/browser/nearby_sharing/nearby_share_feature_status.h"
-#include "chromeos/services/nearby/public/mojom/nearby_connections_types.mojom.h"
-#include "chromeos/services/nearby/public/mojom/nearby_decoder_types.mojom.h"
 #include "components/policy/core/common/policy_service.h"
 #include "components/policy/policy_constants.h"
 
@@ -16,6 +16,16 @@ namespace {
 
 const size_t kBytesPerKilobyte = 1024;
 const uint64_t k5MbInBytes = 5242880;
+
+// These values are persisted to logs. Entries should not be renumbered and
+// numeric values should never be reused. The numbers here correspond to the
+// ordering of the flow. This enum should be kept in sync with the
+// NearbyShareBackgroundScanningSetupNotificationFlowEvent enum in
+// src/tools/metrics/histograms/enums.xml.
+enum class BackgroundScanningDevicesDetectedEvent {
+  kNearbyDevicesDetected = 1,
+  kMaxValue = kNearbyDevicesDetected
+};
 
 // These values are persisted to logs. Entries should not be renumbered and
 // numeric values should never be reused. If entries are added, kMaxValue should
@@ -588,4 +598,49 @@ void RecordNearbyShareTransferFinalStatusMetric(
           *success);
     }
   }
+}
+
+void RecordNearbyShareDeviceNearbySharingNotificationFlowEvent(
+    NearbyShareBackgroundScanningDeviceNearbySharingNotificationFlowEvent
+        event) {
+  base::UmaHistogramSparse(
+      "Nearby.Share.BackgroundScanning.DeviceNearbySharing.Notification.Flow",
+      static_cast<int>(event));
+}
+
+void RecordNearbyShareDeviceNearbySharingNotificationTimeToAction(
+    base::TimeDelta time) {
+  base::UmaHistogramMediumTimes(
+      "Nearby.Share.BackgroundScanning.DeviceNearbySharing.Notification."
+      "TimeToAction",
+      time);
+}
+
+void RecordNearbyShareBackgroundScanningDevicesDetected() {
+  base::UmaHistogramEnumeration(
+      "Nearby.Share.BackgroundScanning.DevicesDetected",
+      BackgroundScanningDevicesDetectedEvent::kNearbyDevicesDetected);
+}
+
+void RecordNearbyShareBackgroundScanningDevicesDetectedDuration(
+    base::TimeDelta duration) {
+  base::UmaHistogramLongTimes(
+      "Nearby.Share.BackgroundScanning.DevicesDetected.Duration", duration);
+}
+
+void RecordNearbyShareBackgroundScanningSessionStarted(bool success) {
+  base::UmaHistogramBoolean("Nearby.Share.BackgroundScanning.SessionStarted",
+                            success);
+}
+
+void RecordNearbyShareSetupNotificationFlowEvent(
+    NearbyShareBackgroundScanningSetupNotificationFlowEvent event) {
+  base::UmaHistogramSparse(
+      "Nearby.Share.BackgroundScanning.Setup.Notification.Flow",
+      static_cast<int>(event));
+}
+
+void RecordNearbyShareSetupNotificationTimeToAction(base::TimeDelta time) {
+  base::UmaHistogramMediumTimes(
+      "Nearby.Share.BackgroundScanning.Setup.Notification.TimeToAction", time);
 }

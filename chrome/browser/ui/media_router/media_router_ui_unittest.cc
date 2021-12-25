@@ -189,10 +189,8 @@ class MediaRouterViewsUITest : public ChromeRenderViewHostTestHarness {
       const std::vector<MediaSinkWithCastModes>& sinks) {
     ui_->OnResultsUpdated(sinks);
   }
-  void NotifyUiOnRoutesUpdated(
-      const std::vector<MediaRoute>& routes,
-      const std::vector<MediaRoute::Id>& joinable_route_ids) {
-    ui_->OnRoutesUpdated(routes, joinable_route_ids);
+  void NotifyUiOnRoutesUpdated(const std::vector<MediaRoute>& routes) {
+    ui_->OnRoutesUpdated(routes);
   }
 
   void StartTabCasting(bool is_incognito) {
@@ -292,7 +290,7 @@ TEST_F(MediaRouterViewsUITest, NotifyObserver) {
       })));
   NotifyUiOnResultsUpdated({sink_with_cast_modes});
 
-  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true, true);
+  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true);
   EXPECT_CALL(observer, OnModelUpdated(_))
       .WillOnce(
           WithArg<0>(Invoke([&sink, &route](const CastDialogModel& model) {
@@ -302,7 +300,7 @@ TEST_F(MediaRouterViewsUITest, NotifyObserver) {
             EXPECT_EQ(UIMediaSinkState::CONNECTED, ui_sink.state);
             EXPECT_EQ(route.media_route_id(), ui_sink.route->media_route_id());
           })));
-  NotifyUiOnRoutesUpdated({route}, {});
+  NotifyUiOnRoutesUpdated({route});
 
   EXPECT_CALL(observer, OnControllerInvalidatedInternal());
   ui_.reset();
@@ -417,18 +415,18 @@ TEST_F(MediaRouterViewsUITest, ConnectingState) {
         ASSERT_EQ(1u, model.media_sinks().size());
         EXPECT_EQ(UIMediaSinkState::CONNECTED, model.media_sinks()[0].state);
       })));
-  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true, true);
-  NotifyUiOnRoutesUpdated({route}, {});
+  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true);
+  NotifyUiOnRoutesUpdated({route});
 }
 
 TEST_F(MediaRouterViewsUITest, DisconnectingState) {
   NiceMock<MockControllerObserver> observer(ui_.get());
 
   MediaSink sink{CreateDialSink(kSinkId, kSinkName)};
-  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true, true);
+  MediaRoute route(kRouteId, MediaSource(kSourceId), kSinkId, "", true);
   for (MediaSinksObserver* sinks_observer : media_sinks_observers_)
     sinks_observer->OnSinksUpdated({sink}, std::vector<url::Origin>());
-  NotifyUiOnRoutesUpdated({route}, {});
+  NotifyUiOnRoutesUpdated({route});
 
   // When a request to stop casting to a sink is made, its state should become
   // DISCONNECTING.
@@ -446,7 +444,7 @@ TEST_F(MediaRouterViewsUITest, DisconnectingState) {
         ASSERT_EQ(1u, model.media_sinks().size());
         EXPECT_EQ(UIMediaSinkState::AVAILABLE, model.media_sinks()[0].state);
       })));
-  NotifyUiOnRoutesUpdated({}, {});
+  NotifyUiOnRoutesUpdated({});
 }
 
 TEST_F(MediaRouterViewsUITest, AddAndRemoveIssue) {
@@ -605,24 +603,6 @@ TEST_F(MediaRouterViewsUITest, SortSinksByIconType) {
   EXPECT_EQ("id1", sorted_sinks[2].sink.id());
   EXPECT_EQ("id4", sorted_sinks[3].sink.id());
   EXPECT_EQ("id2", sorted_sinks[4].sink.id());
-}
-
-TEST_F(MediaRouterViewsUITest, FilterNonDisplayRoutes) {
-  MediaSource media_source("mediaSource");
-  MediaRoute display_route_1("routeId1", media_source, "sinkId1", "desc 1",
-                             true, true);
-  MediaRoute non_display_route_1("routeId2", media_source, "sinkId2", "desc 2",
-                                 true, false);
-  MediaRoute display_route_2("routeId3", media_source, "sinkId2", "desc 2",
-                             true, true);
-
-  NotifyUiOnRoutesUpdated(
-      {display_route_1, non_display_route_1, display_route_2}, {});
-  ASSERT_EQ(2u, ui_->routes().size());
-  EXPECT_EQ(display_route_1, ui_->routes()[0]);
-  EXPECT_TRUE(ui_->routes()[0].for_display());
-  EXPECT_EQ(display_route_2, ui_->routes()[1]);
-  EXPECT_TRUE(ui_->routes()[1].for_display());
 }
 
 TEST_F(MediaRouterViewsUITest, NotFoundErrorOnCloseWithNoSinks) {

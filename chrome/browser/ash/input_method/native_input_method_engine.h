@@ -30,11 +30,11 @@ namespace input_method {
 // currently depends on the Chrome extension system, it will not need to in
 // the future after all the extensions code are migrated to the IME service.
 // The design of this class is not good, mainly because we are inheriting
-// from InputMethodEngineBase, which was designed for extension-based engines.
+// from InputMethodEngine, which was designed for extension-based engines.
 //
 // In the final design, there should be some common interface between
 // NativeInputMethodEngine and "ExtensionInputMethodEngine" (which is
-// InputMethodEngineBase in the current design). All extensions-related logic
+// InputMethodEngine in the current design). All extensions-related logic
 // will reside in the ExtensionInputMethodEngine inheritance tree. There will
 // be no "ImeObserver" for the native engine either, as it is only used as
 // a way for ExtensionInputMethodEngine to delegate to the extensions code,
@@ -46,12 +46,19 @@ class NativeInputMethodEngine
   NativeInputMethodEngine();
   ~NativeInputMethodEngine() override;
 
+  // |use_ime_service| can be |false| in browser tests to avoid connecting to
+  // IME service which may try to load libimedecoder.so unsupported in tests.
+  // TODO(crbug/1197005): Migrate native_input_method_engine_browsertest suite
+  // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
+  static std::unique_ptr<NativeInputMethodEngine> CreateForTesting(
+      bool use_ime_service);
+
   // Used to override deps for testing.
   NativeInputMethodEngine(
       std::unique_ptr<AssistiveSuggesterSwitch> suggester_switch);
 
   // InputMethodEngine:
-  void Initialize(std::unique_ptr<InputMethodEngineBase::Observer> observer,
+  void Initialize(std::unique_ptr<InputMethodEngineObserver> observer,
                   const char* extension_id,
                   Profile* profile) override;
   void CandidateClicked(uint32_t index) override;
@@ -88,22 +95,27 @@ class NativeInputMethodEngine
                      int start_index);
 
  private:
-  class ImeObserver : public InputMethodEngineBase::Observer,
+  class ImeObserver : public InputMethodEngineObserver,
                       public chromeos::ime::mojom::InputMethodHost {
    public:
     // |ime_base_observer| is to forward events to extension during this
     // migration. It will be removed when the official extension is completely
     // migrated.
-    ImeObserver(
-        PrefService* prefs,
-        std::unique_ptr<InputMethodEngineBase::Observer> ime_base_observer,
-        std::unique_ptr<AssistiveSuggester> assistive_suggester,
-        std::unique_ptr<AutocorrectManager> autocorrect_manager,
-        std::unique_ptr<SuggestionsCollector> suggestions_collector,
-        std::unique_ptr<GrammarManager> grammar_manager);
+    // |use_ime_service| should always be |true| in prod code, and may only be
+    // |false| in browser tests that need to avoid connecting to the Mojo IME
+    // service which can involve loading libimedecoder.so unsupported in tests.
+    // TODO(crbug/1197005): Migrate native_input_method_engine_browsertest suite
+    // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
+    ImeObserver(PrefService* prefs,
+                std::unique_ptr<InputMethodEngineObserver> ime_base_observer,
+                std::unique_ptr<AssistiveSuggester> assistive_suggester,
+                std::unique_ptr<AutocorrectManager> autocorrect_manager,
+                std::unique_ptr<SuggestionsCollector> suggestions_collector,
+                std::unique_ptr<GrammarManager> grammar_manager,
+                bool use_ime_service);
     ~ImeObserver() override;
 
-    // InputMethodEngineBase::Observer:
+    // InputMethodEngineObserver:
     void OnActivate(const std::string& engine_id) override;
     void OnFocus(
         const std::string& engine_id,
@@ -124,10 +136,9 @@ class NativeInputMethodEngine
                                   int cursor_pos,
                                   int anchor_pos,
                                   int offset_pos) override;
-    void OnCandidateClicked(
-        const std::string& component_id,
-        int candidate_id,
-        InputMethodEngineBase::MouseButtonEvent button) override;
+    void OnCandidateClicked(const std::string& component_id,
+                            int candidate_id,
+                            MouseButtonEvent button) override;
     void OnAssistiveWindowButtonClicked(
         const ui::ime::AssistiveWindowButton& button) override;
     void OnMenuItemActivated(const std::string& component_id,
@@ -141,9 +152,13 @@ class NativeInputMethodEngine
     void CommitText(const std::u16string& text,
                     chromeos::ime::mojom::CommitTextCursorBehavior
                         cursor_behavior) override;
-    void SetComposition(
+    void DEPRECATED_SetComposition(
         const std::u16string& text,
         std::vector<chromeos::ime::mojom::CompositionSpanPtr> spans) override;
+    void SetComposition(
+        const std::u16string& text,
+        std::vector<chromeos::ime::mojom::CompositionSpanPtr> spans,
+        uint32_t new_cursor_position) override;
     void SetCompositionRange(uint32_t start_index, uint32_t end_index) override;
     void FinishComposition() override;
     void DeleteSurroundingText(uint32_t num_before_cursor,
@@ -186,9 +201,12 @@ class NativeInputMethodEngine
     void SendSurroundingTextToNativeMojoEngine(
         const SurroundingText& surrounding_text);
 
+    bool ShouldRouteToRuleBasedEngine(const std::string& engine_id) const;
+    bool ShouldRouteToNativeMojoEngine(const std::string& engine_id) const;
+
     PrefService* prefs_ = nullptr;
 
-    std::unique_ptr<InputMethodEngineBase::Observer> ime_base_observer_;
+    std::unique_ptr<InputMethodEngineObserver> ime_base_observer_;
     mojo::Remote<chromeos::ime::mojom::InputEngineManager> remote_manager_;
     mojo::Remote<chromeos::ime::mojom::InputMethod> input_method_;
     mojo::Receiver<chromeos::ime::mojom::InputMethodHost> host_receiver_{this};
@@ -201,11 +219,27 @@ class NativeInputMethodEngine
     ui::CharacterComposer character_composer_;
 
     SurroundingText last_surrounding_text_;
+
+    // |use_ime_service| should always be |true| in prod code, and may only be
+    // |false| in browser tests that need to avoid connecting to the Mojo IME
+    // service which can involve loading libimedecoder.so unsupported in tests.
+    // TODO(crbug/1197005): Migrate native_input_method_engine_browsertest suite
+    // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
+    bool use_ime_service_ = true;
   };
+
+  // |use_ime_service| should always be |true| in prod code, and may only be
+  // |false| in browser tests that need to avoid connecting to the Mojo IME
+  // service which can involve loading libimedecoder.so unsupported in tests.
+  // TODO(crbug/1197005): Migrate native_input_method_engine_browsertest suite
+  // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
+  explicit NativeInputMethodEngine(bool use_ime_service);
 
   ImeObserver* GetNativeObserver() const;
 
   void OnInputMethodOptionsChanged() override;
+
+  bool ShouldRouteToNativeMojoEngine(const std::string& engine_id) const;
 
   AssistiveSuggester* assistive_suggester_ = nullptr;
   AutocorrectManager* autocorrect_manager_ = nullptr;
@@ -215,6 +249,13 @@ class NativeInputMethodEngine
 
   // Optional dependency overrides used in testing.
   std::unique_ptr<AssistiveSuggesterSwitch> suggester_switch_;
+
+  // |use_ime_service| should always be |true| in prod code, and may only be
+  // |false| in browser tests that need to avoid connecting to the Mojo IME
+  // service (which can involve loading libimedecoder.so unsupported in tests).
+  // TODO(crbug/1197005): Migrate native_input_method_engine_browsertest suite
+  // to e2e Tast tests and unit tests, then dismantle this for-test-only flag.
+  bool use_ime_service_ = true;
 };
 
 }  // namespace input_method

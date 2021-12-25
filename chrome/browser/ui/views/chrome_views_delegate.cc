@@ -10,10 +10,10 @@
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/ui/browser_window_state.h"
 #include "components/keep_alive_registry/keep_alive_registry.h"
 #include "components/keep_alive_registry/keep_alive_types.h"
@@ -117,7 +117,7 @@ bool ChromeViewsDelegate::GetSavedWindowPlacement(
     return false;
 
   DCHECK(prefs->FindPreference(window_name));
-  const base::DictionaryValue* dictionary = prefs->GetDictionary(window_name);
+  const base::Value* dictionary = prefs->GetDictionary(window_name);
   if (!dictionary)
     return false;
   absl::optional<int> left = dictionary->FindIntKey("left");

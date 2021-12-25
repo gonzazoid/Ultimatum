@@ -61,6 +61,7 @@ Es posible que algunas funciones no estén disponibles y que no se guarden los c
 <translation id="2348335408836342058">Chrome necesita permiso para acceder a la cámara y al micrófono en este sitio web</translation>
 <translation id="234869673307233423">Chrome no puede comprobar tus contraseñas. Vuelve a intentarlo más tarde.</translation>
 <translation id="235650106824528204">El administrador del perfil de trabajo puede quitar cualquier dato de Chrome generado durante el uso de este perfil, como los marcadores, el historial, las contraseñas y otros ajustes. <ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">Continuar</translation>
 <translation id="2429317896000329049">Google Chrome no ha podido sincronizar los datos porque la función de sincronización no está disponible para tu dominio.</translation>
 <translation id="2467438592969358367">Google Chrome quiere exportar tus contraseñas. Escribe tu contraseña de Windows para permitirlo.</translation>
 <translation id="2485422356828889247">Desinstalar</translation>
@@ -145,6 +146,7 @@ Es posible que algunas funciones no estén disponibles y que no se guarden los c
 <translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> se ha añadido a Chrome</translation>
 <translation id="4384570495110188418">Chrome no puede comprobar tus contraseñas porque no has iniciado sesión</translation>
 <translation id="4407807842708586359">Google Chrome OS</translation>
+<translation id="4427306783828095590">La protección mejorada es más eficaz para bloquear ataques de suplantación de identidad y software malicioso.</translation>
 <translation id="4450664632294415862">Chrome, inicio de sesión en la red, <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">Hay otra operación en curso en Google Chrome. Vuelve a intentarlo más tarde.</translation>
 <translation id="4480040274068703980">Chrome OS no ha podido sincronizar los datos debido a un error de inicio de sesión.</translation>
@@ -175,7 +177,6 @@ Puede que algunas funciones no estén disponibles. Especifica otro directorio de
 <translation id="5193136243808726294">Google Chrome OS no puede abrir esta página.</translation>
 <translation id="521447420733633466">Si compartes un dispositivo, tus amigos y familiares pueden navegar de forma independiente y configurar Chrome a su gusto.</translation>
 <translation id="5251420635869119124">Los invitados pueden utilizar Chrome sin dejar nada atrás.</translation>
-<translation id="5251679006894510177">La actualización ya casi ha terminado. Reinicia Chrome para completar la actualización. Las ventanas de incógnito no se volverán a abrir.</translation>
 <translation id="5334487786912937552">Chrome necesita el permiso de acceso al almacenamiento para descargar archivos</translation>
 <translation id="5386244825306882791">También controla qué página se muestra al iniciar Chrome o al hacer búsquedas desde el omnibox.</translation>
 <translation id="5394833366792865639">Compartir una pestaña de Chrome</translation>
@@ -248,6 +249,7 @@ Google Chrome no puede recuperar tu configuración.</translation>
 <translation id="7398801000654795464">Habías iniciado sesión en Chrome como <ph name="USER_EMAIL_ADDRESS" />. Utiliza la misma cuenta para volver a iniciar sesión.</translation>
 <translation id="7408085963519505752">Condiciones de Chrome OS</translation>
 <translation id="7419046106786626209">Chrome OS no ha podido sincronizar los datos porque la función de sincronización no está disponible para tu dominio.</translation>
+<translation id="7481213027396403996">Consigue la seguridad más potente de Chrome</translation>
 <translation id="7486227612705979895">Chrome accederá a tu Drive para mostrarte sugerencias en la barra de direcciones</translation>
 <translation id="7535429826459677826">Google Chrome Dev</translation>
 <translation id="7573289029918943991">Para comprobar si tu dispositivo está actualizado, ve a la <ph name="LINK_BEGIN" />configuración de Chrome OS<ph name="LINK_END" /></translation>
@@ -306,6 +308,8 @@ Google Chrome no puede recuperar tu configuración.</translation>
 <translation id="8862326446509486874">No dispones de los derechos necesarios para la instalación en el sistema. Intenta ejecutar de nuevo el programa de instalación como administrador.</translation>
 <translation id="8914504000324227558">Volver a iniciar Chrome</translation>
 <translation id="8922193594870374009">Para enviar un número desde <ph name="ORIGIN" /> a tu teléfono Android, inicia sesión en Chrome con ambos dispositivos.</translation>
+<translation id="8927704157641862988">Personaliza las opciones de privacidad que Chrome considera más importantes. En esta guía, no se incluyen todos los ajustes y opciones.</translation>
+<translation id="8983720963221508955">Has activado la función Navegación segura mejorada en tu cuenta. Habilítala ahora en Chrome.</translation>
 <translation id="8986207147630327271">Vas a añadir un perfil de trabajo a este navegador y le vas a dar a tu administrador el control únicamente sobre este perfil.</translation>
 <translation id="8999208279178790196">{0,plural, =0{Hay una actualización de Chrome disponible}=1{Hay una actualización de Chrome disponible}other{Hay una actualización de Chrome disponible desde hace # días}}</translation>
 <translation id="9026991721384951619">Chrome OS no ha podido sincronizar los datos porque la información de inicio de sesión de tu cuenta está obsoleta.</translation>

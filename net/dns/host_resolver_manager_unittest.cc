@@ -2642,8 +2642,73 @@ TEST_F(HostResolverManagerTest, IncludeCanonicalName) {
   EXPECT_THAT(
       response.request()->GetEndpointResults(),
       testing::Optional(testing::UnorderedElementsAre(ExpectEndpointResult(
-          testing::ElementsAre(CreateExpected("192.168.1.42", 80)),
-          "canon.name"))));
+          testing::ElementsAre(CreateExpected("192.168.1.42", 80))))));
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(testing::ElementsAre("canon.name")));
+
+  EXPECT_THAT(response_no_flag.result_error(), IsError(ERR_NAME_NOT_RESOLVED));
+}
+
+TEST_F(HostResolverManagerTest, IncludeCanonicalNameButNotReceived) {
+  proc_->AddRuleForAllFamilies("just.testing", "192.168.1.42",
+                               HOST_RESOLVER_CANONNAME);
+  proc_->SignalMultiple(2u);
+
+  HostResolver::ResolveHostParameters parameters;
+  parameters.include_canonical_name = true;
+  ResolveHostResponseHelper response(resolver_->CreateRequest(
+      HostPortPair("just.testing", 80), NetworkIsolationKey(),
+      NetLogWithSource(), parameters, resolve_context_.get(),
+      resolve_context_->host_cache()));
+  ResolveHostResponseHelper response_no_flag(resolver_->CreateRequest(
+      HostPortPair("just.testing", 80), NetworkIsolationKey(),
+      NetLogWithSource(), absl::nullopt, resolve_context_.get(),
+      resolve_context_->host_cache()));
+
+  EXPECT_THAT(response.result_error(), IsOk());
+  EXPECT_THAT(response.request()->GetAddressResults().value().endpoints(),
+              testing::ElementsAre(CreateExpected("192.168.1.42", 80)));
+  EXPECT_EQ("",
+            response.request()->GetAddressResults().value().GetCanonicalName());
+  EXPECT_THAT(
+      response.request()->GetEndpointResults(),
+      testing::Optional(testing::UnorderedElementsAre(ExpectEndpointResult(
+          testing::ElementsAre(CreateExpected("192.168.1.42", 80))))));
+  EXPECT_EQ(response.request()->GetDnsAliasResults(), absl::nullopt);
+
+  EXPECT_THAT(response_no_flag.result_error(), IsError(ERR_NAME_NOT_RESOLVED));
+}
+
+// If `ResolveHostParameters::include_canonical_name` is set, canonical name
+// should be returned exactly as received from the system resolver, without any
+// attempt to do URL hostname canonicalization on it.
+TEST_F(HostResolverManagerTest, IncludeCanonicalNameSkipsUrlCanonicalization) {
+  proc_->AddRuleForAllFamilies("just.testing", "192.168.1.42",
+                               HOST_RESOLVER_CANONNAME, "CANON.name");
+  proc_->SignalMultiple(2u);
+
+  HostResolver::ResolveHostParameters parameters;
+  parameters.include_canonical_name = true;
+  ResolveHostResponseHelper response(resolver_->CreateRequest(
+      HostPortPair("just.testing", 80), NetworkIsolationKey(),
+      NetLogWithSource(), parameters, resolve_context_.get(),
+      resolve_context_->host_cache()));
+  ResolveHostResponseHelper response_no_flag(resolver_->CreateRequest(
+      HostPortPair("just.testing", 80), NetworkIsolationKey(),
+      NetLogWithSource(), absl::nullopt, resolve_context_.get(),
+      resolve_context_->host_cache()));
+
+  EXPECT_THAT(response.result_error(), IsOk());
+  EXPECT_THAT(response.request()->GetAddressResults().value().endpoints(),
+              testing::ElementsAre(CreateExpected("192.168.1.42", 80)));
+  EXPECT_EQ("CANON.name",
+            response.request()->GetAddressResults().value().GetCanonicalName());
+  EXPECT_THAT(
+      response.request()->GetEndpointResults(),
+      testing::Optional(testing::UnorderedElementsAre(ExpectEndpointResult(
+          testing::ElementsAre(CreateExpected("192.168.1.42", 80))))));
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(testing::ElementsAre("CANON.name")));
 
   EXPECT_THAT(response_no_flag.result_error(), IsError(ERR_NAME_NOT_RESOLVED));
 }
@@ -3739,8 +3804,8 @@ DnsConfig CreateValidDnsConfig() {
   IPAddress dns_ip(192, 168, 1, 0);
   DnsConfig config;
   config.nameservers.push_back(IPEndPoint(dns_ip, dns_protocol::kDefaultPort));
-  config.dns_over_https_servers.push_back({DnsOverHttpsServerConfig(
-      "https://dns.example.com/", true /* use_post */)});
+  config.dns_over_https_servers.push_back(
+      *DnsOverHttpsServerConfig::FromString("https://dns.example.com/"));
   config.secure_dns_mode = SecureDnsMode::kOff;
   EXPECT_TRUE(config.IsValid());
   return config;
@@ -7406,32 +7471,6 @@ TEST_F(HostResolverManagerDnsTest, TtlNotSharedBetweenQtypes) {
   EXPECT_EQ(resolve_context_->host_cache()->size(), 0u);
 }
 
-TEST_F(HostResolverManagerDnsTest, NoCanonicalName) {
-  MockDnsClientRuleList rules;
-  AddDnsRule(&rules, "alias", dns_protocol::kTypeA, IPAddress::IPv4Localhost(),
-             "canonical", false /* delay */);
-  AddDnsRule(&rules, "alias", dns_protocol::kTypeAAAA,
-             IPAddress::IPv6Localhost(), "canonical", false /* delay */);
-
-  CreateResolver();
-  UseMockDnsClient(CreateValidDnsConfig(), std::move(rules));
-  set_allow_fallback_to_proctask(false);
-
-  ResolveHostResponseHelper response(resolver_->CreateRequest(
-      HostPortPair("alias", 80), NetworkIsolationKey(), NetLogWithSource(),
-      absl::nullopt, resolve_context_.get(), resolve_context_->host_cache()));
-  ASSERT_THAT(response.result_error(), IsOk());
-
-  // HostResolver may still give name, but if so, it must be correct.
-  std::string result_name =
-      response.request()->GetAddressResults().value().GetCanonicalName();
-  EXPECT_TRUE(result_name.empty() || result_name == "canonical");
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(ExpectEndpointResult(
-                  _, testing::AnyOf(IsEmpty(), "canonical"),
-                  testing::AnyOf(IsEmpty(), "canonical")))));
-}
-
 TEST_F(HostResolverManagerDnsTest, CanonicalName) {
   MockDnsClientRuleList rules;
   AddDnsRule(&rules, "alias", dns_protocol::kTypeA, IPAddress::IPv4Localhost(),
@@ -7444,7 +7483,6 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName) {
   set_allow_fallback_to_proctask(false);
 
   HostResolver::ResolveHostParameters params;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
   ResolveHostResponseHelper response(resolver_->CreateRequest(
       HostPortPair("alias", 80), NetworkIsolationKey(), NetLogWithSource(),
@@ -7453,9 +7491,8 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName) {
 
   EXPECT_EQ(response.request()->GetAddressResults().value().GetCanonicalName(),
             "canonical");
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "canonical", "canonical"))));
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(testing::ElementsAre("canonical", "alias")));
 }
 
 TEST_F(HostResolverManagerDnsTest, CanonicalName_PreferV6) {
@@ -7470,7 +7507,6 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName_PreferV6) {
   set_allow_fallback_to_proctask(false);
 
   HostResolver::ResolveHostParameters params;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
   ResolveHostResponseHelper response(resolver_->CreateRequest(
       HostPortPair("alias", 80), NetworkIsolationKey(), NetLogWithSource(),
@@ -7481,11 +7517,11 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName_PreferV6) {
   ASSERT_THAT(response.result_error(), IsOk());
   EXPECT_EQ(response.request()->GetAddressResults().value().GetCanonicalName(),
             "correct");
-  // TODO(crbug.com/1264933): Fix validation once separate cnames are wired by
-  // address family.
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "correct", "correct"))));
+
+  // GetDnsAliasResults() includes all aliases from all families.
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(
+                  testing::UnorderedElementsAre("correct", "alias", "wrong")));
 }
 
 TEST_F(HostResolverManagerDnsTest, CanonicalName_V4Only) {
@@ -7498,7 +7534,6 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName_V4Only) {
 
   HostResolver::ResolveHostParameters params;
   params.dns_query_type = DnsQueryType::A;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
   ResolveHostResponseHelper response(resolver_->CreateRequest(
       HostPortPair("alias", 80), NetworkIsolationKey(), NetLogWithSource(),
@@ -7506,11 +7541,8 @@ TEST_F(HostResolverManagerDnsTest, CanonicalName_V4Only) {
   ASSERT_THAT(response.result_error(), IsOk());
   EXPECT_EQ(response.request()->GetAddressResults().value().GetCanonicalName(),
             "correct");
-  // TODO(crbug.com/1264933): Fix validation once separate cnames are wired by
-  // address family.
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "correct", "correct"))));
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(testing::ElementsAre("correct", "alias")));
 }
 
 // Test that responses containing CNAME records but no address results are fine
@@ -7544,6 +7576,7 @@ TEST_F(HostResolverManagerDnsTest, CanonicalNameWithoutResults) {
       resolve_context_->host_cache()));
 
   ASSERT_THAT(response.result_error(), IsError(ERR_NAME_NOT_RESOLVED));
+  EXPECT_EQ(response.request()->GetDnsAliasResults(), absl::nullopt);
 
   // Underlying error should be the typical no-results error
   // (ERR_NAME_NOT_RESOLVED), not anything more exotic like
@@ -7617,9 +7650,8 @@ TEST_F(HostResolverManagerDnsTest, CanonicalNameForcesProc) {
 
   EXPECT_EQ(response.request()->GetAddressResults().value().GetCanonicalName(),
             "canonical");
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "canonical", "canonical"))));
+  EXPECT_THAT(response.request()->GetDnsAliasResults(),
+              testing::Optional(testing::ElementsAre("canonical")));
 }
 
 TEST_F(HostResolverManagerDnsTest, DnsAliases) {
@@ -7649,7 +7681,6 @@ TEST_F(HostResolverManagerDnsTest, DnsAliases) {
   UseMockDnsClient(CreateValidDnsConfig(), std::move(rules));
   set_allow_fallback_to_proctask(false);
   HostResolver::ResolveHostParameters params;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
 
   ResolveHostResponseHelper response(resolver_->CreateRequest(
@@ -7663,22 +7694,20 @@ TEST_F(HostResolverManagerDnsTest, DnsAliases) {
   EXPECT_THAT(response.request()->GetAddressResults().value().dns_aliases(),
               testing::ElementsAre("fourth.test", "third.test", "second.test",
                                    "first.test"));
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "fourth.test", "fourth.test"))));
 
   EXPECT_THAT(response.request()->GetDnsAliasResults(),
               testing::Optional(testing::ElementsAre(
                   "fourth.test", "third.test", "second.test", "first.test")));
 }
 
-TEST_F(HostResolverManagerDnsTest, DnsAliasesAreSanitized) {
+TEST_F(HostResolverManagerDnsTest, DnsAliasesAreFixedUp) {
   MockDnsClientRuleList rules;
 
   DnsResponse expected_A_response = BuildTestDnsResponse(
       "host.test", dns_protocol::kTypeA,
       {BuildTestAddressRecord("localhost", IPAddress::IPv4Localhost()),
-       BuildTestCnameRecord("host.test", "localhost")});
+       BuildTestCnameRecord("HOST2.test", "localhost"),
+       BuildTestCnameRecord("host.test", "HOST2.test")});
 
   AddDnsRule(&rules, "host.test", dns_protocol::kTypeA,
              std::move(expected_A_response), false /* delay */);
@@ -7686,7 +7715,8 @@ TEST_F(HostResolverManagerDnsTest, DnsAliasesAreSanitized) {
   DnsResponse expected_AAAA_response = BuildTestDnsResponse(
       "host.test", dns_protocol::kTypeAAAA,
       {BuildTestAddressRecord("localhost", IPAddress::IPv6Localhost()),
-       BuildTestCnameRecord("host.test", "localhost")});
+       BuildTestCnameRecord("HOST2.test", "localhost"),
+       BuildTestCnameRecord("host.test", "HOST2.test")});
 
   AddDnsRule(&rules, "host.test", dns_protocol::kTypeAAAA,
              std::move(expected_AAAA_response), false /* delay */);
@@ -7695,28 +7725,26 @@ TEST_F(HostResolverManagerDnsTest, DnsAliasesAreSanitized) {
   UseMockDnsClient(CreateValidDnsConfig(), std::move(rules));
   set_allow_fallback_to_proctask(false);
   HostResolver::ResolveHostParameters params;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
 
   ResolveHostResponseHelper response(resolver_->CreateRequest(
       HostPortPair("host.test", 80), NetworkIsolationKey(), NetLogWithSource(),
       params, resolve_context_.get(), resolve_context_->host_cache()));
 
-  // Verify that, while the AddressResults contain the full unsanitized alias
+  // Verify that, while the AddressResults contain the full unfixed alias
   // list (which has "localhost" has first element and canonical name i.e.
   // address record name), the call to ResolveHostRequest::GetDnsAliasResults
-  // returns a sanitized list.
+  // returns a fixed up list, including URL hostname canonicalization to
+  // uncapitalize "HOST.test".
   ASSERT_THAT(response.result_error(), IsOk());
   ASSERT_TRUE(response.request()->GetAddressResults());
   EXPECT_EQ(response.request()->GetAddressResults().value().GetCanonicalName(),
             "localhost");
   EXPECT_THAT(response.request()->GetAddressResults().value().dns_aliases(),
-              testing::ElementsAre("localhost", "host.test"));
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "localhost", "localhost"))));
-  EXPECT_THAT(response.request()->GetDnsAliasResults(),
-              testing::Optional(testing::ElementsAre("host.test")));
+              testing::ElementsAre("localhost", "HOST2.test", "host.test"));
+  EXPECT_THAT(
+      response.request()->GetDnsAliasResults(),
+      testing::Optional(testing::ElementsAre("host2.test", "host.test")));
 }
 
 TEST_F(HostResolverManagerDnsTest, NoAdditionalDnsAliases) {
@@ -7732,7 +7760,6 @@ TEST_F(HostResolverManagerDnsTest, NoAdditionalDnsAliases) {
   UseMockDnsClient(CreateValidDnsConfig(), std::move(rules));
   set_allow_fallback_to_proctask(false);
   HostResolver::ResolveHostParameters params;
-  params.include_canonical_name = true;
   params.source = HostResolverSource::DNS;
 
   ResolveHostResponseHelper response(resolver_->CreateRequest(
@@ -7745,9 +7772,6 @@ TEST_F(HostResolverManagerDnsTest, NoAdditionalDnsAliases) {
             "first.test");
   EXPECT_THAT(response.request()->GetAddressResults().value().dns_aliases(),
               testing::ElementsAre("first.test"));
-  EXPECT_THAT(response.request()->GetEndpointResults(),
-              testing::Optional(testing::ElementsAre(
-                  ExpectEndpointResult(_, "first.test", "first.test"))));
   EXPECT_THAT(response.request()->GetDnsAliasResults(),
               testing::Optional(testing::ElementsAre("first.test")));
 }
@@ -7864,8 +7888,7 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerAfterConfig) {
 
   std::string server("https://dnsserver.example.net/dns-query{?dns}");
   DnsConfigOverrides overrides;
-  overrides.dns_over_https_servers.emplace(
-      {DnsOverHttpsServerConfig(server, true)});
+  overrides.dns_over_https_servers.emplace(ParseDohTemplates({server}));
   overrides.secure_dns_mode = SecureDnsMode::kAutomatic;
   resolver_->SetDnsConfigOverrides(overrides);
   base::Value config = resolver_->GetDnsConfigAsValue();
@@ -7876,8 +7899,6 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerAfterConfig) {
   EXPECT_EQ(doh_servers->GetList().size(), 1u);
   base::Value& server_method = doh_servers->GetList()[0];
   EXPECT_TRUE(server_method.is_dict());
-  absl::optional<bool> use_post = server_method.FindBoolKey("use_post");
-  EXPECT_TRUE(use_post);
   const std::string* server_template =
       server_method.FindStringKey("server_template");
   EXPECT_TRUE(server_template);
@@ -7892,8 +7913,7 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerBeforeConfig) {
   CreateSerialResolver();  // To guarantee order of resolutions.
   std::string server("https://dnsserver.example.net/dns-query{?dns}");
   DnsConfigOverrides overrides;
-  overrides.dns_over_https_servers.emplace(
-      {DnsOverHttpsServerConfig(server, true)});
+  overrides.dns_over_https_servers.emplace(ParseDohTemplates({server}));
   overrides.secure_dns_mode = SecureDnsMode::kAutomatic;
   resolver_->SetDnsConfigOverrides(overrides);
 
@@ -7909,8 +7929,6 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerBeforeConfig) {
   EXPECT_EQ(doh_servers->GetList().size(), 1u);
   base::Value& server_method = doh_servers->GetList()[0];
   EXPECT_TRUE(server_method.is_dict());
-  absl::optional<bool> use_post = server_method.FindBoolKey("use_post");
-  EXPECT_TRUE(use_post);
   const std::string* server_template =
       server_method.FindStringKey("server_template");
   EXPECT_TRUE(server_template);
@@ -7925,8 +7943,7 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerBeforeClient) {
   CreateSerialResolver();  // To guarantee order of resolutions.
   std::string server("https://dnsserver.example.net/dns-query{?dns}");
   DnsConfigOverrides overrides;
-  overrides.dns_over_https_servers.emplace(
-      {DnsOverHttpsServerConfig(server, true)});
+  overrides.dns_over_https_servers.emplace(ParseDohTemplates({server}));
   overrides.secure_dns_mode = SecureDnsMode::kAutomatic;
   resolver_->SetDnsConfigOverrides(overrides);
 
@@ -7942,8 +7959,6 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerBeforeClient) {
   EXPECT_EQ(doh_servers->GetList().size(), 1u);
   base::Value& server_method = doh_servers->GetList()[0];
   EXPECT_TRUE(server_method.is_dict());
-  absl::optional<bool> use_post = server_method.FindBoolKey("use_post");
-  EXPECT_TRUE(use_post);
   const std::string* server_template =
       server_method.FindStringKey("server_template");
   EXPECT_TRUE(server_template);
@@ -7958,8 +7973,7 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerAndThenRemove) {
   CreateSerialResolver();  // To guarantee order of resolutions.
   std::string server("https://dns.example.com/");
   DnsConfigOverrides overrides;
-  overrides.dns_over_https_servers.emplace(
-      {DnsOverHttpsServerConfig(server, true)});
+  overrides.dns_over_https_servers.emplace(ParseDohTemplates({server}));
   overrides.secure_dns_mode = SecureDnsMode::kAutomatic;
   resolver_->SetDnsConfigOverrides(overrides);
 
@@ -7977,8 +7991,6 @@ TEST_F(HostResolverManagerDnsTest, AddDnsOverHttpsServerAndThenRemove) {
   EXPECT_EQ(doh_servers->GetList().size(), 1u);
   base::Value& server_method = doh_servers->GetList()[0];
   EXPECT_TRUE(server_method.is_dict());
-  absl::optional<bool> use_post = server_method.FindBoolKey("use_post");
-  EXPECT_TRUE(use_post);
   const std::string* server_template =
       server_method.FindStringKey("server_template");
   EXPECT_TRUE(server_template);
@@ -8059,8 +8071,8 @@ TEST_F(HostResolverManagerDnsTest, SetDnsConfigOverrides) {
   overrides.doh_attempts = doh_attempts;
   overrides.rotate = true;
   overrides.use_local_ipv6 = true;
-  const std::vector<DnsOverHttpsServerConfig> dns_over_https_servers = {
-      DnsOverHttpsServerConfig("dns.example.com", true)};
+  const auto dns_over_https_servers =
+      ParseDohTemplates({"https://dns.example.com/"});
   overrides.dns_over_https_servers = dns_over_https_servers;
   const SecureDnsMode secure_dns_mode = SecureDnsMode::kSecure;
   overrides.secure_dns_mode = secure_dns_mode;
@@ -8348,12 +8360,10 @@ TEST_F(HostResolverManagerDnsTest, DohMapping) {
 
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
   EXPECT_EQ(original_config.nameservers, fetched_config->nameservers);
-  std::vector<DnsOverHttpsServerConfig> expected_doh_servers = {
-      {"https://chrome.cloudflare-dns.com/dns-query", true /* use-post */},
-      {"https://doh.cleanbrowsing.org/doh/family-filter{?dns}",
-       false /* use_post */},
-      {"https://doh.cleanbrowsing.org/doh/security-filter{?dns}",
-       false /* use_post */}};
+  auto expected_doh_servers = ParseDohTemplates(
+      {"https://chrome.cloudflare-dns.com/dns-query",
+       "https://doh.cleanbrowsing.org/doh/family-filter{?dns}",
+       "https://doh.cleanbrowsing.org/doh/security-filter{?dns}"});
   EXPECT_EQ(expected_doh_servers, fetched_config->dns_over_https_servers);
 }
 
@@ -8442,9 +8452,8 @@ TEST_F(HostResolverManagerDnsTest, DohMappingWithExclusion) {
   // only for permitted providers.
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
   EXPECT_EQ(original_config.nameservers, fetched_config->nameservers);
-  std::vector<DnsOverHttpsServerConfig> expected_doh_servers = {
-      {"https://doh.cleanbrowsing.org/doh/family-filter{?dns}",
-       false /* use_post */}};
+  const auto expected_doh_servers = ParseDohTemplates(
+      {"https://doh.cleanbrowsing.org/doh/family-filter{?dns}"});
   EXPECT_EQ(expected_doh_servers, fetched_config->dns_over_https_servers);
 }
 
@@ -8465,8 +8474,8 @@ TEST_F(HostResolverManagerDnsTest, DohMappingIgnoredIfTemplateSpecified) {
 
   // If the overrides contains DoH servers, no DoH upgrade should be attempted.
   DnsConfigOverrides overrides;
-  const std::vector<DnsOverHttpsServerConfig> dns_over_https_servers_overrides =
-      {DnsOverHttpsServerConfig("doh.server.override.com", true)};
+  const auto dns_over_https_servers_overrides =
+      ParseDohTemplates({"https://doh.server.override.com/"});
   overrides.dns_over_https_servers = dns_over_https_servers_overrides;
   resolver_->SetDnsConfigOverrides(overrides);
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
@@ -8494,8 +8503,8 @@ TEST_F(HostResolverManagerDnsTest,
 
   // If the overrides contains DoH servers, no DoH upgrade should be attempted.
   DnsConfigOverrides overrides;
-  const std::vector<DnsOverHttpsServerConfig> dns_over_https_servers_overrides =
-      {DnsOverHttpsServerConfig("doh.server.override.com", true)};
+  const auto dns_over_https_servers_overrides =
+      ParseDohTemplates({"https://doh.server.override.com/"});
   overrides.dns_over_https_servers = dns_over_https_servers_overrides;
   resolver_->SetDnsConfigOverrides(overrides);
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
@@ -8524,12 +8533,10 @@ TEST_F(HostResolverManagerDnsTest, DohMappingWithAutomaticDot) {
 
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
   EXPECT_EQ(original_config.nameservers, fetched_config->nameservers);
-  std::vector<DnsOverHttpsServerConfig> expected_doh_servers = {
-      {"https://chrome.cloudflare-dns.com/dns-query", true /* use-post */},
-      {"https://doh.cleanbrowsing.org/doh/family-filter{?dns}",
-       false /* use_post */},
-      {"https://doh.cleanbrowsing.org/doh/security-filter{?dns}",
-       false /* use_post */}};
+  auto expected_doh_servers = ParseDohTemplates(
+      {"https://chrome.cloudflare-dns.com/dns-query",
+       "https://doh.cleanbrowsing.org/doh/family-filter{?dns}",
+       "https://doh.cleanbrowsing.org/doh/security-filter{?dns}"});
   EXPECT_EQ(expected_doh_servers, fetched_config->dns_over_https_servers);
 }
 
@@ -8554,8 +8561,8 @@ TEST_F(HostResolverManagerDnsTest, DohMappingWithStrictDot) {
   ChangeDnsConfig(original_config);
   const DnsConfig* fetched_config = client_ptr->GetEffectiveConfig();
   EXPECT_EQ(original_config.nameservers, fetched_config->nameservers);
-  std::vector<DnsOverHttpsServerConfig> expected_doh_servers = {
-      {"https://dns.google/dns-query{?dns}", false /* use_post */}};
+  const auto expected_doh_servers =
+      ParseDohTemplates({"https://dns.google/dns-query{?dns}"});
   EXPECT_EQ(expected_doh_servers, fetched_config->dns_over_https_servers);
 }
 
@@ -13862,6 +13869,348 @@ TEST_F(HostResolverManagerDnsTest, AvoidMulticastIgnoredWithDnsTask) {
       HostPortPair("ok", 80), NetworkIsolationKey(), NetLogWithSource(),
       parameters, resolve_context_.get(), resolve_context_->host_cache()));
   EXPECT_THAT(response.result_error(), IsOk());
+}
+
+class HostResolverManagerBootstrapTest : public HostResolverManagerDnsTest {
+ protected:
+  using MockResult = MockDnsClientRule::ResultType;
+
+  void SetUp() override {
+    HostResolverManagerDnsTest::SetUp();
+
+    // MockHostResolverProc only returns failure if there is at least one
+    // non-matching rule.
+    proc_->AddRuleForAllFamilies("other_name", {});
+    proc_->SignalMultiple(1u);  // Allow up to one proc query.
+
+    // The request host scheme and port are only preserved if the SVCB feature
+    // is enabled.
+    features.InitAndEnableFeature(features::kUseDnsHttpsSvcb);
+  }
+
+  const NetworkIsolationKey kIsolationKey;
+  const url::SchemeHostPort kEndpoint =
+      url::SchemeHostPort(url::kHttpsScheme, "bootstrap", 443);
+  const AddressList kCacheAddrs = AddressList::CreateFromIPAddressList(
+      {{0x20, 0x01, 0x0d, 0xb1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+       {192, 0, 2, 1}},
+      {});
+  const AddressList kBootstrapAddrs = AddressList::CreateFromIPAddressList(
+      {{0x20, 0x01, 0x0d, 0xb1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2},
+       {192, 0, 2, 2}},
+      {});
+  // The mock DNS client always returns localhost.
+  const AddressList kRemoteAddrs = AddressList::CreateFromIPAddressList(
+      {IPAddress::IPv6Localhost(), IPAddress::IPv4Localhost()},
+      {});
+
+  static HostResolver::ResolveHostParameters bootstrap_params() {
+    HostResolver::ResolveHostParameters params;
+    params.secure_dns_policy = SecureDnsPolicy::kBootstrap;
+    return params;
+  }
+
+  void ConfigureMockDns(MockResult insecure_result, MockResult secure_result) {
+    MockDnsClientRuleList rules;
+    AddDnsRule(&rules, kEndpoint.host(), dns_protocol::kTypeA, insecure_result,
+               /*delay=*/false);
+    AddDnsRule(&rules, kEndpoint.host(), dns_protocol::kTypeAAAA,
+               insecure_result, /*delay=*/false);
+    AddSecureDnsRule(&rules, kEndpoint.host(), dns_protocol::kTypeA,
+                     secure_result, /*delay=*/false);
+    AddSecureDnsRule(&rules, kEndpoint.host(), dns_protocol::kTypeAAAA,
+                     secure_result, /*delay=*/false);
+    UseMockDnsClient(CreateValidDnsConfig(), std::move(rules));
+    dns_client_->set_preset_endpoint(kEndpoint);
+  }
+
+  HostCache::Key MakeCacheKey(bool secure) {
+    HostCache::Key cache_key(kEndpoint, DnsQueryType::UNSPECIFIED, 0,
+                             HostResolverSource::ANY, kIsolationKey);
+    cache_key.secure = secure;
+    return cache_key;
+  }
+
+  void PopulateCache(bool secure) {
+    constexpr base::TimeDelta kTtl = base::Seconds(3600);
+    HostCache::Entry entry(OK, kCacheAddrs, HostCache::Entry::SOURCE_DNS, kTtl);
+    resolve_context_->host_cache()->Set(MakeCacheKey(secure), std::move(entry),
+                                        GetMockTickClock()->NowTicks(), kTtl);
+  }
+
+  base::test::ScopedFeatureList features;
+};
+
+std::vector<IPAddress> IPAddresses(const AddressList& addresses) {
+  std::vector<IPAddress> ip_addresses;
+  base::ranges::transform(addresses, std::back_inserter(ip_addresses),
+                          &IPEndPoint::address);
+  return ip_addresses;
+}
+
+MATCHER_P(AddressesMatch, expected, "Matches addresses between AddressLists") {
+  return testing::Matches(testing::UnorderedElementsAreArray(
+      IPAddresses(expected)))(IPAddresses(arg));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, BlankSlate) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kOk,
+                   /*secure_result=*/MockResult::kUnexpected);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_FALSE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kRemoteAddrs)));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, InsecureCacheEntry) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kUnexpected);
+  PopulateCache(/*secure=*/false);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kCacheAddrs)));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, SecureCacheEntry) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kUnexpected);
+  PopulateCache(/*secure=*/true);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kCacheAddrs)));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, OnlyBootstrap) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kOk);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  // Run the followup query.
+  RunUntilIdle();
+
+  // Confirm that the remote addresses are now in the secure cache.
+  const auto* secure_result = resolve_context_->host_cache()->Lookup(
+      MakeCacheKey(/*secure=*/true), GetMockTickClock()->NowTicks());
+  ASSERT_THAT(secure_result, testing::NotNull());
+  EXPECT_THAT(secure_result->second.addresses(),
+              Optional(AddressesMatch(kRemoteAddrs)));
+}
+
+// The insecure cache is ignored, so the results are identical to
+// OnlyBootstrap.
+TEST_F(HostResolverManagerBootstrapTest, BootstrapAndInsecureCache) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kOk);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+  PopulateCache(/*secure=*/false);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  // Run the followup query.
+  RunUntilIdle();
+
+  // Confirm that the remote addresses are now in the secure cache.
+  const auto* secure_result = resolve_context_->host_cache()->Lookup(
+      MakeCacheKey(/*secure=*/true), GetMockTickClock()->NowTicks());
+  ASSERT_THAT(secure_result, testing::NotNull());
+  EXPECT_THAT(secure_result->second.addresses(),
+              Optional(AddressesMatch(kRemoteAddrs)));
+}
+
+// The bootstrap addrs are ignored, so the results are identical to
+// SecureCacheEntry.
+TEST_F(HostResolverManagerBootstrapTest, BootstrapAndSecureCacheEntry) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kUnexpected);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+  PopulateCache(/*secure=*/true);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kCacheAddrs)));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, BlankSlateFailure) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kFail,
+                   /*secure_result=*/MockResult::kUnexpected);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_FALSE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(),
+              IsError(ERR_NAME_NOT_RESOLVED));
+  EXPECT_FALSE(bootstrap_response.request()
+                   ->GetResolveErrorInfo()
+                   .is_secure_network_error);
+}
+
+TEST_F(HostResolverManagerBootstrapTest, BootstrapFollowupFailure) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kFail);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response.complete());
+  EXPECT_THAT(bootstrap_response.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  // Run the followup query.
+  RunUntilIdle();
+
+  // Confirm that the secure cache remains empty.
+  const auto* secure_result = resolve_context_->host_cache()->Lookup(
+      MakeCacheKey(/*secure=*/true), GetMockTickClock()->NowTicks());
+  EXPECT_THAT(secure_result, testing::IsNull());
+}
+
+TEST_F(HostResolverManagerBootstrapTest, ContextClose) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kOk);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  // Trigger a followup request.
+  ResolveHostResponseHelper bootstrap_response(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  // Deregistering the resolve context should clean up the pending followup job.
+  EXPECT_EQ(1u, resolver_->num_jobs_for_testing());
+  resolver_->DeregisterResolveContext(resolve_context_.get());
+  EXPECT_EQ(0u, resolver_->num_jobs_for_testing());
+
+  resolver_ = nullptr;  // Avoid duplicate Deregister in TearDown.
+}
+
+// Equivalent to OnlyBootstrap + BootstrapAndSecureCacheEntry
+TEST_F(HostResolverManagerBootstrapTest, BootstrapAfterFollowup) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kOk);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  // Run bootstrap and its followup query.
+  ResolveHostResponseHelper bootstrap_response1(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+  RunUntilIdle();
+
+  // The remote addresses are now in the secure cache.
+  // Rerun bootstrap, which reads the secure cache results.
+  ResolveHostResponseHelper bootstrap_response2(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response2.complete());
+  EXPECT_THAT(bootstrap_response2.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response2.request()->GetAddressResults(),
+              Optional(AddressesMatch(kRemoteAddrs)));
+}
+
+TEST_F(HostResolverManagerBootstrapTest, BootstrapFollowupFailureTwice) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kFail);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  // Run the bootstrap query and the followup, which will fail.
+  ResolveHostResponseHelper bootstrap_response1(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+  RunUntilIdle();
+
+  // Reissue the bootstrap query.
+  ResolveHostResponseHelper bootstrap_response2(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response2.complete());
+  EXPECT_THAT(bootstrap_response2.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response2.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  // Run the followup query again.
+  RunUntilIdle();
+
+  // Confirm that the secure cache remains empty.
+  const auto* secure_result = resolve_context_->host_cache()->Lookup(
+      MakeCacheKey(/*secure=*/true), GetMockTickClock()->NowTicks());
+  EXPECT_THAT(secure_result, testing::IsNull());
+}
+
+TEST_F(HostResolverManagerBootstrapTest, OnlyBootstrapTwice) {
+  ConfigureMockDns(/*insecure_result=*/MockResult::kUnexpected,
+                   /*secure_result=*/MockResult::kOk);
+  dns_client_->set_preset_addrs(kBootstrapAddrs);
+
+  ResolveHostResponseHelper bootstrap_response1(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response1.complete());
+  EXPECT_THAT(bootstrap_response1.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response1.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  ResolveHostResponseHelper bootstrap_response2(resolver_->CreateRequest(
+      kEndpoint, kIsolationKey, NetLogWithSource(), bootstrap_params(),
+      resolve_context_.get(), resolve_context_->host_cache()));
+
+  EXPECT_TRUE(bootstrap_response2.complete());
+  EXPECT_THAT(bootstrap_response2.result_error(), IsOk());
+  EXPECT_THAT(bootstrap_response2.request()->GetAddressResults(),
+              Optional(AddressesMatch(kBootstrapAddrs)));
+
+  // Run the followup query.
+  RunUntilIdle();
+
+  // Confirm that the remote addresses are now in the secure cache.
+  const auto* secure_result = resolve_context_->host_cache()->Lookup(
+      MakeCacheKey(/*secure=*/true), GetMockTickClock()->NowTicks());
+  ASSERT_THAT(secure_result, testing::NotNull());
+  EXPECT_THAT(secure_result->second.addresses(),
+              Optional(AddressesMatch(kRemoteAddrs)));
 }
 
 }  // namespace net

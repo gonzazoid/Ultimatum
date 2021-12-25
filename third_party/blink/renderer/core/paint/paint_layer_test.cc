@@ -188,9 +188,6 @@ TEST_P(PaintLayerTest, SticksToScrollerStickyPositionInsideScroller) {
 }
 
 TEST_P(PaintLayerTest, CompositedScrollingNoNeedsRepaint) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   SetBodyInnerHTML(R"HTML(
     <div id='scroll' style='width: 100px; height: 100px; overflow: scroll;
         will-change: transform'>
@@ -200,10 +197,8 @@ TEST_P(PaintLayerTest, CompositedScrollingNoNeedsRepaint) {
   )HTML");
 
   PaintLayer* scroll_layer = GetPaintLayerByElementId("scroll");
-  EXPECT_EQ(kPaintsIntoOwnBacking, scroll_layer->GetCompositingState());
 
   PaintLayer* content_layer = GetPaintLayerByElementId("content");
-  EXPECT_EQ(kNotComposited, content_layer->GetCompositingState());
   EXPECT_EQ(PhysicalOffset(), content_layer->LocationWithoutPositionOffset());
 
   scroll_layer->GetScrollableArea()->SetScrollOffset(
@@ -237,10 +232,8 @@ TEST_P(PaintLayerTest, NonCompositedScrollingNeedsRepaint) {
                    .PaintProperties()
                    ->ScrollTranslation()
                    ->HasDirectCompositingReasons());
-  EXPECT_EQ(kNotComposited, scroll_layer->GetCompositingState());
 
   PaintLayer* content_layer = GetPaintLayerByElementId("content");
-  EXPECT_EQ(kNotComposited, scroll_layer->GetCompositingState());
   EXPECT_EQ(PhysicalOffset(), content_layer->LocationWithoutPositionOffset());
 
   scroll_layer->GetScrollableArea()->SetScrollOffset(
@@ -1280,13 +1273,6 @@ TEST_P(PaintLayerTest, CompositingContainerStackedFloatUnderStackingInline) {
 
   PaintLayer* target = GetPaintLayerByElementId("target");
   EXPECT_EQ(GetPaintLayerByElementId("span"), target->CompositingContainer());
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-  }
 }
 
 TEST_P(PaintLayerTest, CompositingContainerColumnSpanAll) {
@@ -1323,13 +1309,6 @@ TEST_P(PaintLayerTest,
   PaintLayer* target = GetPaintLayerByElementId("target");
   PaintLayer* span = GetPaintLayerByElementId("span");
   EXPECT_EQ(span, target->CompositingContainer());
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(span,
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-  }
 }
 
 TEST_P(PaintLayerTest, CompositingContainerNonStackedFloatUnderStackingInline) {
@@ -1350,13 +1329,6 @@ TEST_P(PaintLayerTest, CompositingContainerNonStackedFloatUnderStackingInline) {
   } else {
     EXPECT_EQ(GetPaintLayerByElementId("containingBlock"),
               target->CompositingContainer());
-  }
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
   }
 }
 
@@ -1380,18 +1352,6 @@ TEST_P(PaintLayerTest,
     EXPECT_EQ(GetPaintLayerByElementId("containingBlock"),
               target->CompositingContainer());
   }
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    if (RuntimeEnabledFeatures::LayoutNGEnabled()) {
-      EXPECT_EQ(GetPaintLayerByElementId("span"),
-                target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-    } else {
-      EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-                target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-    }
-  }
 }
 
 TEST_P(PaintLayerTest,
@@ -1411,13 +1371,6 @@ TEST_P(PaintLayerTest,
 
   PaintLayer* target = GetPaintLayerByElementId("target");
   EXPECT_EQ(GetPaintLayerByElementId("span"), target->CompositingContainer());
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-  }
 }
 
 TEST_P(PaintLayerTest,
@@ -1438,13 +1391,6 @@ TEST_P(PaintLayerTest,
   PaintLayer* target = GetPaintLayerByElementId("target");
   PaintLayer* span = GetPaintLayerByElementId("span");
   EXPECT_EQ(span, target->CompositingContainer());
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(span,
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-  }
 }
 
 TEST_P(PaintLayerTest,
@@ -1469,13 +1415,6 @@ TEST_P(PaintLayerTest,
     EXPECT_EQ(GetPaintLayerByElementId("containingBlock"),
               target->CompositingContainer());
   }
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-  }
 }
 
 TEST_P(PaintLayerTest,
@@ -1499,18 +1438,6 @@ TEST_P(PaintLayerTest,
   } else {
     EXPECT_EQ(GetPaintLayerByElementId("containingBlock"),
               target->CompositingContainer());
-  }
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    if (RuntimeEnabledFeatures::LayoutNGEnabled()) {
-      EXPECT_EQ(GetPaintLayerByElementId("span"),
-                target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-    } else {
-      EXPECT_EQ(GetPaintLayerByElementId("compositedContainer"),
-                target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
-    }
   }
 }
 
@@ -1888,15 +1815,6 @@ TEST_P(PaintLayerTest, CompositingContainerFloatingIframe) {
   } else {
     EXPECT_EQ(GetPaintLayerByElementId("containingBlock"),
               target->CompositingContainer());
-  }
-  PaintLayer* composited_container =
-      GetPaintLayerByElementId("compositedContainer");
-
-  // enclosingLayerWithCompositedLayerMapping is not needed or applicable to
-  // CAP.
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    EXPECT_EQ(composited_container,
-              target->EnclosingLayerWithCompositedLayerMapping(kExcludeSelf));
   }
 }
 
@@ -2596,83 +2514,6 @@ TEST_P(PaintLayerTest, InlineWithBackdropFilterHasPaintLayer) {
   EXPECT_NE(nullptr, paint_layer);
 }
 
-TEST_P(PaintLayerTest, DirectCompositingReasonsCrossingFrameBoundaries) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-  SetBodyInnerHTML(R"HTML(
-    <iframe></iframe>
-  )HTML");
-  SetChildFrameHTML(R"HTML(
-    <div id=target style="position: relative"></div>
-  )HTML");
-  UpdateAllLifecyclePhasesForTest();
-
-  PaintLayer* target =
-      To<LayoutBoxModelObject>(
-          ChildDocument().getElementById("target")->GetLayoutObject())
-          ->Layer();
-
-  EXPECT_EQ(
-      GetDocument().View()->GetLayoutView()->Layer(),
-      target->EnclosingDirectlyCompositableLayerCrossingFrameBoundaries());
-}
-
-TEST_P(PaintLayerTest,
-       DirectCompositingReasonsCrossingFrameBoundariesCompositedIframe) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-  SetBodyInnerHTML(R"HTML(
-    <iframe id="iframe" style="will-change: transform";></iframe>
-  )HTML");
-  SetChildFrameHTML(R"HTML(
-    <div id=target style="position: relative"></div>
-  )HTML");
-  UpdateAllLifecyclePhasesForTest();
-
-  PaintLayer* target =
-      To<LayoutBoxModelObject>(
-          ChildDocument().getElementById("target")->GetLayoutObject())
-          ->Layer();
-
-  PaintLayer* iframe =
-      To<LayoutBoxModelObject>(
-          GetDocument().getElementById("iframe")->GetLayoutObject())
-          ->Layer();
-
-  EXPECT_EQ(
-      iframe,
-      target->EnclosingDirectlyCompositableLayerCrossingFrameBoundaries());
-}
-
-TEST_P(PaintLayerTest,
-       DirectCompositingReasonsCrossingFrameBoundariesCompositedParent) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-  SetBodyInnerHTML(R"HTML(
-    <iframe></iframe>
-  )HTML");
-  SetChildFrameHTML(R"HTML(
-    <div id="parent" style="will-change: transform">
-      <div id=target style="position: relative"></div>
-    </div>
-  )HTML");
-  UpdateAllLifecyclePhasesForTest();
-
-  PaintLayer* target =
-      To<LayoutBoxModelObject>(
-          ChildDocument().getElementById("target")->GetLayoutObject())
-          ->Layer();
-
-  PaintLayer* parent =
-      To<LayoutBoxModelObject>(
-          ChildDocument().getElementById("parent")->GetLayoutObject())
-          ->Layer();
-
-  EXPECT_EQ(
-      parent,
-      target->EnclosingDirectlyCompositableLayerCrossingFrameBoundaries());
-}
-
 TEST_P(PaintLayerTest, GlobalRootScrollerHitTest) {
   SetBodyInnerHTML(R"HTML(
     <style>
@@ -2710,19 +2551,6 @@ TEST_P(PaintLayerTest, GlobalRootScrollerHitTest) {
     EXPECT_EQ(result_scrollbar.InnerNode(), &GetDocument());
     EXPECT_NE(result_scrollbar.GetScrollbar(), nullptr);
   }
-}
-
-TEST_P(PaintLayerTest, HasNonEmptyChildLayoutObjectsZeroSizeOverflowVisible) {
-  SetBodyInnerHTML(R"HTML(
-    <div id="layer" style="position: relative">
-      <div style="overflow: visible; height: 0; width: 0">text</div>
-    </div>
-  )HTML");
-
-  auto* layer = GetPaintLayerByElementId("layer");
-  EXPECT_TRUE(layer->HasVisibleContent());
-  EXPECT_FALSE(layer->HasVisibleDescendant());
-  EXPECT_TRUE(layer->HasNonEmptyChildLayoutObjects());
 }
 
 TEST_P(PaintLayerTest, AddLayerNeedsRepaintAndCullRectUpdate) {

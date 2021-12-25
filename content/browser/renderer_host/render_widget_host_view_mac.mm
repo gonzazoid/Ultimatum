@@ -1108,6 +1108,16 @@ bool RenderWidgetHostViewMac::GetCachedFirstRectForCharacterRange(
     DCHECK(GetFocusedWidget());
     if (actual_range)
       *actual_range = requested_range;
+
+    // Check selection bounds first (currently populated only for EditContext)
+    const absl::optional<gfx::Rect> text_selection_bound =
+        GetTextInputManager()->GetTextSelectionBounds();
+    if (text_selection_bound) {
+      *rect = text_selection_bound.value();
+      return true;
+    }
+
+    // If no selection bounds, fall back to use selection region.
     *rect = GetTextInputManager()
                 ->GetSelectionRegion(GetFocusedWidget()->GetView())
                 ->caret_rect;
@@ -1164,6 +1174,12 @@ void RenderWidgetHostViewMac::FocusedNodeChanged(
     NSRect bounds = NSRectFromCGRect(node_bounds_in_screen.ToCGRect());
     UAZoomChangeFocus(&bounds, NULL, kUAZoomFocusTypeOther);
   }
+}
+
+void RenderWidgetHostViewMac::ClearFallbackSurfaceForCommitPending() {
+  browser_compositor_->GetDelegatedFrameHost()
+      ->ClearFallbackSurfaceForCommitPending();
+  browser_compositor_->InvalidateLocalSurfaceIdOnEviction();
 }
 
 void RenderWidgetHostViewMac::ResetFallbackToFirstNavigationSurface() {

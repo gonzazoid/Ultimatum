@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">このサイトと Chrome にログインしてください。同期は後でオンにできます。</translation>
 <translation id="424864128008805179">Chrome からログアウトしますか？</translation>
 <translation id="4249068189593983585">Chrome の使い方のヒント: タブのオプションをさらに表示するには、画面の下部または上部のツールバーにある [タブを表示] を長押しします。</translation>
-<translation id="4267862249323750454">パスワードは <ph name="BEGIN_LINK" />Google パスワード マネージャー<ph name="END_LINK" />に保存され、どのデバイスからでも使用できます。</translation>
 <translation id="4523886039239821078">アドオンが原因でChromeがクラッシュしました。次をアンインストールしてください:</translation>
 <translation id="4633328489441962921">Chrome でアップデートを確認できません</translation>
 <translation id="4698415050768537821">Chrome ですべてのパスワードを確認できませんでした。明日もう一度お試しいただくか、<ph name="BEGIN_LINK" />Google アカウント内のパスワードをご確認ください<ph name="END_LINK" />。</translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Google Chrome でいつでも安全にブラウジング</translation>
 <translation id="8772179140489533211">Chrome へのログインを促すメッセージが表示されます。</translation>
+<translation id="8788269841521769222">このパスワードを覚えておく必要はありません。パスワードは、<ph name="EMAIL" /> の Google パスワード マネージャーに保存されます</translation>
 <translation id="9112744793181547300">Chrome を既定に設定しますか？</translation>
 </translationbundle>

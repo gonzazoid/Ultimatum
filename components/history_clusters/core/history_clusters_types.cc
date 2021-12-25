@@ -6,14 +6,6 @@
 
 namespace history_clusters {
 
-Visit::Visit() = default;
-Visit::~Visit() = default;
-Visit::Visit(const Visit&) = default;
-
-Cluster::Cluster() = default;
-Cluster::~Cluster() = default;
-Cluster::Cluster(const Cluster&) = default;
-
 QueryClustersResult::QueryClustersResult() = default;
 QueryClustersResult::~QueryClustersResult() = default;
 QueryClustersResult::QueryClustersResult(const QueryClustersResult&) = default;

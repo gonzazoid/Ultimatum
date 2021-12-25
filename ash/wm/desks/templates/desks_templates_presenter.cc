@@ -25,6 +25,7 @@
 namespace ash {
 
 namespace {
+
 DesksTemplatesPresenter* g_instance = nullptr;
 
 // The amount of time for which the launch template toasts will remain
@@ -37,7 +38,6 @@ constexpr char kMaximumDeskLaunchTemplateToastName[] =
 
 // Helper to get the desk model from the shell delegate. Should always return a
 // usable desk model, either from chrome sync, or a local storage.
-// TODO(sammiequon): Investigate if we can cache this.
 desks_storage::DeskModel* GetDeskModel() {
   auto* desk_model = Shell::Get()->desks_templates_delegate()->GetDeskModel();
   DCHECK(desk_model);
@@ -97,6 +97,14 @@ void DesksTemplatesPresenter::UpdateDesksTemplatesUI() {
       Shell::Get()->tablet_mode_controller()->InTabletMode();
   should_show_templates_ui_ = !in_tablet_mode && GetEntryCount() > 0u;
   for (auto& overview_grid : overview_session_->grid_list()) {
+    if (!should_show_templates_ui_ &&
+        overview_grid->IsShowingDesksTemplatesGrid()) {
+      // When deleting, it is possible to delete the last template. In this
+      // case, close the template grid and go back to overview.
+      overview_grid->HideDesksTemplatesGrid(/*exit_overview=*/false);
+      continue;
+    }
+
     if (DesksBarView* desks_bar_view =
             const_cast<DesksBarView*>(overview_grid->desks_bar_view())) {
       // When templates is enabled but templates haven't loaded, the templates
@@ -105,18 +113,7 @@ void DesksTemplatesPresenter::UpdateDesksTemplatesUI() {
       desks_bar_view->UpdateDesksTemplatesButtonVisibility();
       desks_bar_view->UpdateButtonsForDesksTemplatesGrid();
       desks_bar_view->Layout();
-    }
-
-    overview_grid->UpdateSaveDeskAsTemplateButton();
-
-    if (!overview_grid->IsShowingDesksTemplatesGrid())
-      continue;
-
-    if (!should_show_templates_ui_) {
-      // When deleting, it is possible to delete the last template. In this
-      // case, close the template grid and go back to overview.
-      overview_grid->HideDesksTemplatesGrid(/*exit_overview=*/false);
-      continue;
+      overview_grid->UpdateSaveDeskAsTemplateButton();
     }
   }
 }
@@ -184,10 +181,20 @@ void DesksTemplatesPresenter::SaveOrUpdateDeskTemplate(
                      weak_ptr_factory_.GetWeakPtr(), is_update));
 }
 
-void DesksTemplatesPresenter::DeskModelLoaded() {}
-
 void DesksTemplatesPresenter::OnDeskModelDestroying() {
   desk_model_observation_.Reset();
+}
+
+void DesksTemplatesPresenter::EntriesAddedOrUpdatedRemotely(
+    const std::vector<const DeskTemplate*>& new_entries) {
+  if (overview_session_->IsShowingDesksTemplatesGrid())
+    GetAllEntries();
+}
+
+void DesksTemplatesPresenter::EntriesRemovedRemotely(
+    const std::vector<std::string>& uuids) {
+  if (overview_session_->IsShowingDesksTemplatesGrid())
+    GetAllEntries();
 }
 
 void DesksTemplatesPresenter::OnGetAllEntries(
@@ -221,8 +228,6 @@ void DesksTemplatesPresenter::OnDeleteEntry(
 
   RecordDeleteTemplateHistogram();
   GetAllEntries();
-
-  UpdateDesksTemplatesUI();
 }
 
 void DesksTemplatesPresenter::OnGetTemplateForDeskLaunch(
@@ -253,18 +258,17 @@ void DesksTemplatesPresenter::OnAddOrUpdateEntry(
   if (status != desks_storage::DeskModel::AddOrUpdateEntryStatus::kOk)
     return;
 
-  const auto& grid_list = overview_session_->grid_list();
-  DCHECK(!grid_list.empty());
-
   // If the templates grid is already shown, just update the entries.
-  if (grid_list[0]->IsShowingDesksTemplatesGrid()) {
+  if (overview_session_->IsShowingDesksTemplatesGrid()) {
     GetAllEntries();
     return;
   }
 
   // Update the button here in case it has been disabled.
+  const auto& grid_list = overview_session_->grid_list();
+  DCHECK(!grid_list.empty());
   overview_session_->ShowDesksTemplatesGrids(
-      grid_list[0]->desks_bar_view()->IsZeroState());
+      grid_list.front()->desks_bar_view()->IsZeroState());
   for (auto& overview_grid : grid_list)
     overview_grid->UpdateSaveDeskAsTemplateButton();
 

@@ -77,6 +77,8 @@ PASS oldChildWindow.navigator.virtualKeyboard.boundingRect.y is newChildWindow.n
 PASS oldChildWindow.navigator.virtualKeyboard.ongeometrychange is newChildWindow.navigator.virtualKeyboard.ongeometrychange
 PASS oldChildWindow.navigator.virtualKeyboard.overlaysContent is newChildWindow.navigator.virtualKeyboard.overlaysContent
 PASS oldChildWindow.navigator.webdriver is newChildWindow.navigator.webdriver
+PASS oldChildWindow.navigator.windowControlsOverlay.ongeometrychange is newChildWindow.navigator.windowControlsOverlay.ongeometrychange
+PASS oldChildWindow.navigator.windowControlsOverlay.visible is newChildWindow.navigator.windowControlsOverlay.visible
 PASS oldChildWindow.navigator.xr.ondevicechange is newChildWindow.navigator.xr.ondevicechange
 PASS oldChildWindow.onabort is newChildWindow.onabort
 PASS oldChildWindow.onafterprint is newChildWindow.onafterprint
@@ -96,7 +98,9 @@ PASS oldChildWindow.oncanplaythrough is newChildWindow.oncanplaythrough
 PASS oldChildWindow.onchange is newChildWindow.onchange
 PASS oldChildWindow.onclick is newChildWindow.onclick
 PASS oldChildWindow.onclose is newChildWindow.onclose
+PASS oldChildWindow.oncontextlost is newChildWindow.oncontextlost
 PASS oldChildWindow.oncontextmenu is newChildWindow.oncontextmenu
+PASS oldChildWindow.oncontextrestored is newChildWindow.oncontextrestored
 PASS oldChildWindow.oncuechange is newChildWindow.oncuechange
 PASS oldChildWindow.ondblclick is newChildWindow.ondblclick
 PASS oldChildWindow.ondevicemotion is newChildWindow.ondevicemotion

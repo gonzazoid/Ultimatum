@@ -35,6 +35,7 @@ CRWSessionStorage* SessionStorageBuilder::BuildStorage(
   DCHECK_EQ(&web_state, navigation_manager.GetWebState());
 
   CRWSessionStorage* session_storage = [[CRWSessionStorage alloc] init];
+  session_storage.stableIdentifier = web_state.GetStableIdentifier();
   session_storage.hasOpener = web_state.HasOpener();
   session_storage.lastCommittedItemIndex =
       navigation_manager.GetLastCommittedItemIndex();
@@ -81,9 +82,7 @@ CRWSessionStorage* SessionStorageBuilder::BuildStorage(
   const SerializableUserDataManager* user_data_manager =
       SerializableUserDataManager::FromWebState(&web_state);
   if (user_data_manager) {
-    [session_storage
-        setSerializableUserData:user_data_manager
-                                    ->CreateSerializableUserData()];
+    session_storage.userData = user_data_manager->GetUserDataForSession();
   }
   session_storage.userAgentType = web_state.GetUserAgentForSessionRestoration();
 
@@ -126,7 +125,7 @@ void SessionStorageBuilder::ExtractSessionState(
   web_state.SetSessionCertificatePolicyCacheImpl(std::move(cert_policy_cache));
 
   SerializableUserDataManager::FromWebState(&web_state)
-      ->AddSerializableUserData(session_storage.userData);
+      ->SetUserDataFromSession(session_storage.userData);
   UserAgentType user_agent_type = session_storage.userAgentType;
   web_state.SetUserAgent(user_agent_type);
 }

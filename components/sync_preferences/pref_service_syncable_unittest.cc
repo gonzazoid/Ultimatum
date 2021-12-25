@@ -381,11 +381,11 @@ class TestPrefModelAssociatorClient : public PrefModelAssociatorClient {
     return is_dict_pref_;
   }
 
-  std::unique_ptr<base::Value> MaybeMergePreferenceValues(
+  base::Value MaybeMergePreferenceValues(
       const std::string& pref_name,
       const base::Value& local_value,
       const base::Value& server_value) const override {
-    return nullptr;
+    return base::Value();
   }
 
   void SetIsDictPref(bool is_dict_pref) { is_dict_pref_ = is_dict_pref; }
@@ -400,6 +400,7 @@ class PrefServiceSyncableMergeTest : public testing::Test {
       : prefs_(
             std::unique_ptr<PrefNotifierImpl>(pref_notifier_),
             std::make_unique<PrefValueStore>(managed_prefs_.get(),
+                                             new TestingPrefStore,
                                              new TestingPrefStore,
                                              new TestingPrefStore,
                                              new TestingPrefStore,
@@ -933,8 +934,9 @@ class PrefServiceSyncableChromeOsTest : public testing::Test {
         std::unique_ptr<PrefNotifierImpl>(pref_notifier_),
         std::make_unique<PrefValueStore>(
             new TestingPrefStore, new TestingPrefStore, new TestingPrefStore,
-            new TestingPrefStore, user_prefs_.get(), new TestingPrefStore,
-            pref_registry_->defaults().get(), pref_notifier_),
+            new TestingPrefStore, new TestingPrefStore, user_prefs_.get(),
+            new TestingPrefStore, pref_registry_->defaults().get(),
+            pref_notifier_),
         user_prefs_, pref_registry_, &client_,
         /*read_error_callback=*/base::DoNothing(),
         /*async=*/false);

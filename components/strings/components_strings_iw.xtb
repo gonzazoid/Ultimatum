@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">הצעה זמינה</translation>
 <translation id="1312803275555673949">האם קיימות ראיות תומכות?</translation>
 <translation id="131405271941274527">‏<ph name="URL" /> רוצה לשלוח ולקבל מידע אחרי כל הקשה של מספר הטלפון שלך במכשיר NFC</translation>
+<translation id="1314311879718644478">הצגת תוכן של מציאות רבודה</translation>
 <translation id="1314509827145471431">כריכה בקצה הימני</translation>
 <translation id="1318023360584041678">הפריט נשמר בקבוצת הכרטיסיות</translation>
 <translation id="1319245136674974084">לא צריך לשאול יותר לגבי האפליקציה הזו</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">הצגת יותר מידע</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">רוצה לאתר את גרסת הדפדפן? יש לעבור לכתובת</translation>
 <translation id="1476595624592550506">עליך לשנות את הסיסמה</translation>
 <translation id="1483493594462132177">שליחה</translation>
 <translation id="1484290072879560759">בחירת כתובת למשלוח</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">משהו השתבש בעת הצגת דף אינטרנט זה.</translation>
 <translation id="1586541204584340881">אילו תוספים התקנת.</translation>
 <translation id="1588438908519853928">רגיל</translation>
+<translation id="1589050138437146318">‏להתקין את ARCore?</translation>
 <translation id="1592005682883173041">גישה לנתונים מקומיים</translation>
 <translation id="1594030484168838125">בחירה</translation>
 <translation id="160851722280695521">‏הפעלת המשחק Dino Run ב-Chrome</translation>
@@ -1263,6 +1266,7 @@ Del</translation>
 <translation id="4968522289500246572">האפליקציה מיועדת לנייד וייתכן ששינוי הגודל שלה לא יפעל כראוי. עשויות להיות בעיות באפליקציה או שהיא תופעל מחדש.</translation>
 <translation id="4969341057194253438">מחיקת ההקלטה</translation>
 <translation id="4973922308112707173">שני ניקובים בחלק העליון</translation>
+<translation id="4976702386844183910">הכניסה האחרונה: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">להשתמש במיקרופון?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)‎</translation>
 <translation id="4989163558385430922">אני רוצה לראות הכול</translation>
@@ -1348,6 +1352,7 @@ Del</translation>
 <translation id="5215116848420601511">‏אמצעי תשלום וכתובות שנשמרו ב-Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">מגש 13</translation>
+<translation id="5216942107514965959">הכניסה האחרונה בוצעה היום</translation>
 <translation id="5222812217790122047">אימייל (חובה)</translation>
 <translation id="5230733896359313003">כתובת למשלוח</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1391,6 +1396,7 @@ Del</translation>
 <translation id="5333022057423422993">‏Chrome איתר את הסיסמה שבה השתמשת עכשיו בפרצה באבטחת מידע. כדי לאבטח את החשבונות שלך, מומלץ לבדוק את הסיסמאות השמורות.</translation>
 <translation id="5334013548165032829">יומני מערכת מפורטים</translation>
 <translation id="5334145288572353250">לשמור את הכתובת?</translation>
+<translation id="5335920952954443287">לב פועם</translation>
 <translation id="5340250774223869109">האפליקציה חסומה</translation>
 <translation id="534295439873310000">‏מכשירי NFC</translation>
 <translation id="5344579389779391559">ייתכן שהדף הזה ינסה לדרוש ממך תשלום</translation>
@@ -1534,6 +1540,7 @@ Del</translation>
 <translation id="5869522115854928033">סיסמאות שמורות</translation>
 <translation id="5873013647450402046">הבנק שלך רוצה לאמת את זהותך.</translation>
 <translation id="5887400589839399685">הכרטיס נשמר</translation>
+<translation id="5887687176710214216">הכניסה האחרונה בוצעה אתמול</translation>
 <translation id="5895138241574237353">הפעלה מחדש</translation>
 <translation id="5895187275912066135">הונפק בתאריך</translation>
 <translation id="5901630391730855834">צהוב</translation>
@@ -1727,6 +1734,7 @@ Del</translation>
 <translation id="6529602333819889595">&amp;ביצוע מחדש של מחיקה</translation>
 <translation id="6545864417968258051">‏סריקת Bluetooth</translation>
 <translation id="6547208576736763147">שני ניקובים בצד שמאל</translation>
+<translation id="6554732001434021288">הביקור האחרון התבצע לפני <ph name="NUM_DAYS" /> ימים</translation>
 <translation id="6556866813142980365">ביצוע מחדש</translation>
 <translation id="6569060085658103619">זהו דף של תוסף</translation>
 <translation id="6573200754375280815">שני ניקובים בצד ימין</translation>
@@ -1889,6 +1897,7 @@ Del</translation>
 <translation id="7118618213916969306">‏חיפוש כתובת ה-URL שהועתקה ללוח, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">סגירת כרטיסיות או תוכניות אחרות</translation>
 <translation id="7129409597930077180">לא ניתן לבצע משלוח לכתובת הזו. עליך לבחור כתובת אחרת.</translation>
+<translation id="7132939140423847331">מנהל המערכת שלך אסר על העתקת הנתונים האלה.</translation>
 <translation id="7135130955892390533">הצגת סטטוס</translation>
 <translation id="7138472120740807366">שיטת מסירה</translation>
 <translation id="7139724024395191329">האמירויות הערביות</translation>
@@ -2061,6 +2070,7 @@ Del</translation>
 <translation id="7654909834015434372">המסמך הזה יחזור למצב הסיבוב המקורי שלו בזמן עריכת ההערות</translation>
 <translation id="765676359832457558">הסתרת הגדרות מתקדמות...</translation>
 <translation id="7658239707568436148">ביטול</translation>
+<translation id="7659878911471462949">דמעות של שמחה</translation>
 <translation id="7662298039739062396">ההגדרה נשלטת על-ידי תוסף</translation>
 <translation id="7663736086183791259">אישור <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">אין הרשאה במצב אנונימי</translation>
@@ -2161,7 +2171,6 @@ Del</translation>
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">האתר יכול לבקש הרשאה להשתמש בנתונים ובמכשירים של מציאות מדומה</translation>
 <translation id="7984945080620862648">‏לא ניתן לבקר כעת באתר <ph name="SITE" /> מכיוון שהאתר שלח אישורים משובשים ש-Chrome אינו יכול לעבד. שגיאות רשת ותקיפות מתרחשות בדרך כלל לזמן מוגבל, כך שסביר להניח שדף זה יפעל מאוחר יותר.</translation>
-<translation id="79859296434321399">‏כדי להציג תוכן של מציאות רבודה, צריך להתקין את ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">כריכה</translation>
 <translation id="7992044431894087211">שיתוף המסך באמצעות <ph name="APPLICATION_TITLE" /> ממשיך</translation>
@@ -2265,6 +2274,7 @@ Del</translation>
 <translation id="830498451218851433">קיפול באמצע</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">את האפליקציות המותקנות ואת תדירות השימוש בהן.</translation>
+<translation id="8317207217658302555">‏לעדכן את ARCore?</translation>
 <translation id="831997045666694187">ערב</translation>
 <translation id="8321476692217554900">התראות</translation>
 <translation id="8328484624016508118">‏אחרי שסוגרים את כל הכרטיסיות במצב אנונימי, יימחקו בדפדפן Chrome:
@@ -2335,7 +2345,6 @@ Del</translation>
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{איפוס ההרשאה}two{איפוס ההרשאות}many{איפוס ההרשאות}other{איפוס ההרשאות}}</translation>
 <translation id="8555010941760982128">צריך להזין את הקוד הזה בקופה</translation>
 <translation id="8557066899867184262">קוד האימות נמצא בגב הכרטיס.</translation>
-<translation id="8558485628462305855">‏כדי להציג תוכן של מציאות רבודה, צריך לעדכן את ARCore</translation>
 <translation id="8559762987265718583">לא ניתן ליצור חיבור פרטי אל <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> מפני שהתאריך והשעה (<ph name="DATE_AND_TIME" />) במכשיר שלך שגויים.</translation>
 <translation id="8564182942834072828">מסמכים נפרדים/עותקים לא מסודרים</translation>
 <translation id="8564985650692024650">‏אם הזנת את הסיסמה של <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> באתרים אחרים, ההמלצה של Chromium היא לאפס אותה.</translation>
@@ -2447,6 +2456,7 @@ Del</translation>
 <translation id="8987245424886630962">‏<ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, מקישים על Tab ואז על Enter כדי להציג את היסטוריית הגלישה ב-Chrome</translation>
 <translation id="8987927404178983737">חודש</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">רוצה לאתר את גרסת המערכת? יש לעבור לכתובת</translation>
 <translation id="899688752321268742">האתר <ph name="URL" /> מבקש לדעת מתי המכשיר הזה משמש אותך באופן פעיל</translation>
 <translation id="8996941253935762404">האתר הבא מכיל תוכניות מזיקות</translation>
 <translation id="8997023839087525404">השרת הציג אישור שלא נחשף באופן ציבורי בעזרת מדיניות 'שקיפות אישורים'. זוהי דרישה עבור חלק מהאישורים, ומטרתה לוודא שהם מהימנים וכדי להגן מפני תוקפים.</translation>

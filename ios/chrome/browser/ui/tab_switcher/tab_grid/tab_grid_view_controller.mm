@@ -254,8 +254,7 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
 
   [self setupTopToolbar];
   [self setupBottomToolbar];
-  if (IsTabsBulkActionsEnabled())
-    [self setupEditButton];
+  [self setupEditButton];
 
   // Hide the toolbars and the floating button, so they can fade in the first
   // time there's a transition into this view controller.
@@ -617,7 +616,7 @@ NSUInteger GetPageIndexFromPage(TabGridPage page) {
   self.regularTabsViewController.mode = self.tabGridMode;
   self.incognitoTabsViewController.mode = self.tabGridMode;
   self.topToolbar.mode = self.tabGridMode;
-  self.scrollView.scrollEnabled = (self.tabGridMode != TabGridModeSelection);
+  self.scrollView.scrollEnabled = (self.tabGridMode == TabGridModeNormal);
   if (mode == TabGridModeSelection)
     [self updateSelectionModeToolbars];
 }

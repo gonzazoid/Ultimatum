@@ -10,6 +10,7 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/system/sys_info.h"
 #include "build/build_config.h"
+#include "chromeos/constants/chromeos_features.h"
 
 namespace ash {
 namespace features {
@@ -195,7 +196,7 @@ const base::Feature kBluetoothWbsDogfood{"BluetoothWbsDogfood",
 
 // Enable Big GL when using Borealis.
 const base::Feature kBorealisBigGl{"BorealisBigGl",
-                                   base::FEATURE_DISABLED_BY_DEFAULT};
+                                   base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Enable experimental disk management changes for Borealis.
 const base::Feature kBorealisDiskManagement{"BorealisDiskManagement",
@@ -368,10 +369,6 @@ const base::Feature kCryptAuthV2Enrollment{"CryptAuthV2Enrollment",
 // to their profile and Cryptohome after performing an online authentication.
 const base::Feature kCryptohomeRecoveryFlow{"CryptohomeRecoveryFlow",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Enables dark/light mode feature.
-const base::Feature kDarkLightMode{"DarkLightMode",
-                                   base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kDemoModeSWA{"DemoModeSWA",
                                  base::FEATURE_DISABLED_BY_DEFAULT};
@@ -610,6 +607,13 @@ const base::Feature kFiltersInRecents{"FiltersInRecents",
 const base::Feature kFirmwareUpdaterApp = {"FirmwareUpdaterApp",
                                            base::FEATURE_DISABLED_BY_DEFAULT};
 
+// When enabled, there will be an alert bubble showing up when the device
+// returns from low brightness (e.g., sleep, closed cover) without a lock screen
+// and the active window is in fullscreen.
+// TODO(https://crbug.com/1107185): Remove this after the feature is launched.
+const base::Feature kFullscreenAlertBubble{"EnableFullscreenBubble",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Enable ChromeOS FuseBox service.
 const base::Feature kFuseBox{"FuseBox", base::FEATURE_DISABLED_BY_DEFAULT};
 
@@ -687,6 +691,12 @@ const base::Feature kHideArcMediaNotifications{
 // preferences, or policy).
 const base::Feature kHideShelfControlsInTabletMode{
     "HideShelfControlsInTabletMode", base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Enables V2 implementation for visual representation of in-progress items in
+// Tote, the productivity feature that aims to reduce context switching by
+// enabling users to collect content and transfer or access it later.
+const base::Feature kHoldingSpaceInProgressAnimationV2{
+    "HoldingSpaceInProgressAnimationV2", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enables in-progress downloads integration with the productivity feature that
 // aims to reduce context switching by enabling users to collect content and
@@ -788,6 +798,11 @@ const base::Feature kLacrosSupport{"LacrosSupport",
 // profile mgiration.
 const base::Feature kForceProfileMigrationCompletion{
     "ForceProfileMigrationCompletion", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enable this to turn on profile migration for non-googlers. Currently the
+// feature is only limited to googlers only.
+const base::Feature kLacrosProfileMigrationForAnyUser{
+    "LacrosProfileMigrationForAnyUser", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enables or disables Language Packs for Handwriting Recognition.
 // This feature turns on the download of language-specific Handwriting models
@@ -1203,6 +1218,10 @@ const base::Feature kTelemetryExtension{"TelemetryExtension",
 const base::Feature kTerminalSSH{"TerminalSSH",
                                  base::FEATURE_DISABLED_BY_DEFAULT};
 
+// Enables tmux integration in the Terminal System App.
+const base::Feature kTerminalTmuxIntegration{"TerminalTmuxIntegration",
+                                             base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Enables the Settings UI to show data usage for cellular networks.
 const base::Feature kTrafficCountersSettingsUi{
     "TrafficCountersSettingsUi", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -1219,15 +1238,6 @@ const base::Feature kUseAuthsessionAuthentication{
 // Enables using the BluetoothSystem Mojo interface for Bluetooth operations.
 const base::Feature kUseBluetoothSystemInAsh{"UseBluetoothSystemInAsh",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Uses the same browser sync consent dialog as Windows/Mac/Linux. Allows the
-// user to fully opt-out of browser sync, including marking the IdentityManager
-// primary account as unconsented. Requires SyncConsentOptional.
-// NOTE: Call UseBrowserSyncConsent() to test the flag, see implementation.
-// TODO(https://crbug.com/1246824) Maybe deprecate the flag in favor of
-// SyncConsentOptional.
-const base::Feature kUseBrowserSyncConsent{"UseBrowserSyncConsent",
-                                           base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Use the staging URL as part of the "Messages" feature under "Connected
 // Devices" settings.
@@ -1272,9 +1282,9 @@ const base::Feature kVirtualKeyboardMultipasteSuggestion{
 const base::Feature kWakeOnWifiAllowed{"WakeOnWifiAllowed",
                                        base::FEATURE_DISABLED_BY_DEFAULT};
 
-// Enable new wallpaper experience in WebUI inside system settings.
+// Enable new wallpaper experience SWA.
 const base::Feature kWallpaperWebUI{"WallpaperWebUI",
-                                    base::FEATURE_DISABLED_BY_DEFAULT};
+                                    base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Enable full screen wallpaper preview in new wallpaper experience. Requires
 // |kWallpaperWebUI| to also be enabled.
@@ -1463,7 +1473,7 @@ bool IsCryptohomeRecoveryFlowEnabled() {
 }
 
 bool IsDarkLightModeEnabled() {
-  return base::FeatureList::IsEnabled(kDarkLightMode);
+  return chromeos::features::IsDarkLightModeEnabled();
 }
 
 bool IsDemoModeSWAEnabled() {
@@ -1526,6 +1536,10 @@ bool IsFirmwareUpdaterAppEnabled() {
   return base::FeatureList::IsEnabled(kFirmwareUpdaterApp);
 }
 
+bool IsFullscreenAlertBubbleEnabled() {
+  return base::FeatureList::IsEnabled(kFullscreenAlertBubble);
+}
+
 bool IsGaiaCloseViewMessageEnabled() {
   return base::FeatureList::IsEnabled(kGaiaCloseViewMessage);
 }
@@ -1540,6 +1554,10 @@ bool IsHideArcMediaNotificationsEnabled() {
 
 bool IsHideShelfControlsInTabletModeEnabled() {
   return base::FeatureList::IsEnabled(kHideShelfControlsInTabletMode);
+}
+
+bool IsHoldingSpaceInProgressAnimationV2Enabled() {
+  return base::FeatureList::IsEnabled(kHoldingSpaceInProgressAnimationV2);
 }
 
 bool IsHoldingSpaceInProgressDownloadsIntegrationEnabled() {
@@ -1903,12 +1921,6 @@ bool ShouldUseAttachApn() {
   // See comment on |kCellularForbidAttachApn| for details.
   return !base::FeatureList::IsEnabled(kCellularForbidAttachApn) &&
          base::FeatureList::IsEnabled(kCellularUseAttachApn);
-}
-
-bool ShouldUseBrowserSyncConsent() {
-  // UseBrowserSyncConsent requires SyncConsentOptional.
-  return base::FeatureList::IsEnabled(kSyncConsentOptional) &&
-         base::FeatureList::IsEnabled(kUseBrowserSyncConsent);
 }
 
 bool ShouldUseV1DeviceSync() {

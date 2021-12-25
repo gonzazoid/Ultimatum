@@ -1,0 +1,45 @@
+# Copyright 2020 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//build/config/chromeos/ui_mode.gni")
+
+assert(is_chromeos_ash)
+
+static_library("cpp") {
+  sources = [
+    "nearby_client_uuids.cc",
+    "nearby_client_uuids.h",
+    "nearby_process_manager.cc",
+    "nearby_process_manager.h",
+  ]
+
+  deps = [
+    "//ash/services/nearby/public/mojom",
+    "//base",
+    "//components/keyed_service/core",
+  ]
+}
+
+static_library("test_support") {
+  testonly = true
+
+  sources = [
+    "fake_nearby_process_manager.cc",
+    "fake_nearby_process_manager.h",
+    "mock_nearby_connections.cc",
+    "mock_nearby_connections.h",
+    "mock_nearby_process_manager.cc",
+    "mock_nearby_process_manager.h",
+    "mock_nearby_sharing_decoder.cc",
+    "mock_nearby_sharing_decoder.h",
+  ]
+
+  deps = [
+    ":cpp",
+    "//ash/services/nearby/public/mojom",
+    "//base",
+    "//mojo/public/cpp/bindings/",
+    "//testing/gmock",
+  ]
+}

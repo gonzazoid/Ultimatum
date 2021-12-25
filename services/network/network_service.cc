@@ -345,8 +345,9 @@ void NetworkService::Initialize(mojom::NetworkServiceParamsPtr params,
         std::move(params->default_observer));
   }
 
-  first_party_sets_ = std::make_unique<FirstPartySets>();
-  if (net::cookie_util::IsFirstPartySetsEnabled()) {
+  first_party_sets_ =
+      std::make_unique<FirstPartySets>(params->first_party_sets_enabled);
+  if (first_party_sets_->is_enabled()) {
     first_party_sets_->SetManuallySpecifiedSet(
         command_line->GetSwitchValueASCII(switches::kUseFirstPartySet));
   }
@@ -378,10 +379,6 @@ NetworkService::~NetworkService() {
 
   if (initialized_)
     trace_net_log_observer_.StopWatchForTraceStart();
-}
-
-void NetworkService::set_os_crypt_is_configured() {
-  os_crypt_config_set_ = true;
 }
 
 std::unique_ptr<NetworkService> NetworkService::Create(
@@ -485,11 +482,8 @@ void NetworkService::CreateNetworkContext(
 void NetworkService::ConfigureStubHostResolver(
     bool insecure_dns_client_enabled,
     net::SecureDnsMode secure_dns_mode,
-    absl::optional<std::vector<mojom::DnsOverHttpsServerPtr>>
-        dns_over_https_servers,
+    const std::vector<net::DnsOverHttpsServerConfig>& dns_over_https_servers,
     bool additional_dns_types_enabled) {
-  DCHECK(!dns_over_https_servers || !dns_over_https_servers->empty());
-
   // Enable or disable the insecure part of DnsClient. "DnsClient" is the class
   // that implements the stub resolver.
   host_resolver_manager_->SetInsecureDnsClientEnabled(
@@ -497,13 +491,7 @@ void NetworkService::ConfigureStubHostResolver(
 
   // Configure DNS over HTTPS.
   net::DnsConfigOverrides overrides;
-  if (dns_over_https_servers && !dns_over_https_servers.value().empty()) {
-    overrides.dns_over_https_servers.emplace();
-    for (const auto& doh_server : *dns_over_https_servers) {
-      overrides.dns_over_https_servers.value().emplace_back(
-          doh_server->server_template, doh_server->use_post);
-    }
-  }
+  overrides.dns_over_https_servers = dns_over_https_servers;
   overrides.secure_dns_mode = secure_dns_mode;
   overrides.allow_dns_over_https_upgrade =
       base::FeatureList::IsEnabled(features::kDnsOverHttpsUpgrade);
@@ -625,28 +613,9 @@ void NetworkService::OnCertDBChanged() {
   net::CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
 }
 
-#if defined(OS_LINUX)
-void NetworkService::SetCryptConfig(mojom::CryptConfigPtr crypt_config) {
-#if !BUILDFLAG(IS_CHROMECAST)
-  DCHECK(!os_crypt_config_set_);
-  auto config = std::make_unique<os_crypt::Config>();
-  config->store = crypt_config->store;
-  config->product_name = crypt_config->product_name;
-  config->application_name = crypt_config->application_name;
-  config->main_thread_runner = base::ThreadTaskRunnerHandle::Get();
-  config->should_use_preference = crypt_config->should_use_preference;
-  config->user_data_path = crypt_config->user_data_path;
-  OSCrypt::SetConfig(std::move(config));
-  os_crypt_config_set_ = true;
-#endif
-}
-#endif
-
-#if defined(OS_WIN) || defined(OS_MAC)
 void NetworkService::SetEncryptionKey(const std::string& encryption_key) {
   OSCrypt::SetRawEncryptionKey(encryption_key);
 }
-#endif
 
 void NetworkService::AddAllowedRequestInitiatorForPlugin(
     int32_t process_id,

@@ -87,6 +87,13 @@ EVENT_TYPE(HOST_RESOLVER_MANAGER_CACHE_HIT)
 //   }
 EVENT_TYPE(HOST_RESOLVER_MANAGER_HOSTS_HIT)
 
+// This event is logged when a bootstrap request matches a config preset entry.
+// It contains the following parameter:
+//   {
+//     "results": <HostCache::Entry of results>,
+//   }
+EVENT_TYPE(HOST_RESOLVER_MANAGER_CONFIG_PRESET_MATCH)
+
 // This event is created when a new HostResolverManager::Job is about to be
 // created for a request.
 EVENT_TYPE(HOST_RESOLVER_MANAGER_CREATE_JOB)
@@ -1165,9 +1172,7 @@ EVENT_TYPE(HTTP_STREAM_JOB_BOUND_TO_REQUEST)
 
 // Logs the protocol negotiated with the server. The event parameters are:
 //   {
-//      "status": <The NPN status ("negotiated", "unsupported", "no-overlap")>,
-//      "proto": <The NPN protocol negotiated>,
-//      "server_protos": <The list of server advertised protocols>,
+//      "proto": <The ALPN protocol negotiated>,
 //   }
 EVENT_TYPE(HTTP_STREAM_REQUEST_PROTO)
 

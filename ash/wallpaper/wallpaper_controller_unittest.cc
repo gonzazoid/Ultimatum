@@ -48,6 +48,7 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time_override.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "components/user_manager/fake_user_manager.h"
 #include "components/user_manager/scoped_user_manager.h"
@@ -279,7 +280,7 @@ std::unique_ptr<base::DictionaryValue> CreateWallpaperInfoDict(
         base::NumberToString(variant.asset_id));
     online_wallpaper_variant_dict.SetStringPath(
         WallpaperControllerImpl::kOnlineWallpaperUrlNodeName,
-        variant.url.spec());
+        variant.raw_url.spec());
     online_wallpaper_variant_dict.SetIntPath(
         WallpaperControllerImpl::kOnlineWallpaperTypeNodeName,
         static_cast<int>(variant.type));
@@ -330,8 +331,9 @@ void AssertWallpaperInfoInPrefs(const PrefService* pref_service,
                                 AccountId account_id,
                                 WallpaperInfo info) {
   const base::DictionaryValue* stored_info_dict;
-  pref_service->GetDictionary(pref_name)->GetDictionaryWithoutPathExpansion(
-      account_id.GetUserEmail(), &stored_info_dict);
+  base::Value::AsDictionaryValue(*pref_service->GetDictionary(pref_name))
+      .GetDictionaryWithoutPathExpansion(account_id.GetUserEmail(),
+                                         &stored_info_dict);
   auto expected_info_dict = CreateWallpaperInfoDict(info);
   EXPECT_EQ(*expected_info_dict.get(), *stored_info_dict);
 }
@@ -3250,7 +3252,7 @@ class WallpaperControllerWallpaperWebUiTest
   void SetUp() override {
     scoped_feature_list_.InitWithFeatures(
         {features::kWallpaperWebUI, features::kWallpaperFullScreenPreview,
-         features::kDarkLightMode},
+         chromeos::features::kDarkLightMode},
         {});
     WallpaperControllerTestBase::SetUp();
   }

@@ -56,6 +56,7 @@
 <translation id="2348335408836342058">Chrome potrzebuje uprawnień dostępu do aparatu i mikrofonu na tej stronie</translation>
 <translation id="234869673307233423">Chrome nie może sprawdzić Twoich haseł. Spróbuj później.</translation>
 <translation id="235650106824528204">Wszystkie dane Chrome wygenerowane podczas używania tego profilu (takie jak zakładki, historia, hasła i inne ustawienia) mogą zostać usunięte przez administratora profilu służbowego. <ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">Dalej</translation>
 <translation id="2429317896000329049">Google Chrome nie może zsynchronizować danych, ponieważ synchronizacja jest niedostępna w Twojej domenie.</translation>
 <translation id="2467438592969358367">Google Chrome chce wyeksportować Twoje hasła. Wpisz swoje hasło do Windows, by na to zezwolić.</translation>
 <translation id="2485422356828889247">Odinstaluj</translation>
@@ -140,6 +141,7 @@
 <translation id="4343195214584226067">Rozszerzenie <ph name="EXTENSION_NAME" /> zostało dodane do Chrome</translation>
 <translation id="4384570495110188418">Chrome nie może sprawdzić haseł, jeśli się nie zalogujesz</translation>
 <translation id="4407807842708586359">System operacyjny Google Chrome</translation>
+<translation id="4427306783828095590">Silniejsza ochrona lepiej chroni przed phishingiem i złośliwym oprogramowaniem</translation>
 <translation id="4450664632294415862">Chrome – logowanie do sieci – <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">Google Chrome wykonuje teraz inną operację. Spróbuj ponownie później.</translation>
 <translation id="4480040274068703980">System operacyjny Chrome nie może zsynchronizować danych z powodu błędu logowania.</translation>
@@ -168,7 +170,6 @@
 <translation id="5193136243808726294">System operacyjny Google Chrome nie może otworzyć tej strony.</translation>
 <translation id="521447420733633466">Jeśli dzielisz urządzenie ze znajomymi lub rodziną, wszyscy możecie niezależnie przeglądać internet i skonfigurować Chrome po swojemu</translation>
 <translation id="5251420635869119124">Goście mogą korzystać z Chrome, nie pozostawiając żadnych danych.</translation>
-<translation id="5251679006894510177">Prawie gotowe. Aby dokończyć aktualizowanie, uruchom ponownie Chrome. Okna incognito nie otworzą się ponownie.</translation>
 <translation id="5334487786912937552">Aby pobierać pliki, Chrome musi mieć dostęp do pamięci</translation>
 <translation id="5386244825306882791">Kontroluje także to, jaka strona wyświetla się po uruchomieniu Chrome lub wyszukiwaniu w omniboksie.</translation>
 <translation id="5394833366792865639">Udostępnij kartę Chrome</translation>
@@ -238,6 +239,7 @@
 <translation id="7398801000654795464">Byłeś zalogowany w Chrome jako <ph name="USER_EMAIL_ADDRESS" />. Zaloguj się ponownie, korzystając z tego samego konta.</translation>
 <translation id="7408085963519505752">Warunki korzystania z Chrome OS</translation>
 <translation id="7419046106786626209">System operacyjny Chrome nie może zsynchronizować danych, ponieważ synchronizacja jest niedostępna w Twojej domenie.</translation>
+<translation id="7481213027396403996">Korzystaj z najlepszych zabezpieczeń Chrome</translation>
 <translation id="7486227612705979895">Chrome będzie mieć dostęp do Dysku, by wyświetlać podpowiedzi na pasku adresu</translation>
 <translation id="7535429826459677826">Wersja deweloperska Google Chrome</translation>
 <translation id="7573289029918943991">Aby sprawdzić, czy urządzenie jest zaktualizowane, otwórz <ph name="LINK_BEGIN" />ustawienia systemu operacyjnego Chrome<ph name="LINK_END" /></translation>
@@ -296,6 +298,8 @@
 <translation id="8862326446509486874">Nie masz odpowiednich uprawnień do przeprowadzenia instalacji na poziomie systemowym. Uruchom ponownie program instalacyjny jako administrator.</translation>
 <translation id="8914504000324227558">Uruchom Chrome ponownie</translation>
 <translation id="8922193594870374009">Aby wysłać numer z <ph name="ORIGIN" /> na swój telefon z Androidem, zaloguj się w Chrome na obu urządzeniach.</translation>
+<translation id="8927704157641862988">Dostosuj opcje prywatności, które Chrome uważa za najważniejsze. Ten przewodnik nie uwzględnia wszystkich ustawień ani opcji.</translation>
+<translation id="8983720963221508955">Na swoim koncie włączyłeś(-aś) Ulepszone Bezpieczne przeglądanie. Zacznij korzystać z tej funkcji w Chrome.</translation>
 <translation id="8986207147630327271">Dodajesz profil służbowy w tej przeglądarce i dajesz swojemu administratorowi kontrolę tylko nad tym profilem.</translation>
 <translation id="8999208279178790196">{0,plural, =0{Dostępna jest aktualizacja Chrome}=1{Dostępna jest aktualizacja Chrome}few{Aktualizacja Chrome jest dostępna od # dni}many{Aktualizacja Chrome jest dostępna od # dni}other{Aktualizacja Chrome jest dostępna od # dnia}}</translation>
 <translation id="9026991721384951619">Google Chrome nie może zsynchronizować danych, ponieważ dane logowania na Twoje konto są nieaktualne.</translation>

@@ -16,6 +16,7 @@
 #include "base/system/sys_info.h"
 #include "base/threading/thread_checker.h"
 #include "media/gpu/macros.h"
+#include "media/media_buildflags.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/ozone/public/ozone_platform.h"
 #include "ui/ozone/public/surface_factory_ozone.h"
@@ -162,7 +163,11 @@ ProtectedBufferManager::ProtectedNativePixmap::Create(
   ui::SurfaceFactoryOzone* factory = platform->GetSurfaceFactoryOzone();
   protected_pixmap->native_pixmap_ = factory->CreateNativePixmap(
       gfx::kNullAcceleratedWidget, VK_NULL_HANDLE, size, format,
+#if BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
+      gfx::BufferUsage::PROTECTED_SCANOUT_VDA_WRITE);
+#else
       gfx::BufferUsage::SCANOUT_VDA_WRITE);
+#endif  // BUILDFLAG(USE_ARC_PROTECTED_MEDIA)
 
   if (!protected_pixmap->native_pixmap_) {
     VLOGF(1) << "Failed allocating a native pixmap";
@@ -420,6 +425,20 @@ ProtectedBufferManager::GetProtectedNativePixmapHandleFor(
     return gfx::NativePixmapHandle();
 
   return iter->second->DuplicateNativePixmapHandle();
+}
+
+void ProtectedBufferManager::GetProtectedSharedMemoryRegionFor(
+    base::ScopedFD dummy_fd,
+    GetProtectedSharedMemoryRegionForResponseCB response_cb) {
+  std::move(response_cb)
+      .Run(GetProtectedSharedMemoryRegionFor(std::move(dummy_fd)));
+}
+
+void ProtectedBufferManager::GetProtectedNativePixmapHandleFor(
+    base::ScopedFD dummy_fd,
+    GetProtectedNativePixmapHandleForResponseCB response_cb) {
+  std::move(response_cb)
+      .Run(GetProtectedNativePixmapHandleFor(std::move(dummy_fd)));
 }
 
 scoped_refptr<gfx::NativePixmap>

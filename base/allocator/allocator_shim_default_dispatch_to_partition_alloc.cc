@@ -6,9 +6,12 @@
 
 #include <atomic>
 #include <cstddef>
+#include <map>
+#include <string>
 
 #include "base/allocator/allocator_shim_internals.h"
 #include "base/allocator/buildflags.h"
+#include "base/allocator/partition_alloc_features.h"
 #include "base/allocator/partition_allocator/allocation_guard.h"
 #include "base/allocator/partition_allocator/memory_reclaimer.h"
 #include "base/allocator/partition_allocator/partition_alloc.h"
@@ -19,9 +22,9 @@
 #include "base/allocator/partition_allocator/partition_stats.h"
 #include "base/bits.h"
 #include "base/compiler_specific.h"
+#include "base/feature_list.h"
 #include "base/ignore_result.h"
 #include "base/memory/nonscannable_memory.h"
-#include "base/no_destructor.h"
 #include "base/numerics/checked_math.h"
 #include "build/build_config.h"
 #include "build/chromecast_buildflags.h"
@@ -134,12 +137,10 @@ class MainPartitionConstructor {
     constexpr base::PartitionOptions::ThreadCache thread_cache =
 #if BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
         // Additional partitions may be created in ConfigurePartitions(). Since
-        // only one partition can have thread cache enabled, leave this ability
-        // to the new main partition. If such a partition isn't needed, the
-        // thread cache will be then turned on in this one.
-        // TODO(bartekn): Revert crrev.com/c/3240505 once
-        // PartitionAllocSimulateBRPPartitionSplit is no longer needed. The main
-        // reason is to bring back ThreadCache::kEnabled in the default case.
+        // only one partition can have thread cache enabled, postpone the
+        // decision to turn the thread cache on until after that call.
+        // TODO(bartekn): Enable it here by default, once the "split-only" mode
+        // is no longer needed.
         base::PartitionOptions::ThreadCache::kDisabled;
 #else   // BUILDFLAG(USE_PARTITION_ALLOC_AS_MALLOC)
         // Other tests, such as the ThreadCache tests create a thread cache,
@@ -502,11 +503,7 @@ alignas(base::ThreadSafePartitionRoot) uint8_t
 void ConfigurePartitions(
     EnableBrp enable_brp,
     SplitMainPartition split_main_partition,
-    UseDedicatedAlignedPartition use_dedicated_aligned_partition,
-    ThreadCacheOnNonQuarantinablePartition
-        thread_cache_on_non_quarantinable_partition) {
-  // |thread_cache_on_non_quarantinable_partition| can't be enabled with BRP.
-  PA_CHECK(!enable_brp || !thread_cache_on_non_quarantinable_partition);
+    UseDedicatedAlignedPartition use_dedicated_aligned_partition) {
   // BRP cannot be enabled without splitting the main partition. Furthermore, in
   // the "before allocation" mode, it can't be enabled without further splitting
   // out the aligned partition.
@@ -521,39 +518,25 @@ void ConfigurePartitions(
   PA_CHECK(!configured);
   configured = true;
 
+  // Calling Get() is actually important, even if the return values weren't
+  // used, because it has a side effect of initializing the variables, if they
+  // weren't already.
   auto* current_root = g_root.Get();
-  // Call Get() to ensure g_aligned_root gets initialized. In some cases it is
-  // initialized with g_root, and we want to make sure it is the pre-swap
-  // value (unless explicitly overwritten below).
   auto* current_aligned_root = g_aligned_root.Get();
 
-  // When there is no need to split partition, simply enable thread cache in the
-  // existing root.
   if (!split_main_partition) {
     PA_DCHECK(!enable_brp);
     PA_DCHECK(!use_dedicated_aligned_partition);
     PA_DCHECK(!current_root->with_thread_cache);
-    if (thread_cache_on_non_quarantinable_partition) {
-      // The caller is responsible for turning thread cache there. Here, we're
-      // just making sure nobody else turned it on for themselves.
-      // TODO(bartekn): Turn on thread cache in one spot, for consistence.
-    } else {
-      current_root->EnableThreadCacheIfSupported();
-    }
     return;
   }
-
-  current_root->PurgeMemory(PartitionPurgeDecommitEmptySlotSpans |
-                            PartitionPurgeDiscardUnusedSystemPages);
 
   auto* new_root = new (g_allocator_buffer_for_new_main_partition)
       base::ThreadSafePartitionRoot({
           !use_dedicated_aligned_partition
               ? base::PartitionOptions::AlignedAlloc::kAllowed
               : base::PartitionOptions::AlignedAlloc::kDisallowed,
-          thread_cache_on_non_quarantinable_partition
-              ? base::PartitionOptions::ThreadCache::kDisabled
-              : base::PartitionOptions::ThreadCache::kEnabled,
+          base::PartitionOptions::ThreadCache::kDisabled,
           base::PartitionOptions::Quarantine::kAllowed,
           base::PartitionOptions::Cookie::kAllowed,
           enable_brp ? base::PartitionOptions::BackupRefPtr::kEnabled
@@ -561,13 +544,6 @@ void ConfigurePartitions(
           base::PartitionOptions::UseConfigurablePool::kNo,
           base::PartitionOptions::LazyCommit::kEnabled,
       });
-  g_root.Replace(new_root);
-  // g_original_root has to be set after g_root, because other code doesn't
-  // handle well both pointing to the same root.
-  // TODO(bartekn): Reorder, once handled well. It isn't ideal for one
-  // partition to be invisible temporarily.
-  // TODO(bartekn): Move current_root->PurgeMemory after the replacement.
-  g_original_root = current_root;
 
   base::ThreadSafePartitionRoot* new_aligned_root;
   if (use_dedicated_aligned_partition) {
@@ -585,18 +561,26 @@ void ConfigurePartitions(
         });
   } else {
     // The new main root can also support AlignedAlloc.
-    new_aligned_root = g_root.Get();
+    new_aligned_root = new_root;
   }
-  PA_CHECK(current_aligned_root == g_original_root);
+
+  // Now switch traffic to the new partitions.
   g_aligned_root.Replace(new_aligned_root);
+  g_root.Replace(new_root);
+
+  // g_original_root has to be set after g_root, because other code doesn't
+  // handle well both pointing to the same root.
+  // TODO(bartekn): Reorder, once handled well. It isn't ideal for one
+  // partition to be invisible temporarily.
+  g_original_root = current_root;
+
   // No need for g_original_aligned_root, because in cases where g_aligned_root
   // is replaced, it must've been g_original_root.
+  PA_CHECK(current_aligned_root == g_original_root);
 
-  if (thread_cache_on_non_quarantinable_partition) {
-    // The caller is responsible for turning thread cache there. In this
-    // function, we're just making sure nobody else turned it on for themselves.
-    // TODO(bartekn): Turn on thread cache in one spot, for consistence.
-  }
+  // Purge memory, now that the traffic to the original partition is cut off.
+  current_root->PurgeMemory(PartitionPurgeDecommitEmptySlotSpans |
+                            PartitionPurgeDiscardUnusedSystemPages);
 }
 
 #if defined(PA_ALLOW_PCSCAN)

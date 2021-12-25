@@ -144,6 +144,8 @@ class WebAppRegistrar : public ProfileManagerObserver {
   const apps::ProtocolHandlers* GetAppProtocolHandlers(
       const AppId& app_id) const;
   bool IsAppFileHandlerPermissionBlocked(const web_app::AppId& app_id) const;
+  // Returns the state of the File Handling API for the given app.
+  ApiApprovalState GetAppFileHandlerApprovalState(const AppId& app_id) const;
 
   // Returns the start_url with launch_query_params appended to the end if any.
   GURL GetAppLaunchUrl(const AppId& app_id) const;
@@ -189,6 +191,9 @@ class WebAppRegistrar : public ProfileManagerObserver {
   // Gets the IDs for all apps in `GetApps()`.
   std::vector<AppId> GetAppIds() const;
 
+  // Gets the IDs for all sub-apps of parent app with id |parent_app_id|.
+  std::vector<AppId> GetAllSubAppIds(const AppId& parent_app_id) const;
+
   // Returns the "scope" field from the app manifest, or infers a scope from the
   // "start_url" field if unavailable. Returns an invalid GURL iff the |app_id|
   // does not refer to an installed web app.
@@ -232,6 +237,8 @@ class WebAppRegistrar : public ProfileManagerObserver {
   // complete installation via the ExternallyManagedAppManager.
   bool IsPlaceholderApp(const AppId& app_id) const;
 
+  bool IsSystemApp(const AppId& app_id) const;
+
   // Computes and returns the DisplayMode, accounting for user preference
   // to launch in a browser window and entries in the web app manifest.
   DisplayMode GetAppEffectiveDisplayMode(const AppId& app_id) const;
@@ -250,6 +257,7 @@ class WebAppRegistrar : public ProfileManagerObserver {
   void NotifyWebAppManifestUpdated(const AppId& app_id,
                                    base::StringPiece old_name);
   void NotifyWebAppProtocolSettingsChanged();
+  void NotifyWebAppFileHandlerApprovalStateChanged(const AppId& app_id);
   void NotifyWebAppsWillBeUpdatedFromSync(
       const std::vector<const WebApp*>& new_apps_state);
   void NotifyWebAppUninstalled(const AppId& app_id);

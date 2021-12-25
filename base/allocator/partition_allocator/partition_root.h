@@ -235,7 +235,6 @@ struct alignas(64) BASE_EXPORT PartitionRoot {
   } scan_mode = ScanMode::kDisabled;
 
   bool with_thread_cache = false;
-  const bool is_thread_safe = thread_safe;
 
   bool allow_aligned_alloc;
   bool allow_cookie;
@@ -281,7 +280,7 @@ struct alignas(64) BASE_EXPORT PartitionRoot {
   // use the union { struct { /* all flags */}; /* padding */} trick. Wasting an
   // entire cacheline per PartitionRoot is not a big issue, given that
   // the object is very large anyway.
-  uint8_t padding[kPartitionCachelineSize - 7];
+  uint8_t padding[kPartitionCachelineSize - 6];
 
   // Not used on the fastest path (thread cache allocations), but on the fast
   // path of the central allocator.
@@ -665,6 +664,10 @@ struct alignas(64) BASE_EXPORT PartitionRoot {
 #endif
   }
 
+  ALWAYS_INLINE bool uses_configurable_pool() const {
+    return use_configurable_pool;
+  }
+
   // To make tests deterministic, it is necessary to uncap the amount of memory
   // waste incurred by empty slot spans. Otherwise, the size of various
   // freelists, and committed memory becomes harder to reason about (and
@@ -896,8 +899,6 @@ ALWAYS_INLINE bool PartitionAllocIsValidPtrDelta(uintptr_t address,
          new_address <= user_data_start + user_data_size;
 }
 
-// TODO(glazunov): Simplify the function once the non-thread-safe PartitionRoot
-// is no longer used.
 ALWAYS_INLINE void PartitionAllocFreeForRefCounting(void* slot_start) {
   PA_DCHECK(!internal::PartitionRefCountPointer(slot_start)->IsAlive());
 
@@ -922,17 +923,7 @@ ALWAYS_INLINE void PartitionAllocFreeForRefCounting(void* slot_start) {
   root->total_count_of_brp_quarantined_slots.fetch_sub(
       1, std::memory_order_relaxed);
 
-  if (root->is_thread_safe) {
-    root->RawFreeWithThreadCache(slot_start, slot_span);
-    return;
-  }
-
-  auto* non_thread_safe_slot_span =
-      reinterpret_cast<SlotSpanMetadata<NotThreadSafe>*>(slot_span);
-  auto* non_thread_safe_root =
-      reinterpret_cast<PartitionRoot<NotThreadSafe>*>(root);
-  non_thread_safe_root->RawFreeWithThreadCache(slot_start,
-                                               non_thread_safe_slot_span);
+  root->RawFreeWithThreadCache(slot_start, slot_span);
 }
 #endif  // BUILDFLAG(USE_BACKUP_REF_PTR)
 

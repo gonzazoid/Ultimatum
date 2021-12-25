@@ -57,13 +57,13 @@ class VisualRectMappingTest : public PaintTestConfigurations,
     auto slow_map_rect = local_rect;
     object.MapToVisualRectInAncestorSpace(&ancestor, slow_map_rect);
 
-    FloatClipRect geometry_mapper_rect(ToGfxRectF(FloatRect(local_rect)));
+    FloatClipRect geometry_mapper_rect((gfx::RectF(local_rect)));
     const FragmentData& fragment_data = object.FirstFragment();
     if (fragment_data.HasLocalBorderBoxProperties()) {
       auto local_rect_copy = local_rect;
       object.MapToVisualRectInAncestorSpace(&ancestor, local_rect_copy,
                                             kUseGeometryMapper);
-      geometry_mapper_rect.SetRect(ToGfxRectF(FloatRect(local_rect_copy)));
+      geometry_mapper_rect.SetRect(gfx::RectF(local_rect_copy));
     }
 
     if (expected_visual_rect_in_ancestor.IsEmpty()) {
@@ -691,14 +691,6 @@ TEST_P(VisualRectMappingTest, ContainerAndTargetDifferentFlippedWritingMode) {
   EXPECT_EQ(PhysicalRect(-2, 3, 140, 110), rect);
 }
 
-static const LayoutBoxModelObject& EnclosingCompositedContainer(
-    const LayoutObject& layout_object) {
-  DCHECK(!RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
-  return layout_object.PaintingLayer()
-      ->EnclosingLayerForPaintInvalidationCrossingFrameBoundaries()
-      ->GetLayoutObject();
-}
-
 TEST_P(VisualRectMappingTest,
        DifferentPaintInvalidaitionContainerForAbsolutePosition) {
   GetDocument().GetFrame()->GetSettings()->SetPreferCompositingToLCDTextEnabled(
@@ -724,9 +716,6 @@ TEST_P(VisualRectMappingTest,
 
   auto* normal_flow =
       To<LayoutBlock>(GetLayoutObjectByElementId("normal-flow"));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_EQ(scroller, &EnclosingCompositedContainer(*normal_flow));
-
   PhysicalRect normal_flow_visual_rect = normal_flow->LocalVisualRect();
   EXPECT_EQ(PhysicalRect(0, 0, 2000, 2000), normal_flow_visual_rect);
   PhysicalRect rect = normal_flow_visual_rect;
@@ -766,8 +755,6 @@ TEST_P(VisualRectMappingTest,
       To<LayoutBlock>(GetLayoutObjectByElementId("stacking-context"));
   auto* absolute = To<LayoutBlock>(GetLayoutObjectByElementId("absolute"));
   auto* container = To<LayoutBlock>(GetLayoutObjectByElementId("container"));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_EQ(absolute->View(), &EnclosingCompositedContainer(*absolute));
   EXPECT_EQ(container, absolute->Container());
 
   PhysicalRect absolute_visual_rect = absolute->LocalVisualRect();
@@ -1030,7 +1017,7 @@ TEST_P(VisualRectMappingTest, ShouldAccountForPreserve3d) {
   matrix.FlattenTo2d();
   matrix *= target->Layer()->CurrentTransform();
   PhysicalRect output =
-      PhysicalRect::EnclosingRect(matrix.MapRect(FloatRect(original_rect)));
+      PhysicalRect::EnclosingRect(matrix.MapRect(gfx::RectF(original_rect)));
 
   CheckVisualRect(*target, *target->View(), original_rect, output,
                   kContainsToEnclosingRect);
@@ -1060,7 +1047,7 @@ TEST_P(VisualRectMappingTest, ShouldAccountForPreserve3dNested) {
   TransformationMatrix matrix = container->Layer()->CurrentTransform();
   matrix *= target->Layer()->CurrentTransform();
   PhysicalRect output =
-      PhysicalRect::EnclosingRect(matrix.MapRect(FloatRect(original_rect)));
+      PhysicalRect::EnclosingRect(matrix.MapRect(gfx::RectF(original_rect)));
 
   CheckVisualRect(*target, *target->View(), original_rect, output);
 }
@@ -1092,7 +1079,7 @@ TEST_P(VisualRectMappingTest, ShouldAccountForPerspective) {
   target->GetTransformFromContainer(container, PhysicalOffset(), target_matrix);
   matrix *= target_matrix;
   PhysicalRect output =
-      PhysicalRect::EnclosingRect(matrix.MapRect(FloatRect(original_rect)));
+      PhysicalRect::EnclosingRect(matrix.MapRect(gfx::RectF(original_rect)));
 
   CheckVisualRect(*target, *target->View(), original_rect, output,
                   kContainsToEnclosingRect);
@@ -1125,7 +1112,7 @@ TEST_P(VisualRectMappingTest, ShouldAccountForPerspectiveNested) {
   target->GetTransformFromContainer(container, PhysicalOffset(), target_matrix);
   matrix *= target_matrix;
   PhysicalRect output =
-      PhysicalRect::EnclosingRect(matrix.MapRect(FloatRect(original_rect)));
+      PhysicalRect::EnclosingRect(matrix.MapRect(gfx::RectF(original_rect)));
 
   CheckVisualRect(*target, *target->View(), original_rect, output);
 }
@@ -1165,7 +1152,7 @@ TEST_P(VisualRectMappingTest, PerspectivePlusScroll) {
   transform.FlattenTo2d();
 
   PhysicalRect output =
-      PhysicalRect::EnclosingRect(transform.MapRect(FloatRect(originalRect)));
+      PhysicalRect::EnclosingRect(transform.MapRect(gfx::RectF(originalRect)));
   output.Intersect(container->ClippingRect(PhysicalOffset()));
   CheckVisualRect(*target, *target->View(), originalRect, output);
 }

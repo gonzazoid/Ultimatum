@@ -112,6 +112,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="1308113895091915999">Tilgængeligt kampagnetilbud</translation>
 <translation id="1312803275555673949">Hvilke beviser underbygger dette?</translation>
 <translation id="131405271941274527"><ph name="URL" /> ønsker at sende og modtage oplysninger, når du parrer din telefon med en NFC-enhed</translation>
+<translation id="1314311879718644478">Vis indhold med augmented reality</translation>
 <translation id="1314509827145471431">Bind i højre side</translation>
 <translation id="1318023360584041678">Gemt i fanegruppe</translation>
 <translation id="1319245136674974084">Spørg ikke igen for denne app</translation>
@@ -176,6 +177,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="1472675084647422956">Vis mere</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Leder du efter browserversionen? Gå til</translation>
 <translation id="1476595624592550506">Skift adgangskode</translation>
 <translation id="1483493594462132177">Send</translation>
 <translation id="1484290072879560759">Vælg leveringsadresse</translation>
@@ -214,6 +216,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="1583429793053364125">Noget gik galt ved visningen af denne webside.</translation>
 <translation id="1586541204584340881">Hvilke udvidelser, du har installeret</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Vil du installere ARCore?</translation>
 <translation id="1592005682883173041">Lokal dataadgang</translation>
 <translation id="1594030484168838125">Vælg</translation>
 <translation id="160851722280695521">Spil Dino Run-spillet i Chrome</translation>
@@ -1261,6 +1264,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="4968522289500246572">Denne app er udviklet til mobilenheder. Du kan muligvis ikke justere størrelsen på den uden at opleve problemer. Hvis du gør, kan der opstå fejl, eller appen kan genstarte.</translation>
 <translation id="4969341057194253438">Slet optagelse</translation>
 <translation id="4973922308112707173">To huller øverst</translation>
+<translation id="4976702386844183910">Senest besøgt <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Vil du bruge mikrofonen?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">Se alle</translation>
@@ -1346,6 +1350,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="5215116848420601511">Betalingsmetoder og adresser, der bruger Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Bakke 13</translation>
+<translation id="5216942107514965959">Senest besøgt i dag</translation>
 <translation id="5222812217790122047">Mail påkrævet</translation>
 <translation id="5230733896359313003">Leveringsadresse</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="5333022057423422993">Chrome har fundet den adgangskode, du netop har brugt, i forbindelse med et brud på datasikkerheden. For at beskytte dine konti anbefaler vi, at du tjekker dine gemte adgangskoder.</translation>
 <translation id="5334013548165032829">Detaljerede systemlogs</translation>
 <translation id="5334145288572353250">Vil du gemme adressen?</translation>
+<translation id="5335920952954443287">Bankende hjerte</translation>
 <translation id="5340250774223869109">Appen er blokeret</translation>
 <translation id="534295439873310000">NFC-enheder</translation>
 <translation id="5344579389779391559">Denne side forsøger muligvis at opkræve penge af dig</translation>
@@ -1531,6 +1537,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="5869522115854928033">Gemte adgangskoder</translation>
 <translation id="5873013647450402046">Din bank vil gerne bekræfte, at det er dig.</translation>
 <translation id="5887400589839399685">Kortet er gemt</translation>
+<translation id="5887687176710214216">Senest besøgt i går</translation>
 <translation id="5895138241574237353">Genstart</translation>
 <translation id="5895187275912066135">Udstedt den</translation>
 <translation id="5901630391730855834">Gul</translation>
@@ -1724,6 +1731,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="6529602333819889595">&amp;Annuller fortryd slet</translation>
 <translation id="6545864417968258051">Bluetooth-scanning</translation>
 <translation id="6547208576736763147">To huller i venstre side</translation>
+<translation id="6554732001434021288">Senest besøgt for <ph name="NUM_DAYS" /> dage siden</translation>
 <translation id="6556866813142980365">Gør det igen</translation>
 <translation id="6569060085658103619">Du ser en udvidelsesside</translation>
 <translation id="6573200754375280815">To huller i højre side</translation>
@@ -1886,6 +1894,7 @@ Ellers vil det blive blokeret af dine privatlivsindstillinger. Det giver det ind
 <translation id="7118618213916969306">Søg efter webadresse til udklipsholderen, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Luk andre faner eller programmer</translation>
 <translation id="7129409597930077180">Der kan ikke sendes til denne adresse. Vælg en anden adresse.</translation>
+<translation id="7132939140423847331">Din administrator tillader ikke kopiering af disse data.</translation>
 <translation id="7135130955892390533">Vis status</translation>
 <translation id="7138472120740807366">Leveringsmetode</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2058,6 +2067,7 @@ Yderligere oplysninger:
 <translation id="7654909834015434372">Når du redigerer annoteringer, skifter dette dokument tilbage til dets oprindelige rotation</translation>
 <translation id="765676359832457558">Skjul avancerede indstillinger...</translation>
 <translation id="7658239707568436148">Annuller</translation>
+<translation id="7659878911471462949">Glædestårer</translation>
 <translation id="7662298039739062396">Indstillingen styres af en udvidelse</translation>
 <translation id="7663736086183791259">Certifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Ikke tilladt i inkognito</translation>
@@ -2158,7 +2168,6 @@ Yderligere oplysninger:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Websitet kan anmode om tilladelse til at bruge virtual reality-enheder og -data</translation>
 <translation id="7984945080620862648">Du kan ikke gå til <ph name="SITE" /> lige nu, da websitet sendte krypterede legitimationsoplysninger, som Chrome ikke kan håndtere. Netværksfejl og angreb er normalt midlertidige, så denne side vil sandsynligvis fungere senere.</translation>
-<translation id="79859296434321399">Installer ARCore for at se augmented reality-indhold</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Bind</translation>
 <translation id="7992044431894087211">Skærmdelingen med <ph name="APPLICATION_TITLE" /> blev genoptaget</translation>
@@ -2262,6 +2271,7 @@ Yderligere oplysninger:
 <translation id="830498451218851433">Fals halvt</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Installerede apps, og hvor ofte de bruges</translation>
+<translation id="8317207217658302555">Vil du opdatere ARCore?</translation>
 <translation id="831997045666694187">Aften</translation>
 <translation id="8321476692217554900">notifikationer</translation>
 <translation id="8328484624016508118">Når du har lukket alle inkognitofaner, rydder Chrome:
@@ -2332,7 +2342,6 @@ Yderligere oplysninger:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Nulstil tilladelse}one{Nulstil tilladelse}other{Nulstil tilladelser}}</translation>
 <translation id="8555010941760982128">Angiv denne kode ved betalingen</translation>
 <translation id="8557066899867184262">Kontrolkoden findes på bagsiden af kortet.</translation>
-<translation id="8558485628462305855">Opdater ARCore for at se augmented reality-indhold</translation>
 <translation id="8559762987265718583">Der kan ikke oprettes en privat forbindelse til <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, da tid og dato (<ph name="DATE_AND_TIME" />) på din enhed er forkerte.</translation>
 <translation id="8564182942834072828">Individuelle dokumenter/ikke-samlede kopier</translation>
 <translation id="8564985650692024650">Chromium anbefaler, at du nulstiller din adgangskode til <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, hvis du har brugt den på andre websites.</translation>
@@ -2445,6 +2454,7 @@ Yderligere oplysninger:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, tryk på Tab-tasten for at se din browserhistorik i Chrome</translation>
 <translation id="8987927404178983737">Måned</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Leder du efter systemversionen? Gå til</translation>
 <translation id="899688752321268742"><ph name="URL" /> vil gerne vide, hvornår du aktivt bruger denne enhed</translation>
 <translation id="8996941253935762404">Det website, du er på vej til, indeholder skadelige programmer</translation>
 <translation id="8997023839087525404">Serveren viste et certifikat, der ikke blev fremvist offentligt ved hjælp af politikken for Certifikatsgennemsigtighed. Dette påkræves for nogle certifikater for at sikre, at de er troværdige, og beskytter mod hackere.</translation>

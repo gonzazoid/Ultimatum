@@ -41,8 +41,7 @@
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/loader/document_loader.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
+#include "third_party/blink/renderer/core/paint/paint_and_raster_invalidation_test.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme_overlay_mobile.h"
@@ -54,8 +53,8 @@
 #include "third_party/blink/renderer/platform/geometry/double_rect.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
 #include "third_party/blink/renderer/platform/graphics/compositor_element_id.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
+#include "third_party/blink/renderer/platform/testing/find_cc_layer.h"
 #include "third_party/blink/renderer/platform/testing/paint_property_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/paint_test_configurations.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
@@ -173,62 +172,10 @@ class VisualViewportTest : public testing::Test,
     settings->SetMainFrameResizesAreOrientationChanges(true);
   }
 
-  const GraphicsLayer* MainGraphicsLayer(const Document* document) {
-    const auto* layer = document->GetLayoutView()->Layer();
-    return layer->GetCompositedLayerMapping()
-               ? layer->GetCompositedLayerMapping()->MainGraphicsLayer()
-               : nullptr;
-  }
-
-  const GraphicsLayer* ScrollingContentsLayer(const Document* document) {
-    const auto* layer = document->GetLayoutView()->Layer();
-    return layer->GetCompositedLayerMapping()
-               ? layer->GetCompositedLayerMapping()->ScrollingContentsLayer()
-               : nullptr;
-  }
-
   const DisplayItemClient& ScrollingBackgroundClient(const Document* document) {
     return document->GetLayoutView()
         ->GetScrollableArea()
         ->GetScrollingBackgroundDisplayItemClient();
-  }
-
-  const RasterInvalidationTracking* MainGraphicsLayerRasterInvalidationTracking(
-      const Document* document) {
-    const auto* layer = MainGraphicsLayer(document);
-    return layer ? layer->GetRasterInvalidationTracking() : nullptr;
-  }
-
-  const RasterInvalidationTracking*
-  ScrollingContentsLayerRasterInvalidationTracking(const Document* document) {
-    const auto* layer = ScrollingContentsLayer(document);
-    return layer ? layer->GetRasterInvalidationTracking() : nullptr;
-  }
-
-  bool MainGraphicsLayerHasRasterInvalidations(const Document* document) {
-    const auto* tracking =
-        MainGraphicsLayerRasterInvalidationTracking(document);
-    return tracking && tracking->HasInvalidations();
-  }
-
-  bool ScrollingContentsLayerHasRasterInvalidations(const Document* document) {
-    const auto* tracking =
-        ScrollingContentsLayerRasterInvalidationTracking(document);
-    return tracking && tracking->HasInvalidations();
-  }
-
-  const Vector<RasterInvalidationInfo>& MainGraphicsLayerRasterInvalidations(
-      const Document* document) {
-    DCHECK(MainGraphicsLayerHasRasterInvalidations(document));
-    return MainGraphicsLayerRasterInvalidationTracking(document)
-        ->Invalidations();
-  }
-
-  const Vector<RasterInvalidationInfo>&
-  ScrollingContentsLayerRasterInvalidations(const Document* document) {
-    DCHECK(ScrollingContentsLayerHasRasterInvalidations(document));
-    return ScrollingContentsLayerRasterInvalidationTracking(document)
-        ->Invalidations();
   }
 
  protected:
@@ -412,8 +359,7 @@ TEST_P(VisualViewportTest, TestResizeAfterVerticalScroll) {
   EXPECT_VECTOR2DF_EQ(ScrollOffset(0, 300), visual_viewport.GetScrollOffset());
 
   // Verify the initial size of the visual viewport in the CSS pixels
-  EXPECT_FLOAT_SIZE_EQ(FloatSize(50, 100),
-                       visual_viewport.VisibleRect().size());
+  EXPECT_SIZEF_EQ(gfx::SizeF(50, 100), visual_viewport.VisibleRect().size());
 
   // Verify the paint property nodes and GeometryMapper cache.
   {
@@ -433,7 +379,7 @@ TEST_P(VisualViewportTest, TestResizeAfterVerticalScroll) {
   WebView()->MainFrameViewWidget()->Resize(gfx::Size(200, 100));
 
   // After resizing the scale changes 2.0 -> 4.0
-  EXPECT_FLOAT_SIZE_EQ(FloatSize(50, 25), visual_viewport.VisibleRect().size());
+  EXPECT_SIZEF_EQ(gfx::SizeF(50, 25), visual_viewport.VisibleRect().size());
 
   EXPECT_EQ(ScrollOffset(0, 625),
             GetFrame()->View()->LayoutViewport()->GetScrollOffset());
@@ -500,8 +446,7 @@ TEST_P(VisualViewportTest, TestResizeAfterHorizontalScroll) {
   EXPECT_VECTOR2DF_EQ(ScrollOffset(150, 0), visual_viewport.GetScrollOffset());
 
   // Verify the initial size of the visual viewport in the CSS pixels
-  EXPECT_FLOAT_SIZE_EQ(FloatSize(50, 100),
-                       visual_viewport.VisibleRect().size());
+  EXPECT_SIZEF_EQ(gfx::SizeF(50, 100), visual_viewport.VisibleRect().size());
 
   // Verify the paint property nodes and GeometryMapper cache.
   {
@@ -520,7 +465,7 @@ TEST_P(VisualViewportTest, TestResizeAfterHorizontalScroll) {
   WebView()->MainFrameViewWidget()->Resize(gfx::Size(200, 100));
 
   // After resizing the scale changes 2.0 -> 4.0
-  EXPECT_FLOAT_SIZE_EQ(FloatSize(50, 25), visual_viewport.VisibleRect().size());
+  EXPECT_SIZEF_EQ(gfx::SizeF(50, 25), visual_viewport.VisibleRect().size());
 
   EXPECT_EQ(ScrollOffset(0, 0),
             GetFrame()->View()->LayoutViewport()->GetScrollOffset());
@@ -562,33 +507,33 @@ TEST_P(VisualViewportTest, TestVisibleRect) {
   visual_viewport.SetSize(size);
 
   // Scale the viewport to 2X; size should not change.
-  FloatRect expected_rect(gfx::PointF(0, 0), FloatSize(size));
+  gfx::RectF expected_rect((gfx::SizeF(size)));
   expected_rect.Scale(0.5);
   visual_viewport.SetScale(2);
   EXPECT_EQ(2, visual_viewport.Scale());
   EXPECT_EQ(size, visual_viewport.Size());
-  EXPECT_FLOAT_RECT_EQ(expected_rect, visual_viewport.VisibleRect());
+  EXPECT_RECTF_EQ(expected_rect, visual_viewport.VisibleRect());
 
   // Move the viewport.
   expected_rect.set_origin(gfx::PointF(5, 7));
   visual_viewport.SetLocation(expected_rect.origin());
-  EXPECT_FLOAT_RECT_EQ(expected_rect, visual_viewport.VisibleRect());
+  EXPECT_RECTF_EQ(expected_rect, visual_viewport.VisibleRect());
 
   expected_rect.set_origin(gfx::PointF(200, 100));
   visual_viewport.SetLocation(expected_rect.origin());
-  EXPECT_FLOAT_RECT_EQ(expected_rect, visual_viewport.VisibleRect());
+  EXPECT_RECTF_EQ(expected_rect, visual_viewport.VisibleRect());
 
   // Scale the viewport to 3X to introduce some non-int values.
   gfx::PointF oldLocation = expected_rect.origin();
-  expected_rect = FloatRect(gfx::PointF(), FloatSize(size));
+  expected_rect = gfx::RectF(gfx::SizeF(size));
   expected_rect.Scale(1 / 3.0f);
   expected_rect.set_origin(oldLocation);
   visual_viewport.SetScale(3);
-  EXPECT_FLOAT_RECT_EQ(expected_rect, visual_viewport.VisibleRect());
+  EXPECT_RECTF_EQ(expected_rect, visual_viewport.VisibleRect());
 
   expected_rect.set_origin(gfx::PointF(0.25f, 0.333f));
   visual_viewport.SetLocation(expected_rect.origin());
-  EXPECT_FLOAT_RECT_EQ(expected_rect, visual_viewport.VisibleRect());
+  EXPECT_RECTF_EQ(expected_rect, visual_viewport.VisibleRect());
 }
 
 TEST_P(VisualViewportTest, TestFractionalScrollOffsetIsNotOverwritten) {
@@ -626,46 +571,40 @@ TEST_P(VisualViewportTest, TestOffsetClamping) {
   // possible. At minimum scale, the viewport is 1280x960.
   VisualViewport& visual_viewport = GetFrame()->GetPage()->GetVisualViewport();
   ASSERT_EQ(0.25, visual_viewport.Scale());
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   visual_viewport.SetLocation(gfx::PointF(-1, -2));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   visual_viewport.SetLocation(gfx::PointF(100, 200));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   visual_viewport.SetLocation(gfx::PointF(-5, 10));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Scale to 2x. The viewport's visible rect should now have a size of 160x120.
   visual_viewport.SetScale(2);
   gfx::PointF location(10, 50);
   visual_viewport.SetLocation(location);
-  EXPECT_FLOAT_POINT_EQ(location, visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(location, visual_viewport.VisibleRect().origin());
 
   visual_viewport.SetLocation(gfx::PointF(10000, 10000));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(1120, 840),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(1120, 840),
+                   visual_viewport.VisibleRect().origin());
 
   visual_viewport.SetLocation(gfx::PointF(-2000, -2000));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Make sure offset gets clamped on scale out. Scale to 1.25 so the viewport
   // is 256x192.
   visual_viewport.SetLocation(gfx::PointF(1120, 840));
   visual_viewport.SetScale(1.25);
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(1024, 768),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(1024, 768),
+                   visual_viewport.VisibleRect().origin());
 
   // Scale out smaller than 1.
   visual_viewport.SetScale(0.25);
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 }
 
 // Test that the viewport can be scrolled around only within the main frame in
@@ -681,60 +620,44 @@ TEST_P(VisualViewportTest, TestOffsetClampingWithResize) {
   // Visual viewport should be initialized to same size as frame so no scrolling
   // possible.
   VisualViewport& visual_viewport = GetFrame()->GetPage()->GetVisualViewport();
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Shrink the viewport vertically. The resize shouldn't affect the location,
   // but it should allow vertical scrolling.
   visual_viewport.SetSize(gfx::Size(320, 200));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(10, 20));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 20),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 20), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(0, 100));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 40),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 40), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(0, 10));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 10),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 10), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(0, -100));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Repeat the above but for horizontal dimension.
   visual_viewport.SetSize(gfx::Size(280, 240));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(10, 20));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(10, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(10, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(100, 0));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(40, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(40, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(10, 0));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(10, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(10, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(-100, 0));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Now with both dimensions.
   visual_viewport.SetSize(gfx::Size(280, 200));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(10, 20));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(10, 20),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(10, 20), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(100, 100));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(40, 40),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(40, 40), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(10, 3));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(10, 3),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(10, 3), visual_viewport.VisibleRect().origin());
   visual_viewport.SetLocation(gfx::PointF(-10, -4));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 }
 
 // Test that the viewport is scrollable but bounded appropriately within the
@@ -749,21 +672,20 @@ TEST_P(VisualViewportTest, TestOffsetClampingWithResizeAndScale) {
   // Visual viewport should be initialized to same size as WebView so no
   // scrolling possible.
   VisualViewport& visual_viewport = GetFrame()->GetPage()->GetVisualViewport();
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(0, 0),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(0, 0), visual_viewport.VisibleRect().origin());
 
   // Zoom in to 2X so we can scroll the viewport to 160x120.
   visual_viewport.SetScale(2);
   visual_viewport.SetLocation(gfx::PointF(200, 200));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(160, 120),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(160, 120),
+                   visual_viewport.VisibleRect().origin());
 
   // Now resize the viewport to make it 10px smaller. Since we're zoomed in by
   // 2X it should allow us to scroll by 5px more.
   visual_viewport.SetSize(gfx::Size(310, 230));
   visual_viewport.SetLocation(gfx::PointF(200, 200));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(165, 125),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(165, 125),
+                   visual_viewport.VisibleRect().origin());
 
   // The viewport can be larger than the main frame (currently 320, 240) though
   // typically the scale will be clamped to prevent it from actually being
@@ -778,15 +700,15 @@ TEST_P(VisualViewportTest, TestOffsetClampingWithResizeAndScale) {
   EXPECT_EQ(WebView()->MainFrameViewWidget()->Size(),
             GetFrame()->View()->FrameRect().size());
   visual_viewport.SetLocation(gfx::PointF(1000, 1000));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(320, 240),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(320, 240),
+                   visual_viewport.VisibleRect().origin());
 
   // Make sure resizing the viewport doesn't change its offset if the resize
   // doesn't make the viewport go out of bounds.
   visual_viewport.SetLocation(gfx::PointF(200, 200));
   visual_viewport.SetSize(gfx::Size(880, 560));
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(200, 200),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(200, 200),
+                   visual_viewport.VisibleRect().origin());
 }
 
 // The main LocalFrameView's size should be set such that its the size of the
@@ -989,8 +911,8 @@ TEST_P(VisualViewportTest, TestRestoredFromHistoryItem) {
   VisualViewport& visual_viewport = GetFrame()->GetPage()->GetVisualViewport();
   EXPECT_EQ(2, visual_viewport.Scale());
 
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(100, 120),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(100, 120),
+                   visual_viewport.VisibleRect().origin());
 }
 
 // Test restoring a HistoryItem without the visual viewport offset falls back to
@@ -1020,8 +942,7 @@ TEST_P(VisualViewportTest, TestRestoredFromLegacyHistoryItem) {
   EXPECT_EQ(2, visual_viewport.Scale());
   EXPECT_EQ(ScrollOffset(100, 150),
             GetFrame()->View()->LayoutViewport()->GetScrollOffset());
-  EXPECT_FLOAT_POINT_EQ(gfx::PointF(20, 30),
-                        visual_viewport.VisibleRect().origin());
+  EXPECT_POINTF_EQ(gfx::PointF(20, 30), visual_viewport.VisibleRect().origin());
 }
 
 // Test that navigation to a new page with a different sized main frame doesn't
@@ -1381,8 +1302,8 @@ TEST_P(VisualViewportTest, TestBrowserControlsAdjustment) {
   WebView()->MainFrameViewWidget()->ApplyViewportChangesForTesting(
       {gfx::Vector2dF(), gfx::Vector2dF(), 1, false, -10.5f / 20, 0,
        cc::BrowserControlsState::kBoth});
-  EXPECT_FLOAT_SIZE_EQ(FloatSize(500, 440.5f),
-                       visual_viewport.VisibleRect().size());
+  EXPECT_SIZEF_EQ(gfx::SizeF(500, 440.5f),
+                  visual_viewport.VisibleRect().size());
 
   // maximumScrollPosition |ceil|s the browser controls adjustment.
   visual_viewport.Move(ScrollOffset(10000, 10000));
@@ -1999,48 +1920,38 @@ TEST_P(VisualViewportTest, TestCoordinateTransforms) {
 
   // At scale = 1 the transform should be a no-op.
   visual_viewport.SetScale(1);
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(314, 273),
-      visual_viewport.ViewportToRootFrame(gfx::PointF(314, 273)));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(314, 273),
-      visual_viewport.RootFrameToViewport(gfx::PointF(314, 273)));
+  EXPECT_POINTF_EQ(gfx::PointF(314, 273),
+                   visual_viewport.ViewportToRootFrame(gfx::PointF(314, 273)));
+  EXPECT_POINTF_EQ(gfx::PointF(314, 273),
+                   visual_viewport.RootFrameToViewport(gfx::PointF(314, 273)));
 
   // At scale = 2.
   visual_viewport.SetScale(2);
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(55, 75),
-      visual_viewport.ViewportToRootFrame(gfx::PointF(110, 150)));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(110, 150),
-      visual_viewport.RootFrameToViewport(gfx::PointF(55, 75)));
+  EXPECT_POINTF_EQ(gfx::PointF(55, 75),
+                   visual_viewport.ViewportToRootFrame(gfx::PointF(110, 150)));
+  EXPECT_POINTF_EQ(gfx::PointF(110, 150),
+                   visual_viewport.RootFrameToViewport(gfx::PointF(55, 75)));
 
   // At scale = 2 and with the visual viewport offset.
   visual_viewport.SetLocation(gfx::PointF(10, 12));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(50, 62),
-      visual_viewport.ViewportToRootFrame(gfx::PointF(80, 100)));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(80, 100),
-      visual_viewport.RootFrameToViewport(gfx::PointF(50, 62)));
+  EXPECT_POINTF_EQ(gfx::PointF(50, 62),
+                   visual_viewport.ViewportToRootFrame(gfx::PointF(80, 100)));
+  EXPECT_POINTF_EQ(gfx::PointF(80, 100),
+                   visual_viewport.RootFrameToViewport(gfx::PointF(50, 62)));
 
   // Test points that will cause non-integer values.
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(50.5, 62.4),
-      visual_viewport.ViewportToRootFrame(gfx::PointF(81, 100.8)));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(81, 100.8),
-      visual_viewport.RootFrameToViewport(gfx::PointF(50.5, 62.4)));
+  EXPECT_POINTF_EQ(gfx::PointF(50.5, 62.4),
+                   visual_viewport.ViewportToRootFrame(gfx::PointF(81, 100.8)));
+  EXPECT_POINTF_EQ(gfx::PointF(81, 100.8), visual_viewport.RootFrameToViewport(
+                                               gfx::PointF(50.5, 62.4)));
 
   // Scrolling the main frame should have no effect.
   frame_view.LayoutViewport()->SetScrollOffset(
       ScrollOffset(100, 120), mojom::blink::ScrollType::kProgrammatic);
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(50, 62),
-      visual_viewport.ViewportToRootFrame(gfx::PointF(80, 100)));
-  EXPECT_FLOAT_POINT_EQ(
-      gfx::PointF(80, 100),
-      visual_viewport.RootFrameToViewport(gfx::PointF(50, 62)));
+  EXPECT_POINTF_EQ(gfx::PointF(50, 62),
+                   visual_viewport.ViewportToRootFrame(gfx::PointF(80, 100)));
+  EXPECT_POINTF_EQ(gfx::PointF(80, 100),
+                   visual_viewport.RootFrameToViewport(gfx::PointF(50, 62)));
 }
 
 // Tests that the window dimensions are available before a full layout occurs.
@@ -2093,9 +2004,6 @@ TEST_P(VisualViewportTest, ResizeWithScrollAnchoring) {
 // Make sure a composited background-attachment:fixed background gets resized
 // by browser controls.
 TEST_P(VisualViewportTest, ResizeCompositedAndFixedBackground) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   WebViewImpl* web_view_impl =
       helper_.InitializeWithSettings(&ConfigureAndroidCompositing);
 
@@ -2127,14 +2035,13 @@ TEST_P(VisualViewportTest, ResizeCompositedAndFixedBackground) {
   UpdateAllLifecyclePhases();
   Document* document =
       To<LocalFrame>(web_view_impl->GetPage()->MainFrame())->GetDocument();
-  GraphicsLayer* background_layer = document->GetLayoutView()
-                                        ->Layer()
-                                        ->GetCompositedLayerMapping()
-                                        ->MainGraphicsLayer();
+  VisualViewport& visual_viewport =
+      web_view_impl->GetPage()->GetVisualViewport();
+  auto* background_layer = visual_viewport.LayerForScrolling();
   ASSERT_TRUE(background_layer);
 
-  ASSERT_EQ(page_width, background_layer->Size().width());
-  ASSERT_EQ(page_height, background_layer->Size().height());
+  ASSERT_EQ(page_width, background_layer->bounds().width());
+  ASSERT_EQ(page_height, background_layer->bounds().height());
   ASSERT_EQ(page_width, document->View()->GetLayoutSize().width());
   ASSERT_EQ(smallest_height, document->View()->GetLayoutSize().height());
 
@@ -2147,16 +2054,16 @@ TEST_P(VisualViewportTest, ResizeCompositedAndFixedBackground) {
   ASSERT_EQ(smallest_height, document->View()->GetLayoutSize().height());
 
   // The background layer's size should have changed though.
-  EXPECT_EQ(page_width, background_layer->Size().width());
-  EXPECT_EQ(smallest_height, background_layer->Size().height());
+  EXPECT_EQ(page_width, background_layer->bounds().width());
+  EXPECT_EQ(smallest_height, background_layer->bounds().height());
 
   web_view_impl->ResizeWithBrowserControls(gfx::Size(page_width, page_height),
                                            browser_controls_height, 0, true);
   UpdateAllLifecyclePhases();
 
   // The background layer's size should change again.
-  EXPECT_EQ(page_width, background_layer->Size().width());
-  EXPECT_EQ(page_height, background_layer->Size().height());
+  EXPECT_EQ(page_width, background_layer->bounds().width());
+  EXPECT_EQ(page_height, background_layer->bounds().height());
 }
 
 static void ConfigureAndroidNonCompositing(WebSettings* settings) {
@@ -2170,9 +2077,6 @@ static void ConfigureAndroidNonCompositing(WebSettings* settings) {
 // Make sure a non-composited background-attachment:fixed background gets
 // resized by browser controls.
 TEST_P(VisualViewportTest, ResizeNonCompositedAndFixedBackground) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   WebViewImpl* web_view_impl =
       helper_.InitializeWithSettings(&ConfigureAndroidNonCompositing);
 
@@ -2214,14 +2118,16 @@ TEST_P(VisualViewportTest, ResizeNonCompositedAndFixedBackground) {
   ASSERT_EQ(smallest_height, document->View()->GetLayoutSize().height());
 
   // Fixed-attachment background is affected by viewport size.
-  EXPECT_FALSE(MainGraphicsLayerHasRasterInvalidations(document));
-  ASSERT_TRUE(ScrollingContentsLayerHasRasterInvalidations(document));
-  EXPECT_THAT(
-      ScrollingContentsLayerRasterInvalidations(document),
-      UnorderedElementsAre(RasterInvalidationInfo{
-          ScrollingBackgroundClient(document).Id(),
-          ScrollingBackgroundClient(document).DebugName(),
-          gfx::Rect(0, 0, 640, 1000), PaintInvalidationReason::kBackground}));
+  {
+    const auto& raster_invalidations =
+        GetRasterInvalidationTracking(*GetFrame()->View())->Invalidations();
+    EXPECT_THAT(
+        raster_invalidations,
+        UnorderedElementsAre(RasterInvalidationInfo{
+            ScrollingBackgroundClient(document).Id(),
+            ScrollingBackgroundClient(document).DebugName(),
+            gfx::Rect(0, 0, 640, 1000), PaintInvalidationReason::kBackground}));
+  }
 
   document->View()->SetTracksRasterInvalidations(false);
 
@@ -2231,14 +2137,16 @@ TEST_P(VisualViewportTest, ResizeNonCompositedAndFixedBackground) {
   UpdateAllLifecyclePhases();
 
   // Fixed-attachment background is affected by viewport size.
-  EXPECT_FALSE(MainGraphicsLayerHasRasterInvalidations(document));
-  ASSERT_TRUE(ScrollingContentsLayerHasRasterInvalidations(document));
-  EXPECT_THAT(
-      ScrollingContentsLayerRasterInvalidations(document),
-      UnorderedElementsAre(RasterInvalidationInfo{
-          ScrollingBackgroundClient(document).Id(),
-          ScrollingBackgroundClient(document).DebugName(),
-          gfx::Rect(0, 0, 640, 1000), PaintInvalidationReason::kBackground}));
+  {
+    const auto& raster_invalidations =
+        GetRasterInvalidationTracking(*GetFrame()->View())->Invalidations();
+    EXPECT_THAT(
+        raster_invalidations,
+        UnorderedElementsAre(RasterInvalidationInfo{
+            ScrollingBackgroundClient(document).Id(),
+            ScrollingBackgroundClient(document).DebugName(),
+            gfx::Rect(0, 0, 640, 1000), PaintInvalidationReason::kBackground}));
+  }
 
   document->View()->SetTracksRasterInvalidations(false);
 }
@@ -2300,12 +2208,8 @@ TEST_P(VisualViewportTest, ResizeNonFixedBackgroundNoLayoutOrInvalidation) {
   ASSERT_EQ(page_width, document->View()->GetLayoutSize().width());
   ASSERT_EQ(smallest_height, document->View()->GetLayoutSize().height());
 
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    // No invalidations should have occurred on either main layer or scrolling
-    // contents layer.
-    EXPECT_FALSE(MainGraphicsLayerHasRasterInvalidations(document));
-    EXPECT_FALSE(ScrollingContentsLayerHasRasterInvalidations(document));
-  }
+  EXPECT_FALSE(
+      GetRasterInvalidationTracking(*GetFrame()->View())->HasInvalidations());
 
   document->View()->SetTracksRasterInvalidations(false);
 }
@@ -2338,12 +2242,12 @@ TEST_P(VisualViewportTest, InvalidateLayoutViewWhenDocumentSmallerThanView) {
   ASSERT_EQ(page_width, document->View()->GetLayoutSize().width());
   ASSERT_EQ(page_height, document->View()->GetLayoutSize().height());
 
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    // Incremental raster invalidation is needed because the resize exposes
-    // unpainted area of background.
-    EXPECT_FALSE(MainGraphicsLayerHasRasterInvalidations(document));
-    ASSERT_TRUE(ScrollingContentsLayerHasRasterInvalidations(document));
-    EXPECT_THAT(ScrollingContentsLayerRasterInvalidations(document),
+  // Incremental raster invalidation is needed because the resize exposes
+  // unpainted area of background.
+  {
+    const auto& raster_invalidations =
+        GetRasterInvalidationTracking(*GetFrame()->View())->Invalidations();
+    EXPECT_THAT(raster_invalidations,
                 UnorderedElementsAre(RasterInvalidationInfo{
                     ScrollingBackgroundClient(document).Id(),
                     ScrollingBackgroundClient(document).DebugName(),
@@ -2359,12 +2263,10 @@ TEST_P(VisualViewportTest, InvalidateLayoutViewWhenDocumentSmallerThanView) {
                                            browser_controls_height, 0, false);
   UpdateAllLifecyclePhases();
 
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    // No raster invalidation is needed because of no change within the root
-    // scrolling layer.
-    EXPECT_FALSE(MainGraphicsLayerHasRasterInvalidations(document));
-    EXPECT_FALSE(ScrollingContentsLayerHasRasterInvalidations(document));
-  }
+  // No raster invalidation is needed because of no change within the root
+  // scrolling layer.
+  EXPECT_FALSE(
+      GetRasterInvalidationTracking(*GetFrame()->View())->HasInvalidations());
 
   document->View()->SetTracksRasterInvalidations(false);
 }

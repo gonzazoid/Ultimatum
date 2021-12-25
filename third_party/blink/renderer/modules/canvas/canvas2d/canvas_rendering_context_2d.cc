@@ -939,14 +939,14 @@ void CanvasRenderingContext2D::fillFormattedText(
   if (!GetState().HasRealizedFont())
     setFont(font());
 
-  FloatRect bounds;
+  gfx::RectF bounds;
   sk_sp<PaintRecord> recording = formatted_text->PaintFormattedText(
       canvas()->GetDocument(), GetState().GetFontDescription(), x, y,
       wrap_width, bounds);
   Draw<OverdrawOp::kNone>(
       [recording](cc::PaintCanvas* c, const PaintFlags* flags)  // draw lambda
       { c->drawPicture(recording); },
-      [](const SkIRect& rect) { return false; }, bounds,
+      [](const SkIRect& rect) { return false; }, gfx::RectFToSkRect(bounds),
       CanvasRenderingContext2DState::PaintType::kFillPaintType,
       CanvasRenderingContext2DState::kNoImage,
       CanvasPerformanceMonitor::DrawType::kText);
@@ -1098,9 +1098,9 @@ CanvasRenderingContext2D::getContextAttributes() const {
       CanvasRenderingContext2DSettings::Create();
   settings->setAlpha(CreationAttributes().alpha);
   if (RuntimeEnabledFeatures::CanvasColorManagementEnabled())
-    settings->setColorSpace(GetCanvas2DColorParams().GetColorSpaceAsString());
+    settings->setColorSpace(color_params_.GetColorSpaceAsString());
   if (RuntimeEnabledFeatures::CanvasColorManagementV2Enabled())
-    settings->setPixelFormat(GetCanvas2DColorParams().GetPixelFormatAsString());
+    settings->setPixelFormat(color_params_.GetPixelFormatAsString());
   settings->setDesynchronized(Host()->LowLatencyEnabled());
   if (RuntimeEnabledFeatures::NewCanvas2DAPIEnabled(
           canvas()->GetTopExecutionContext()))

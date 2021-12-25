@@ -134,6 +134,13 @@ const base::Feature kSecondaryServerFieldPredictions = {
 const base::Feature kSupportForAddPasswordsInSettings = {
     "SupportForAddPasswordsInSettings", base::FEATURE_DISABLED_BY_DEFAULT};
 
+#if defined(OS_LINUX)
+// When enabled, all undecryptable passwords are deleted from the local database
+// during initial sync flow.
+const base::Feature kSyncUndecryptablePasswordsLinux = {
+    "SyncUndecryptablePasswordsLinux", base::FEATURE_DISABLED_BY_DEFAULT};
+#endif
+
 // Treat heuritistics to find new password fields as reliable. This enables
 // password generation on more forms, but could lead to false positives.
 const base::Feature kTreatNewPasswordHeuristicsAsReliable = {
@@ -160,6 +167,12 @@ const base::Feature kUnifiedPasswordManagerMigration{
 // source of truth.
 const base::Feature kUnifiedPasswordManagerShadowAndroid{
     "UnifiedPasswordManagerShadowAndroid", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Similar to kUnifiedPasswordManagerShadowAndroid but send modify operations
+// instead of read operations.Relevant only for non-sync'ing users.
+const base::Feature kUnifiedPasswordManagerShadowWriteOperationsAndroid{
+    "UnifiedPasswordManagerShadowWriteOperationsAndroid",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 // If enabled, the built-in sync functionality in PasswordSyncBridge becomes
 // unused, meaning that SyncService/SyncEngine will no longer download or

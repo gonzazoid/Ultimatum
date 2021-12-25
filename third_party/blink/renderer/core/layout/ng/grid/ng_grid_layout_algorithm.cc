@@ -3433,7 +3433,7 @@ void NGGridLayoutAlgorithm::PlaceGridItemsForFragmentation(
   wtf_size_t breakpoint_row_set_index;
   bool has_subsequent_children;
 
-  const LayoutUnit fragmentainer_space =
+  LayoutUnit fragmentainer_space =
       FragmentainerSpaceAtBfcStart(ConstraintSpace());
   const LayoutUnit previous_consumed_block_size =
       BreakToken() ? BreakToken()->ConsumedBlockSize() : LayoutUnit();
@@ -3534,10 +3534,29 @@ void NGGridLayoutAlgorithm::PlaceGridItemsForFragmentation(
         if (!MovePastBreakpoint(ConstraintSpace(), grid_item.node, *result,
                                 fragment_relative_block_offset, appeal_before,
                                 /* builder */ nullptr)) {
-          // TODO(ikilpatrick): We may have break-before:avoid on this row, we
-          // should search upwards (ensuring that we are still in this
-          // fragmentainer), for the first row with the highest break appeal.
           breakpoint_row_set_index = item_row_set_index;
+
+          // We may have "break-before:avoid" or similar on this row. Instead
+          // of just breaking on this row, search upwards for a row with a
+          // better EBreakBetween.
+          if (IsAvoidBreakValue(ConstraintSpace(), break_between)) {
+            for (int index = item_row_set_index - 1; index >= 0; --index) {
+              // Only consider rows within this fragmentainer.
+              LayoutUnit offset =
+                  grid_geometry->row_geometry.sets[index].offset +
+                  (*row_offset_adjustments)[index] -
+                  previous_consumed_block_size;
+              if (offset <= LayoutUnit())
+                break;
+
+              // Forced row breaks should have been already handled, accept any
+              // row with an "auto" break-between.
+              if (row_break_between[index] == EBreakBetween::kAuto) {
+                breakpoint_row_set_index = index;
+                break;
+              }
+            }
+          }
           continue;
         }
       }
@@ -3614,12 +3633,20 @@ void NGGridLayoutAlgorithm::PlaceGridItemsForFragmentation(
   auto ShiftBreakpointIntoNextFragmentainer = [&]() -> bool {
     if (breakpoint_row_set_index == kNotFound)
       return false;
-    DCHECK_NE(fragmentainer_space, kIndefiniteSize);
 
     const LayoutUnit fragment_relative_row_offset =
         grid_geometry->row_geometry.sets[breakpoint_row_set_index].offset +
         (*row_offset_adjustments)[breakpoint_row_set_index] -
         previous_consumed_block_size;
+
+    // We may be within the initial column-balancing pass (where we have an
+    // indefinite fragmentainer size). If we have a forced break, re-run
+    // |PlaceItems()| assuming the breakpoint offset is the fragmentainer size.
+    if (fragmentainer_space == kIndefiniteSize) {
+      fragmentainer_space = fragment_relative_row_offset;
+      return true;
+    }
+
     const LayoutUnit row_offset_delta =
         fragmentainer_space - fragment_relative_row_offset;
 

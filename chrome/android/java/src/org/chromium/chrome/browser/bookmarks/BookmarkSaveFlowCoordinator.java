@@ -99,18 +99,21 @@ public class BookmarkSaveFlowCoordinator {
      * @param wasBookmarkMoved Whether the save flow is shown as a reslult of a moved bookmark.
      */
     public void show(BookmarkId bookmarkId, boolean fromExplicitTrackUi, boolean wasBookmarkMoved) {
-        assert mBookmarkModel.isBookmarkModelLoaded();
-        show(bookmarkId, fromExplicitTrackUi, wasBookmarkMoved,
-                mBookmarkModel.getPowerBookmarkMeta(bookmarkId));
+        mBookmarkModel.finishLoadingBookmarkModel(() -> {
+            show(bookmarkId, fromExplicitTrackUi, wasBookmarkMoved,
+                    mBookmarkModel.getPowerBookmarkMeta(bookmarkId));
+        });
     }
 
     void show(BookmarkId bookmarkId, boolean fromExplicitTrackUi, boolean wasBookmarkMoved,
             @Nullable PowerBookmarkMeta meta) {
         mDestroyChecker.checkNotDestroyed();
         mBottomSheetContent = new BookmarkSaveFlowBottomSheetContent(mBookmarkSaveFlowView);
+        // Order matters here: Calling show on the mediator first allows the height to be fully
+        // determined before the sheet is shown.
+        mMediator.show(bookmarkId, meta, fromExplicitTrackUi, wasBookmarkMoved);
         boolean shown =
                 mBottomSheetController.requestShowContent(mBottomSheetContent, /* animate= */ true);
-        mMediator.show(bookmarkId, meta, fromExplicitTrackUi, wasBookmarkMoved);
 
         AccessibilityManager am =
                 (AccessibilityManager) mContext.getSystemService(Context.ACCESSIBILITY_SERVICE);

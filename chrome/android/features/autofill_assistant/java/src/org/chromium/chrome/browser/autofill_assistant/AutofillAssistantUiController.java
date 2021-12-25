@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.autofill_assistant;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.view.View;
 import android.view.Window;
 
 import androidx.annotation.Nullable;
@@ -15,24 +14,15 @@ import androidx.annotation.Nullable;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
-import org.chromium.base.supplier.Supplier;
-import org.chromium.base.task.PostTask;
 import org.chromium.chrome.autofill_assistant.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
-import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.autofill_assistant.carousel.AssistantChip;
 import org.chromium.chrome.browser.autofill_assistant.metrics.DropOutReason;
 import org.chromium.chrome.browser.autofill_assistant.overlay.AssistantOverlayCoordinator;
-import org.chromium.chrome.browser.customtabs.CustomTabActivity;
-import org.chromium.chrome.browser.feedback.ScreenshotMode;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabUtils;
-import org.chromium.chrome.browser.ui.TabObscuringHandler;
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController.SheetState;
-import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
-import org.chromium.content_public.browser.UiThreadTaskTraits;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.modelutil.PropertyKey;
@@ -54,16 +44,18 @@ import java.util.Set;
 // TODO(crbug.com/806868): This class should be removed once all logic is in native side and the
 // model is directly modified by the native AssistantMediator.
 public class AutofillAssistantUiController {
-    private static Set<ChromeActivity> sActiveChromeActivities;
+    private static final Set<Activity> sActiveActivities = new HashSet<>();
+
     private long mNativeUiController;
 
-    private final ChromeActivity mActivity;
+    private final Activity mActivity;
     private final AssistantCoordinator mCoordinator;
     private final AssistantDependencies mDependencies;
     private final ActivityTabProvider.ActivityTabTabObserver mActivityTabObserver;
     private WebContents mWebContents;
 
     private final AssistantSnackbarFactory mSnackbarFactory;
+    private final AssistantFeedbackUtil mFeedbackUtil;
     @Nullable
     private AssistantSnackbar mSnackbar;
 
@@ -80,77 +72,43 @@ public class AutofillAssistantUiController {
     public static Profile getProfile() {
         return Profile.getLastUsedRegularProfile();
     }
+
     /**
-     * Finds an activity to which a AA UI can be added.
-     *
-     * <p>The activity must not already have an AA UI installed.
+     * Returns {@code true} if an activity without a ui controller was found.
      */
     @CalledByNative
-    @Nullable
-    private static ChromeActivity findAppropriateActivity(WebContents webContents) {
-        ChromeActivity activity = ChromeActivity.fromWebContents(webContents);
-        if (activity != null && isActive(activity)) {
-            return null;
-        }
-
-        return activity;
-    }
-
-    /**
-     * Returns {@code true} if an AA UI is active on the given activity.
-     *
-     * <p>Used to avoid creating duplicate coordinators views.
-     *
-     * <p>TODO(crbug.com/806868): Refactor to have AssistantCoordinator owned by the activity, so
-     * it's easy to guarantee that there will be at most one per activity.
-     */
-    private static boolean isActive(ChromeActivity activity) {
-        if (sActiveChromeActivities == null) {
-            return false;
-        }
-
-        return sActiveChromeActivities.contains(activity);
+    private static boolean shouldCreateNewInstance(
+            WebContents webContents, AssistantDependencies dependencies) {
+        return dependencies.maybeUpdateDependencies(webContents)
+                && !sActiveActivities.contains(dependencies.getActivity());
     }
 
     @CalledByNative
-    private static AutofillAssistantUiController create(ChromeActivity activity,
-            boolean allowTabSwitching, long nativeUiController, AssistantDependencies dependencies,
+    private AutofillAssistantUiController(long nativeUiController,
+            AssistantDependencies dependencies, boolean allowTabSwitching,
             @Nullable AssistantOverlayCoordinator overlayCoordinator) {
-        BottomSheetController sheetController =
-                BottomSheetControllerProvider.from(activity.getWindowAndroid());
-        assert activity != null;
-        assert sheetController != null;
-
-        if (sActiveChromeActivities == null) {
-            sActiveChromeActivities = new HashSet<>();
-        }
-        sActiveChromeActivities.add(activity);
-
-        // TODO(crbug.com/1048983): Have the params be passed in to the constructor directly rather
-        //         than obtaining them from ChromeActivity getters.
-        return new AutofillAssistantUiController(activity, sheetController,
-                activity.getTabObscuringHandler(), allowTabSwitching, nativeUiController,
-                dependencies, overlayCoordinator);
-    }
-
-    private AutofillAssistantUiController(ChromeActivity activity, BottomSheetController controller,
-            TabObscuringHandler tabObscuringHandler, boolean allowTabSwitching,
-            long nativeUiController, AssistantDependencies dependencies,
-            @Nullable AssistantOverlayCoordinator overlayCoordinator) {
-        mNativeUiController = nativeUiController;
-        mActivity = activity;
         mDependencies = dependencies;
-        Supplier<View> rootView = activity.getCompositorViewHolderSupplier();
-        mSnackbarFactory = dependencies.getSnackbarFactory();
+        mActivity = dependencies.getActivity();
+        sActiveActivities.add(mActivity);
 
-        mCoordinator = new AssistantCoordinator(activity, controller, tabObscuringHandler,
-                overlayCoordinator, this::safeNativeOnKeyboardVisibilityChanged,
-                activity.getWindowAndroid().getKeyboardDelegate(), rootView.get(),
-                activity.getActivityTabProvider(), activity.getBrowserControlsManager(),
-                activity.getWindowAndroid().getApplicationBottomInsetProvider(),
-                dependencies.getAccessibilityUtil());
+        mNativeUiController = nativeUiController;
+        mSnackbarFactory = dependencies.getSnackbarFactory();
+        mFeedbackUtil = dependencies.getFeedbackUtil();
+
+        // NOTE: Only create one instance of this unless you know what you are doing.
+        @Nullable
+        AssistantTabObscuringUtil tabObscuringUtil =
+                dependencies.getTabObscuringUtilOrNull(dependencies.getWindowAndroid());
+
+        mCoordinator = new AssistantCoordinator(mActivity, dependencies.getBottomSheetController(),
+                tabObscuringUtil, overlayCoordinator, this::safeNativeOnKeyboardVisibilityChanged,
+                dependencies.getKeyboardVisibilityDelegate(), dependencies.getRootView(),
+                dependencies.getBrowserControls(), dependencies.getBottomInsetProvider(),
+                dependencies.getAccessibilityUtil(), dependencies.getInfoPageUtil(),
+                dependencies.getProfileImageUtilOrNull(mActivity));
+
         mActivityTabObserver = new ActivityTabProvider.ActivityTabTabObserver(
-                activity.getActivityTabProvider(), /* shouldTrigger = */ true) {
+                dependencies.getActivityTabProvider(), /* shouldTrigger = */ true) {
             @Override
             protected void onObservingDifferentTab(Tab tab, boolean hint) {
                 if (mWebContents == null) {
@@ -170,7 +128,7 @@ public class AutofillAssistantUiController {
                 if (!allowTabSwitching) {
                     if (tab == null || tab.getWebContents() != mWebContents) {
                         safeNativeOnFatalError(
-                                activity.getString(R.string.autofill_assistant_give_up),
+                                mActivity.getString(R.string.autofill_assistant_give_up),
                                 DropOutReason.TAB_CHANGED);
                     }
                     return;
@@ -290,7 +248,7 @@ public class AutofillAssistantUiController {
         mNativeUiController = 0;
         mActivityTabObserver.destroy();
         mCoordinator.destroy();
-        sActiveChromeActivities.remove(mActivity);
+        sActiveActivities.remove(mActivity);
     }
 
     /**
@@ -299,9 +257,7 @@ public class AutofillAssistantUiController {
      */
     @CalledByNative
     private void scheduleCloseCustomTab() {
-        if (mActivity instanceof CustomTabActivity) {
-            PostTask.postTask(UiThreadTaskTraits.DEFAULT, mActivity::finish);
-        }
+        mDependencies.getTabUtil().scheduleCloseCustomTab(mActivity);
     }
 
     @CalledByNative
@@ -320,9 +276,12 @@ public class AutofillAssistantUiController {
         mCoordinator.getBottomBarCoordinator().collapse();
     }
 
+    /**
+     * Shows a feedback form.
+     */
     @CalledByNative
-    private void showFeedback(String debugContext, @ScreenshotMode int screenshotMode) {
-        mCoordinator.showFeedback(debugContext, screenshotMode);
+    private void showFeedback(String debugContext, /* @ScreenshotMode */ int screenshotMode) {
+        mFeedbackUtil.showFeedback(mActivity, mWebContents, screenshotMode, debugContext);
     }
 
     @CalledByNative

@@ -19,7 +19,6 @@
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar_theme.h"
 #include "third_party/blink/renderer/platform/graphics/compositing/paint_artifact_compositor.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 
 using testing::_;
 
@@ -95,22 +94,7 @@ class PaintLayerScrollableAreaTest : public PaintControllerPaintTest {
       return false;
     }
 
-    if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-      DCHECK_EQ(composited, layer->NeedsCompositedScrolling());
-      DCHECK_EQ(composited, scrollable_area->NeedsCompositedScrolling());
-      if (composited)
-        DCHECK(layer->GraphicsLayerBacking());
-    }
     return composited;
-  }
-
-  bool GraphicsLayerContentsOpaque(const LayoutObject* scroller) {
-    DCHECK(!RuntimeEnabledFeatures::CompositeAfterPaintEnabled());
-    return To<LayoutBoxModelObject>(scroller)
-        ->Layer()
-        ->GraphicsLayerBacking()
-        ->CcLayer()
-        .contents_opaque();
   }
 
  private:
@@ -137,8 +121,6 @@ TEST_P(PaintLayerScrollableAreaTest, OpaqueContainedLayersPromoted) {
 
   auto* scroller = GetLayoutObjectByElementId("scroller");
   EXPECT_TRUE(UsesCompositedScrolling(scroller));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller));
 }
 
 TEST_P(PaintLayerScrollableAreaTest, NonStackingContextScrollerPromoted) {
@@ -212,8 +194,6 @@ TEST_P(PaintLayerScrollableAreaTest, OpaqueLayersPromotedOnStyleChange) {
                          "background: white local content-box;");
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(UsesCompositedScrolling(scroller->GetLayoutObject()));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller->GetLayoutObject()));
 }
 
 // Tests that a transform on the scroller or an ancestor doesn't prevent
@@ -234,8 +214,6 @@ TEST_P(PaintLayerScrollableAreaTest,
   Element* parent = GetDocument().getElementById("parent");
   Element* scroller = GetDocument().getElementById("scroller");
   EXPECT_TRUE(UsesCompositedScrolling(scroller->GetLayoutObject()));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller->GetLayoutObject()));
 
   // Change the parent to have a transform.
   parent->setAttribute(html_names::kStyleAttr, "transform: translate(1px, 0);");
@@ -246,8 +224,6 @@ TEST_P(PaintLayerScrollableAreaTest,
   parent->removeAttribute(html_names::kStyleAttr);
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(UsesCompositedScrolling(scroller->GetLayoutObject()));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller->GetLayoutObject()));
 
   // Apply a transform to the scroller directly.
   scroller->setAttribute(html_names::kStyleAttr,
@@ -272,8 +248,6 @@ TEST_P(PaintLayerScrollableAreaTest,
   Element* parent = GetDocument().getElementById("parent");
   Element* scroller = GetDocument().getElementById("scroller");
   EXPECT_TRUE(UsesCompositedScrolling(scroller->GetLayoutObject()));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller->GetLayoutObject()));
 
   // Change the parent to be partially translucent.
   parent->setAttribute(html_names::kStyleAttr, "opacity: 0.5;");
@@ -284,8 +258,6 @@ TEST_P(PaintLayerScrollableAreaTest,
   parent->setAttribute(html_names::kStyleAttr, "opacity: 1;");
   UpdateAllLifecyclePhasesForTest();
   EXPECT_TRUE(UsesCompositedScrolling(scroller->GetLayoutObject()));
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_TRUE(GraphicsLayerContentsOpaque(scroller->GetLayoutObject()));
 
   // Make the scroller translucent.
   scroller->setAttribute(html_names::kStyleAttr, "opacity: 0.5");
@@ -1048,8 +1020,6 @@ TEST_P(PaintLayerScrollableAreaTest, CompositedStickyDescendant) {
   auto* scroller =
       To<LayoutBoxModelObject>(GetLayoutObjectByElementId("scroller"));
   auto* scrollable_area = scroller->GetScrollableArea();
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    EXPECT_EQ(kPaintsIntoOwnBacking, scroller->Layer()->GetCompositingState());
   auto* sticky = To<LayoutBoxModelObject>(GetLayoutObjectByElementId("sticky"));
 
   EXPECT_EQ(&sticky->FirstFragment().LocalBorderBoxProperties().Transform(),
@@ -1464,28 +1434,18 @@ TEST_P(PaintLayerScrollableAreaTest,
     const auto& visual_viewport =
         document.View()->GetPage()->GetVisualViewport();
 
-    if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-      const auto& paint_chunks = ContentPaintChunks();
-      bool found_root_scrollbar = false;
-      for (const auto& chunk : paint_chunks) {
-        if (chunk.id ==
-            PaintChunk::Id(root_scrollable->VerticalScrollbar()->Id(),
-                           DisplayItem::kCustomScrollbarHitTest)) {
-          EXPECT_EQ(
-              &chunk.properties.Transform(),
-              visual_viewport.GetOverscrollElasticityTransformNode()->Parent());
-          found_root_scrollbar = true;
-        }
+    const auto& paint_chunks = ContentPaintChunks();
+    bool found_root_scrollbar = false;
+    for (const auto& chunk : paint_chunks) {
+      if (chunk.id == PaintChunk::Id(root_scrollable->VerticalScrollbar()->Id(),
+                                     DisplayItem::kCustomScrollbarHitTest)) {
+        EXPECT_EQ(
+            &chunk.properties.Transform(),
+            visual_viewport.GetOverscrollElasticityTransformNode()->Parent());
+        found_root_scrollbar = true;
       }
-      EXPECT_TRUE(found_root_scrollbar);
-    } else {
-      auto* vertical_scrollbar_layer =
-          root_scrollable->GraphicsLayerForVerticalScrollbar();
-      ASSERT_TRUE(vertical_scrollbar_layer);
-      EXPECT_EQ(
-          &vertical_scrollbar_layer->GetPropertyTreeState().Transform(),
-          visual_viewport.GetOverscrollElasticityTransformNode()->Parent());
     }
+    EXPECT_TRUE(found_root_scrollbar);
   }
 
   // Non root scrollbar should use scroller's transform node.
@@ -1499,27 +1459,17 @@ TEST_P(PaintLayerScrollableAreaTest,
                                 .FirstFragment()
                                 .LocalBorderBoxProperties();
 
-    if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-      const auto& paint_chunks = ContentPaintChunks();
-      bool found_subscroller_scrollbar = false;
-      for (const auto& chunk : paint_chunks) {
-        if (chunk.id ==
-            PaintChunk::Id(scrollable_area->VerticalScrollbar()->Id(),
-                           DisplayItem::kCustomScrollbarHitTest)) {
-          EXPECT_EQ(&chunk.properties.Transform(),
-                    &paint_properties.Transform());
+    const auto& paint_chunks = ContentPaintChunks();
+    bool found_subscroller_scrollbar = false;
+    for (const auto& chunk : paint_chunks) {
+      if (chunk.id == PaintChunk::Id(scrollable_area->VerticalScrollbar()->Id(),
+                                     DisplayItem::kCustomScrollbarHitTest)) {
+        EXPECT_EQ(&chunk.properties.Transform(), &paint_properties.Transform());
 
-          found_subscroller_scrollbar = true;
-        }
+        found_subscroller_scrollbar = true;
       }
-      EXPECT_TRUE(found_subscroller_scrollbar);
-    } else {
-      auto* vertical_scrollbar_layer =
-          scrollable_area->GraphicsLayerForVerticalScrollbar();
-      ASSERT_TRUE(vertical_scrollbar_layer);
-      EXPECT_EQ(&vertical_scrollbar_layer->GetPropertyTreeState().Transform(),
-                &paint_properties.Transform());
     }
+    EXPECT_TRUE(found_subscroller_scrollbar);
   }
 }
 

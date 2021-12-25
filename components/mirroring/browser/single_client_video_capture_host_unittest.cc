@@ -76,6 +76,12 @@ class FakeDeviceLauncher final : public content::VideoCaptureDeviceLauncher {
                          base::OnceClosure connection_lost_cb,
                          Callbacks* callbacks,
                          base::OnceClosure done_cb) override {
+    if (!params.IsValid()) {
+      callbacks->OnDeviceLaunchFailed(
+          media::VideoCaptureError::
+              kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested);
+      return;
+    }
     base::SequencedTaskRunnerHandle::Get()->PostTask(
         FROM_HERE, base::BindOnce(&FakeDeviceLauncher::OnDeviceLaunched,
                                   weak_factory_.GetWeakPtr(), receiver,
@@ -149,10 +155,21 @@ class MockVideoCaptureObserver final
     OnBufferDestroyedCall(buffer_id);
   }
 
-  MOCK_METHOD1(OnStateChanged, void(media::mojom::VideoCaptureState state));
+  MOCK_METHOD1(OnStateChangedCall, void(media::mojom::VideoCaptureState state));
+  MOCK_METHOD1(OnVideoCaptureErrorCall, void(media::VideoCaptureError error));
+  void OnStateChanged(media::mojom::VideoCaptureResultPtr result) override {
+    if (result->which() == media::mojom::VideoCaptureResult::Tag::STATE)
+      OnStateChangedCall(result->get_state());
+    else
+      OnVideoCaptureErrorCall(result->get_error_code());
+  }
 
-  void Start() {
-    host_->Start(device_id_, session_id_, VideoCaptureParams(),
+  void Start(bool valid_params) {
+    VideoCaptureParams params = VideoCaptureParams();
+    if (!valid_params)
+      params.requested_format.frame_rate = std::numeric_limits<float>::max();
+
+    host_->Start(device_id_, session_id_, params,
                  receiver_.BindNewPipeAndPassRemote());
   }
 
@@ -187,7 +204,9 @@ media::mojom::VideoFrameInfoPtr GetVideoFrameInfo() {
 
 class SingleClientVideoCaptureHostTest : public ::testing::Test {
  public:
-  SingleClientVideoCaptureHostTest() {
+  SingleClientVideoCaptureHostTest() = default;
+
+  void CustomSetUp(bool valid_params = true) {
     auto host_impl = std::make_unique<SingleClientVideoCaptureHost>(
         std::string(), blink::mojom::MediaStreamType::GUM_TAB_VIDEO_CAPTURE,
         base::BindRepeating(
@@ -198,20 +217,31 @@ class SingleClientVideoCaptureHostTest : public ::testing::Test {
                                 host.InitWithNewPipeAndPassReceiver());
     consumer_ = std::make_unique<MockVideoCaptureObserver>(std::move(host));
     base::RunLoop run_loop;
-    EXPECT_CALL(*this, OnDeviceLaunchedCall())
-        .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
-    consumer_->Start();
+    if (valid_params) {
+      EXPECT_CALL(*this, OnDeviceLaunchedCall())
+          .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
+    } else {
+      EXPECT_CALL(
+          *consumer_,
+          OnVideoCaptureErrorCall(
+              media::VideoCaptureError::
+                  kVideoCaptureControllerInvalidOrUnsupportedVideoCaptureParametersRequested))
+          .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
+    }
+    consumer_->Start(valid_params);
     run_loop.Run();
 
-    // The video capture device is launched.
-    EXPECT_TRUE(launched_device_);
-    EXPECT_TRUE(frame_receiver_);
+    if (valid_params) {
+      // The video capture device is launched.
+      EXPECT_TRUE(launched_device_);
+      EXPECT_TRUE(frame_receiver_);
+    }
   }
 
   ~SingleClientVideoCaptureHostTest() override {
     base::RunLoop run_loop;
     EXPECT_CALL(*consumer_,
-                OnStateChanged(media::mojom::VideoCaptureState::ENDED))
+                OnStateChangedCall(media::mojom::VideoCaptureState::ENDED))
         .WillOnce(InvokeWithoutArgs(&run_loop, &base::RunLoop::Quit));
     consumer_->Stop();
     run_loop.Run();
@@ -286,13 +316,19 @@ class SingleClientVideoCaptureHostTest : public ::testing::Test {
 };
 
 TEST_F(SingleClientVideoCaptureHostTest, Basic) {
+  CustomSetUp();
   CreateBuffer(1, 0);
   FrameReadyInBuffer(1, 0, 5);
   FinishConsumingBuffer(0, 5, media::VideoCaptureFeedback(1.0));
   RetireBuffer(1, 0);
 }
 
+TEST_F(SingleClientVideoCaptureHostTest, InvalidParams) {
+  CustomSetUp(false);
+}
+
 TEST_F(SingleClientVideoCaptureHostTest, ReuseBufferId) {
+  CustomSetUp();
   CreateBuffer(0, 0);
   FrameReadyInBuffer(0, 0, 3);
   // Retire buffer 0. The consumer is not expected to receive OnBufferDestroyed
@@ -321,6 +357,7 @@ TEST_F(SingleClientVideoCaptureHostTest, ReuseBufferId) {
 }
 
 TEST_F(SingleClientVideoCaptureHostTest, StopCapturingWhileBuffersInUse) {
+  CustomSetUp();
   for (int i = 0; i < 10; ++i) {
     CreateBuffer(i, i);
     FrameReadyInBuffer(i, i, i);

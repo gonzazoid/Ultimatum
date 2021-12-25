@@ -33,10 +33,6 @@ const char kFirstRunTabs[] = "first_run_tabs";
 base::LazyInstance<installer::InitialPreferences>::DestructorAtExit
     g_initial_preferences = LAZY_INSTANCE_INITIALIZER;
 
-bool GetURLFromValue(const base::Value* in_value, std::string* out_value) {
-  return in_value && out_value && in_value->GetAsString(out_value);
-}
-
 std::vector<std::string> GetNamedList(const char* name,
                                       const base::DictionaryValue* prefs) {
   std::vector<std::string> list;
@@ -48,14 +44,12 @@ std::vector<std::string> GetNamedList(const char* name,
     return list;
 
   list.reserve(value_list->GetList().size());
-  for (size_t i = 0; i < value_list->GetList().size(); ++i) {
-    const base::Value* entry;
-    std::string url_entry;
-    if (!value_list->Get(i, &entry) || !GetURLFromValue(entry, &url_entry)) {
+  for (const base::Value& entry : value_list->GetList()) {
+    if (!entry.is_string()) {
       NOTREACHED();
       break;
     }
-    list.push_back(url_entry);
+    list.push_back(entry.GetString());
   }
   return list;
 }
@@ -326,7 +320,9 @@ std::string InitialPreferences::ExtractPrefString(
   absl::optional<base::Value> pref_value =
       initial_dictionary_->ExtractKey(name);
   if (pref_value.has_value()) {
-    if (!pref_value->GetAsString(&result))
+    if (pref_value->is_string())
+      result = pref_value->GetString();
+    else
       NOTREACHED();
   }
   return result;

@@ -36,6 +36,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/time/time.h"
+#include "cc/layers/layer.h"
 #include "media/base/logging_override_if_enabled.h"
 #include "media/base/media_content_type.h"
 #include "media/base/media_switches.h"
@@ -108,14 +109,12 @@
 #include "third_party/blink/renderer/core/loader/mixed_content_checker.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/peerconnection/execution_context_metronome_provider.h"
 #include "third_party/blink/renderer/platform/audio/audio_bus.h"
 #include "third_party/blink/renderer/platform/audio/audio_source_provider_client.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/microtask.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
@@ -4291,7 +4290,6 @@ void HTMLMediaElement::SetCcLayer(cc::Layer* cc_layer) {
   if (cc_layer == cc_layer_)
     return;
 
-  // We need to update the GraphicsLayer when the cc layer changes.
   SetNeedsCompositingUpdate();
   cc_layer_ = cc_layer;
 }

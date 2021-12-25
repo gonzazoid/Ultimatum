@@ -92,6 +92,7 @@ public class PasswordManagerHelperTest {
     public void setUp() {
         ShadowRecordHistogram.reset();
         MockitoAnnotations.initMocks(this);
+        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
     }
 
     @Test
@@ -131,6 +132,7 @@ public class PasswordManagerHelperTest {
         when(mSyncServiceMock.isSyncFeatureEnabled()).thenReturn(true);
         when(mSyncServiceMock.getChosenDataTypes())
                 .thenReturn(CollectionUtil.newHashSet(ModelType.PASSWORDS));
+        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
         when(mSyncServiceMock.isUsingExplicitPassphrase()).thenReturn(true);
         Assert.assertTrue(PasswordManagerHelper.hasChosenToSyncPasswords(mSyncServiceMock));
         Assert.assertFalse(PasswordManagerHelper.hasChosenToSyncPasswordsWithNoCustomPassphrase(
@@ -142,6 +144,7 @@ public class PasswordManagerHelperTest {
         when(mSyncServiceMock.hasSyncConsent()).thenReturn(true);
         when(mSyncServiceMock.getActiveDataTypes())
                 .thenReturn(CollectionUtil.newHashSet(ModelType.PASSWORDS));
+        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
         when(mSyncServiceMock.isUsingExplicitPassphrase()).thenReturn(false);
         Assert.assertTrue(
                 PasswordManagerHelper.isSyncingPasswordsWithNoCustomPassphrase(mSyncServiceMock));
@@ -152,6 +155,7 @@ public class PasswordManagerHelperTest {
         when(mSyncServiceMock.hasSyncConsent()).thenReturn(true);
         when(mSyncServiceMock.getActiveDataTypes())
                 .thenReturn(CollectionUtil.newHashSet(ModelType.PASSWORDS));
+        when(mSyncServiceMock.isEngineInitialized()).thenReturn(true);
         when(mSyncServiceMock.isUsingExplicitPassphrase()).thenReturn(true);
         Assert.assertFalse(
                 PasswordManagerHelper.isSyncingPasswordsWithNoCustomPassphrase(mSyncServiceMock));

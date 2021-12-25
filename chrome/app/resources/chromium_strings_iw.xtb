@@ -34,6 +34,7 @@
 <translation id="2313870531055795960">‏המערכת בודקת כתובות URL בעזרת רשימה של אתרים לא בטוחים ששמורה ב-Chromium. אם באתר כלשהו מתבצע ניסיון לגנוב את הסיסמה שלך, או אם המערכת מזהה הורדה של קובץ מזיק, Chromium עשוי גם לשלוח כתובות URL לבדיקה באמצעות 'גלישה בטוחה'. הנתונים שנשלחים לבדיקה כוללים ביטים מתוכן של דפים.</translation>
 <translation id="2343156876103232566">‏כדי לשלוח מספר מכאן לטלפון Android, יש להיכנס ל-Chromium בשני המכשירים.</translation>
 <translation id="2347108572062610441">‏התוסף שינה את הדף שמוצג כשמפעילים את Chromium.</translation>
+<translation id="2359808026110333948">המשך</translation>
 <translation id="2396765026452590966">‏התוסף "<ph name="EXTENSION_NAME" />" שינה את הדף שמוצג כשמפעילים את Chromium.</translation>
 <translation id="2401032172288869980">‏נדרשות הרשאות גישה למצלמה ולמיקרופון ב-Chromium עבור האתר הזה</translation>
 <translation id="2483889755041906834">‏ב-Chromium</translation>
@@ -106,20 +107,22 @@
 <translation id="4271805377592243930">‏עזרה בנושא Chromium</translation>
 <translation id="4285930937574705105">‏ההתקנה נכשלה בשל שגיאה לא צפויה. אם Chromium פועל כעת, יש לסגור אותו ולנסות שוב.</translation>
 <translation id="4407044323746248786">‏לסגור את Chromium בכל זאת?</translation>
+<translation id="4414390922528416758">‏התאמה אישית של העדפות הפרטיות הכי חשובות מבחינת Chromium. המדריך הזה לא כולל את כל ההגדרות והאפשרויות.</translation>
 <translation id="4415566066719264597">‏Chromium יכול לפעול ברקע</translation>
 <translation id="4423735387467980091">‏התאמה אישית ושליטה ב-Chromium</translation>
+<translation id="4427306783828095590">עם ההגנה המשופרת, החסימה של פישינג ותוכנות זדוניות מקיפה יותר</translation>
 <translation id="452711251841752011">‏ברוך בואך אל Chromium. נפתח חלון חדש בדפדפן</translation>
 <translation id="4544142686420020088">‏Chromium לא התעדכן, משהו השתבש. <ph name="BEGIN_LINK" />לטיפול בבעיות בעדכון של Chromium ובעדכונים שנכשלו<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">‏להמשיך בפרופיל Chromium חדש?</translation>
 <translation id="4567424176335768812">נכנסת למערכת בתור <ph name="USER_EMAIL_ADDRESS" />. כעת יש לך אפשרות לגשת אל הסימניות, ההיסטוריה והגדרות אחרות שלך בכל המכשירים שבהם התחברת לחשבון.</translation>
 <translation id="459535195905078186">‏יישומי Chromium</translation>
+<translation id="4621240073146040695">‏העדכון כמעט הושלם! הפעל מחדש את Chromium‏ כדי לסיים את העדכון.</translation>
 <translation id="4665829708273112819">‏אזהרה: Chromium לא יכול למנוע מתוספים לתעד את היסטוריית הגלישה שלך. כדי להשבית את התוסף הזה במצב אנונימי, צריך לבטל את הבחירה של האפשרות הזו.</translation>
 <translation id="4677944499843243528">‏נראה שהפרופיל נמצא בשימוש על ידי תהליך Chromium אחר (<ph name="PROCESS_ID" />) במחשב אחר (<ph name="HOST_NAME" />)‏. Chromium נעל את הפרופיל כדי שלא ייפגם. אם וידאת שאף תהליך אחר אינו משתמש בפרופיל זה, אפשר את נעילת הפרופיל ולהפעיל את Chromium מחדש.</translation>
 <translation id="469338717132742108">‏קבלת עזרה בנושא Chromium OS</translation>
 <translation id="4708774505295300557">‏מישהו נכנס בעבר ל-Chromium מהמחשב הזה כ-<ph name="ACCOUNT_EMAIL_LAST" />. יש ליצור משתמש חדש ל-Chromium כדי לשמור על פרטיות המידע שלך.</translation>
 <translation id="4746050847053251315">‏לסגור את Chromium בכל זאת?</translation>
 <translation id="4748217263233248895">‏בוצע עדכון אבטחה מיוחד של Chromium. עכשיו עליך להפעיל מחדש ואנחנו נשחזר את הכרטיסיות.</translation>
-<translation id="4750035648288509542">‏העדכון כמעט הושלם. כדי להשלים את העדכון, יש להפעיל מחדש את Chromium. החלונות האנונימיים לא ייפתחו מחדש.</translation>
 <translation id="4788777615168560705">‏Chromium לא יכול לבדוק את הסיסמאות שלך. יש לנסות שוב בעוד 24 שעות או <ph name="BEGIN_LINK" />לבדוק את הסיסמאות בחשבון Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">‏נעשה כאן שימוש בבדיקת האיות של חיפוש Google. הטקסט המוקלד בדפדפן נשלח אל Google. אפשר לשנות את ההתנהגות הזו בכל שלב דרך ההגדרות.</translation>
 <translation id="4888717733111232871">‏כלל נכנס עבור Chromium על מנת לאפשר תנועת mDNS.</translation>
@@ -233,6 +236,7 @@ Chromium לא יכול לשחזר את ההגדרות שלך.</translation>
 <translation id="7561906087460245826">‏הסרת נתונים גם מ-Chromium (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">‏אם הגדרה מסוימת לא מופיעה בדף הזה, אפשר לחפש אותה <ph name="LINK_BEGIN" />
 בהגדרות ה-OS של Chromium<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">‏הפעלת בחשבון שלך את הגרסה המשופרת של הגלישה הבטוחה. עכשיו אפשר להפעיל אותה ב-Chromium.</translation>
 <translation id="761356813943268536">‏Chromium משתמש במצלמה ובמיקרופון שלך.</translation>
 <translation id="7617377681829253106">‏Chromium השתפר</translation>
 <translation id="7686590090926151193">‏Chromium אינו דפדפן ברירת המחדל שלך</translation>
@@ -292,5 +296,6 @@ Chromium לא יכול לשחזר את ההגדרות שלך.</translation>
 <translation id="9214764063801632699">‏מערכת Chromium OS</translation>
 <translation id="93478295209880648">‏ייתכן ש-Chromium לא יפעל כראוי כי הוא כבר לא נתמך ב-Windows XP וב-Windows Vista</translation>
 <translation id="965162752251293939">‏מי משתמש/ת ב-Chromium?</translation>
+<translation id="967427899662692980">‏רוצה להשיג את רמת האבטחה הגבוהה ביותר של Chromium?</translation>
 <translation id="985602178874221306">‏מחברי Chromium</translation>
 </translationbundle>

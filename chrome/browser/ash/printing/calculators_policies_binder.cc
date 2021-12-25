@@ -35,9 +35,9 @@ BulkPrintersCalculator::AccessMode ConvertToAccessMode(int mode_val) {
   return BulkPrintersCalculator::ALL_ACCESS;
 }
 
-std::vector<std::string> ConvertToVector(const base::ListValue* list) {
+std::vector<std::string> ConvertToVector(const base::Value* list) {
   std::vector<std::string> string_list;
-  if (!list) {
+  if (!list || !list->is_list()) {
     return string_list;
   }
 

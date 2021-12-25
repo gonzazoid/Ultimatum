@@ -5,6 +5,7 @@
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_gatt_service_client_impl.h"
 
 #include "ash/quick_pair/common/constants.h"
+#include "ash/quick_pair/common/fast_pair/fast_pair_metrics.h"
 #include "ash/quick_pair/common/logging.h"
 #include "ash/quick_pair/fast_pair_handshake/fast_pair_data_encryptor.h"
 #include "base/memory/ptr_util.h"
@@ -111,6 +112,7 @@ FastPairGattServiceClientImpl::FastPairGattServiceClientImpl(
       base::BindOnce(&FastPairGattServiceClientImpl::OnGattConnection,
                      weak_ptr_factory_.GetWeakPtr()),
       kFastPairBluetoothUuid);
+  gatt_connection_start_time_ = base::TimeTicks::Now();
   gatt_service_discovery_timer_.Start(
       FROM_HERE, kGattOperationTimeout,
       base::BindOnce(&FastPairGattServiceClientImpl::NotifyInitializedError,
@@ -123,6 +125,8 @@ FastPairGattServiceClientImpl::~FastPairGattServiceClientImpl() = default;
 void FastPairGattServiceClientImpl::OnGattConnection(
     std::unique_ptr<device::BluetoothGattConnection> gatt_connection,
     absl::optional<device::BluetoothDevice::ConnectErrorCode> error_code) {
+  RecordGattConnectionResult(/*success=*/!error_code.has_value());
+
   if (error_code) {
     QP_LOG(WARNING) << "Error creating GATT connection to device due to error: "
                     << error_code.value();
@@ -131,6 +135,8 @@ void FastPairGattServiceClientImpl::OnGattConnection(
     QP_LOG(VERBOSE)
         << "Successful creation of GATT connection to device at address:["
         << device_address_ << "].";
+    RecordTotalGattConnectionTime(base::TimeTicks::Now() -
+                                  gatt_connection_start_time_);
     gatt_connection_ = std::move(gatt_connection);
   }
 }

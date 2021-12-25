@@ -25,7 +25,6 @@
 <translation id="1104084341931202936">显示无障碍设置</translation>
 <translation id="1104621072296271835">协同运作可使您的各部设备更好地发挥作用</translation>
 <translation id="1111781754511998498">投影仪</translation>
-<translation id="1119348796022671382">带主题背景的颜色模式会使用从您壁纸中提取的颜色为界面略施粉黛。</translation>
 <translation id="112308213915226829">自动隐藏任务栏</translation>
 <translation id="1142002900084379065">近期照片</translation>
 <translation id="1148499908455722006">打开“<ph name="USER_NAME" />”的信息对话框</translation>
@@ -35,6 +34,7 @@
 <translation id="1175572348579024023">滚动</translation>
 <translation id="1178581264944972037">暂停</translation>
 <translation id="1181037720776840403">移除</translation>
+<translation id="118437560755358292">请输入密码或 PIN 码以增强安全性</translation>
 <translation id="118532027333893379">点按任意位置即可截取整个屏幕</translation>
 <translation id="1190609913194133056">通知中心</translation>
 <translation id="1190678134285018527">设备需要回滚到上一个版本</translation>
@@ -113,7 +113,6 @@
 <translation id="1632985212731562677">您可在“设置”&gt;“无障碍”中停用“开关控制”功能。</translation>
 <translation id="1637505162081889933"><ph name="NUM_DEVICES" /> 部设备</translation>
 <translation id="1654477262762802994">启动语音查询</translation>
-<translation id="1667964833127753507">中性颜色模式不会使用从壁纸中提取的颜色，而是会将其替换为一组中性的浅色调或深色调。</translation>
 <translation id="1677472565718498478">电量尚余 <ph name="TIME" /></translation>
 <translation id="1677507110654891115">未连接“<ph name="FEATURE_NAME" />”。</translation>
 <translation id="1698080062160024910"><ph name="TOTAL_TIME" />定时器   <ph name="LABEL" /></translation>
@@ -132,6 +131,7 @@
 <translation id="1768366657309696705">键盘快捷键“<ph name="LAUNCHER_KEY_NAME" /> + 句点键”已更改。若要使用 Insert 键，请按<ph name="LAUNCHER_KEY_NAME" />键 + Shift + 退格键。</translation>
 <translation id="1770726142253415363">已移至第 <ph name="ROW_NUMBER" /> 行与第 <ph name="COLUMN_NUMBER" /> 列的相交处。</translation>
 <translation id="1771761307086386028">向右滚动</translation>
+<translation id="1774796056689732716">日历，<ph name="CURRENT_MONTH_YEAR" />，目前所选日期为 <ph name="DATE" />。</translation>
 <translation id="1787955149152357925">关闭</translation>
 <translation id="1804572139604454141">已停止录制，因为磁盘空间严重不足</translation>
 <translation id="181103072419391116">信号强度为 <ph name="SIGNAL_STRENGTH" />，由您的管理员管理</translation>
@@ -191,6 +191,7 @@
 <translation id="2222841058024245321">桌面 7</translation>
 <translation id="2224075387478458881">禁止在屏幕显示受保护内容时录制屏幕</translation>
 <translation id="225680501294068881">正在查找设备...</translation>
+<translation id="2257486738914982088">下载“<ph name="FILENAME" />”时出了点问题</translation>
 <translation id="2268130516524549846">蓝牙已停用</translation>
 <translation id="2268813581635650749">全部退出</translation>
 <translation id="2269016722240250274">有一个应用正在使用您的麦克风</translation>
@@ -338,6 +339,7 @@
 <translation id="3307642347673023554">已切换到笔记本电脑模式</translation>
 <translation id="3308453408813785101">日后“<ph name="USER_EMAIL_ADDRESS" />”仍能登录。</translation>
 <translation id="3321628682574733415">家长访问代码不正确</translation>
+<translation id="3339826665088060472">截屏工具栏，包含各种截屏和录屏工具</translation>
 <translation id="3341303451326249809">已截取屏幕</translation>
 <translation id="334252345105450327">截屏</translation>
 <translation id="3351879221545518001">您目前正在投射屏幕。</translation>
@@ -394,6 +396,7 @@
 <translation id="3606978283550408104">已连接盲文显示屏。</translation>
 <translation id="3615926715408477684">如果您启用移动流量，蓝牙亦会随之开启</translation>
 <translation id="3616883743181209306">菜单已移至屏幕的右上角。</translation>
+<translation id="3619536907358025872">截屏设置</translation>
 <translation id="3621202678540785336">输入</translation>
 <translation id="3621712662352432595">音频设置</translation>
 <translation id="3626281679859535460">亮度</translation>
@@ -470,7 +473,6 @@
 <translation id="412298498316631026">窗口</translation>
 <translation id="4129129681837227511">要想在锁定屏幕上看到通知，请解锁设备以更改设置</translation>
 <translation id="4146833061457621061">播放音乐</translation>
-<translation id="4157822100366708405">深色主题设置</translation>
 <translation id="4173958948577803258">四</translation>
 <translation id="4177913004758410636">{0,plural, =1{请在 1 天内更新此设备}other{请在 # 天内更新此设备}}</translation>
 <translation id="4181841719683918333">语言</translation>
@@ -492,6 +494,7 @@
 <translation id="4269883910223712419">此设备的管理员能够：</translation>
 <translation id="4274537685965975248">键盘快捷键“Ctrl + Alt + 向下键”已更改。若要使用 End 键，请按<ph name="LAUNCHER_KEY_NAME" />键 + 向右键。</translation>
 <translation id="4279490309300973883">正在镜像</translation>
+<translation id="4283888303416325161">请输入密码以增强安全性</translation>
 <translation id="4285498937028063278">取消固定</translation>
 <translation id="429402653707266969">切换工具栏位置</translation>
 <translation id="4294319844246081198"><ph name="GIVEN_NAME" />，上午好！</translation>
@@ -583,6 +586,7 @@
 <translation id="4831034276697007977">确定要关闭自动点击吗？</translation>
 <translation id="4849058404725798627">突出显示键盘焦点所在对象</translation>
 <translation id="485592688953820832">不执行任何操作（暂停）</translation>
+<translation id="4860284199500934869">请检查您的网络连接状况以下载“<ph name="FILENAME" />”</translation>
 <translation id="486056901304535126">系统会于晚些时候再次尝试下载。系统会将语音发送给 Google 以供处理，直到下载完毕。</translation>
 <translation id="4868492592575313542">已启用</translation>
 <translation id="4872237917498892622">Alt + 搜索键或 Shift</translation>
@@ -617,6 +621,8 @@
 <translation id="5075554201838155866">启用字幕</translation>
 <translation id="5078796286268621944">PIN 不正确</translation>
 <translation id="5083553833479578423">启用更多 Google 助理功能。</translation>
+<translation id="5090752371472782287">投射到 <ph name="MANAGER" /> 设备</translation>
+<translation id="5106223312672646208">个性化</translation>
 <translation id="5117590920725113268">显示下一个月</translation>
 <translation id="5136175204352732067">所连接的键盘已不是原来的那个</translation>
 <translation id="5147567197700016471">已解锁</translation>
@@ -625,6 +631,7 @@
 <translation id="5168181903108465623">有可用的投射设备</translation>
 <translation id="5170568018924773124">在文件夹中显示</translation>
 <translation id="5176318573511391780">录制部分屏幕</translation>
+<translation id="5198413532174090167"><ph name="DATE" />，<ph name="NUMBER" /> 个事件</translation>
 <translation id="5198715732953550718">将“<ph name="MOVED_APP_NAME" />”和“<ph name="IN_PLACE_APP" />”移到一起创建了一个新文件夹。</translation>
 <translation id="5206028654245650022"><ph name="APP_NAME" />，<ph name="NOTIFICATION_TITLE" />：<ph name="MESSAGE" />，<ph name="PHONE_NAME" /></translation>
 <translation id="5206057955438543357">{NUM_NOTIFICATIONS,plural, =1{另外 1 条通知}other{另外 # 条通知}}</translation>
@@ -661,6 +668,7 @@
 <translation id="5426063383988017631">已关闭“设置”菜单</translation>
 <translation id="5428899915242071344">开始选择</translation>
 <translation id="5430931332414098647">即时网络共享</translation>
+<translation id="5431318178759467895">彩色</translation>
 <translation id="5431825016875453137">OpenVPN / L2TP</translation>
 <translation id="5433020815079095860">音频输入</translation>
 <translation id="544691375626129091">所有可参加的用户均已添加到此会话中。</translation>
@@ -708,6 +716,7 @@
 <translation id="5769373120130404283">隐私保护屏</translation>
 <translation id="5777841717266010279">要停止屏幕共享吗？</translation>
 <translation id="5779721926447984944">已固定的文件</translation>
+<translation id="5788127256798019331">Play 文件</translation>
 <translation id="5790085346892983794">成功</translation>
 <translation id="5805809050170488595">点击即可激活“<ph name="NETWORK_NAME" />”</translation>
 <translation id="5820394555380036790">Chromium 操作系统</translation>
@@ -760,6 +769,7 @@
 <translation id="607652042414456612">附近的蓝牙设备可检测到您的计算机（名称将显示为“<ph name="NAME" />”，地址为<ph name="ADDRESS" />）</translation>
 <translation id="6114505516289286752"><ph name="LANGUAGE" />语音识别结果文件已下载完毕</translation>
 <translation id="6119360623251949462"><ph name="CHARGING_STATE" />。<ph name="BATTERY_SAVER_STATE" /></translation>
+<translation id="6121838516699723042">确认下载“<ph name="FILENAME" />”</translation>
 <translation id="612734058257491180">无法在访客会话中使用 Google 助理。</translation>
 <translation id="6134259848159370930">搜索您的设备、应用、设置和网站。</translation>
 <translation id="6137566720514957455">打开与 <ph name="USER_EMAIL_ADDRESS" /> 对应的“移除帐号”对话框</translation>
@@ -795,9 +805,11 @@
 <translation id="643147933154517414">大功告成</translation>
 <translation id="6431865393913628856">屏幕录制</translation>
 <translation id="6445835306623867477">正在将“<ph name="ROUTE_TITLE" />”投射至“<ph name="RECEIVER_NAME" />”</translation>
+<translation id="6447111710783417522"><ph name="DATE" />，<ph name="NUMBER" /> 个事件</translation>
 <translation id="6452181791372256707">拒绝</translation>
 <translation id="6453179446719226835">语言已更改</translation>
 <translation id="6459472438155181876">正在将屏幕扩展到<ph name="DISPLAY_NAME" /></translation>
+<translation id="6477681113376365978">无法下载文件</translation>
 <translation id="6482559668224714696">全屏放大镜</translation>
 <translation id="6490471652906364588">USB-C 设备（右侧端口）</translation>
 <translation id="6491071886865974820"><ph name="MANAGER" /> 要求您在截止日期之前更新 <ph name="DEVICE_TYPE" /></translation>
@@ -809,7 +821,10 @@
 <translation id="6528179044667508675">请勿打扰</translation>
 <translation id="65320610082834431">表情符号</translation>
 <translation id="6537924328260219877">信号强度为 <ph name="SIGNAL_STRENGTH" />，剩余电量为 <ph name="BATTERY_STATUS" /></translation>
+<translation id="6539852571005954999">正在扫描要下载的文件“<ph name="FILENAME" />”</translation>
 <translation id="6542521951477560771">正在投射到<ph name="RECEIVER_NAME" /></translation>
+<translation id="655633303491376835"><ph name="APP_NAME" />
+新安装</translation>
 <translation id="6559976592393364813">询问您的管理员</translation>
 <translation id="6565007273808762236">无法连接 eSIM 卡</translation>
 <translation id="6570831796530454248">{0,plural, =1{请在 1 小时内更新此设备}other{请在 # 小时内更新此设备}}</translation>
@@ -841,6 +856,7 @@
 <translation id="6723839937902243910">电源</translation>
 <translation id="6727969043791803658">已连接，剩余电量为 <ph name="BATTERY_PERCENTAGE" />%</translation>
 <translation id="6732800389263199929">+<ph name="COUNT" /></translation>
+<translation id="6739144137573853180">转到“设置”</translation>
 <translation id="6751052314767925245">由您的管理员强制执行</translation>
 <translation id="6751826523481687655">已启用性能跟踪</translation>
 <translation id="6752912906630585008">桌面“<ph name="REMOVED_DESK" />”已移除并与桌面“<ph name="RECEIVE_DESK" />”合并</translation>
@@ -853,6 +869,7 @@
 <translation id="6811454077060061666">桌面版 Google 云端硬盘不可用</translation>
 <translation id="6818242057446442178">后退一个字词</translation>
 <translation id="6820676911989879663">休息一下！</translation>
+<translation id="6827049576281411231">关闭事件面板</translation>
 <translation id="6836499262298959512">危险文件</translation>
 <translation id="6837064795450991317">隐藏桌面栏</translation>
 <translation id="6852052252232534364">点击即可启用</translation>
@@ -860,6 +877,7 @@
 <translation id="685782768769951078">{NUM_DIGITS,plural, =1{还差 1 位数字}other{还差 # 位数字}}</translation>
 <translation id="6867938213751067702"><ph name="FILENAME" /> 已暂停下载</translation>
 <translation id="6878400149835617132">快捷方式已关闭</translation>
+<translation id="6884665277231944629">返回到今天</translation>
 <translation id="6886172995547742638">这可能会导致您的 <ph name="DEVICE_TYPE" /> 性能低下。请使用已获认证的不低于 <ph name="PREFERRED_MINIMUM_POWER" />W 的 USB-C 型电源适配器。</translation>
 <translation id="688631446150864480">按向下键即可切换窗口</translation>
 <translation id="6896758677409633944">复制</translation>
@@ -946,6 +964,7 @@
 <translation id="7497767806359279797">选择语言和键盘布局</translation>
 <translation id="7509246181739783082">验证您的身份</translation>
 <translation id="7513622367902644023">已选择截屏模式</translation>
+<translation id="7513922695575567867">日历，<ph name="DATE" />这周，目前所选日期为 <ph name="SELECTED_DATE" />。</translation>
 <translation id="7514365320538308">下载</translation>
 <translation id="7526573455193969409">网络可能受到了监控</translation>
 <translation id="7536035074519304529">IP 地址：<ph name="ADDRESS" /></translation>
@@ -955,6 +974,7 @@
 <translation id="7564874036684306347">将窗口移至另一桌面可能会导致出现意外行为 - 后续的通知、窗口和对话框可能会被拆分到不同的桌面中。</translation>
 <translation id="7569509451529460200">已启用盲文和 ChromeVox</translation>
 <translation id="7569983096843329377">黑色</translation>
+<translation id="757941033127302446">已登录</translation>
 <translation id="7579778809502851308">截取屏幕</translation>
 <translation id="7590883480672980941">输入设置</translation>
 <translation id="7593891976182323525">搜索键或 Shift</translation>
@@ -962,7 +982,6 @@
 <translation id="7600875258240007829">查看所有通知</translation>
 <translation id="7607002721634913082">已暂停</translation>
 <translation id="7610198039767537854">在 <ph name="DEVICE_TYPE" /> 上查看您手机的相机胶卷中的近期照片</translation>
-<translation id="7618774594543487847">中性</translation>
 <translation id="7624117708979618027"><ph name="TEMPERATURE_F" /> 华氏度</translation>
 <translation id="7631906263969450674">标记笔</translation>
 <translation id="7633755430369750696">显示“附近分享”设置。</translation>
@@ -976,6 +995,7 @@
 <translation id="7662283695561029522">点按即可配置</translation>
 <translation id="7705524343798198388">VPN</translation>
 <translation id="7714767791242455379">添加新的移动网络</translation>
+<translation id="7720410380936703141">重试</translation>
 <translation id="7723389094756330927">{NUM_NOTIFICATIONS,plural, =1{1 条通知}other{# 条通知}}</translation>
 <translation id="7724603315864178912">剪切</translation>
 <translation id="7745560842763881396">显示任务栏中的应用</translation>
@@ -1028,6 +1048,7 @@
 <translation id="8035152190676905274">钢笔</translation>
 <translation id="8036504271468642248">上一句</translation>
 <translation id="8042893070933512245">打开无障碍功能设置菜单</translation>
+<translation id="8042925093898452104">关闭详情信息</translation>
 <translation id="8048123526339889627">蓝牙设置</translation>
 <translation id="8051716679295756675">名为“<ph name="DESK_TEMPLATE_NAME" />”的模板已存在</translation>
 <translation id="8052898407431791827">已复制到剪贴板</translation>
@@ -1097,6 +1118,7 @@
 <translation id="8513108775083588393">自动旋转屏幕</translation>
 <translation id="851458219935658693">显示当前桌面中的窗口，已选中单选按钮</translation>
 <translation id="8517041960877371778">您的 <ph name="DEVICE_TYPE" /> 在开启时可能无法充电。</translation>
+<translation id="8551588720239073785">日期和时间设置</translation>
 <translation id="8553395910833293175">此前就已分配至所有桌面。</translation>
 <translation id="856298576161209842"><ph name="MANAGER" /> 建议您更新 <ph name="DEVICE_TYPE" /></translation>
 <translation id="8563862697512465947">通知设置</translation>
@@ -1116,7 +1138,6 @@
 <translation id="8660331759611631213">71 的平方根</translation>
 <translation id="8663756353922886599"><ph name="CONNECTION_STATUS" />，信号强度为 <ph name="SIGNAL_STRENGTH" /></translation>
 <translation id="8664753092453405566">显示网络列表。<ph name="STATE_TEXT" /></translation>
-<translation id="8668052347555487755">颜色模式</translation>
 <translation id="8676770494376880701">已连接低功率充电器</translation>
 <translation id="8683506306463609433">正在跟踪性能</translation>
 <translation id="8685326675965865247">搜索您的设备、应用、设置和网站。使用箭头键可浏览各个应用。</translation>
@@ -1150,7 +1171,6 @@
 <translation id="8896630965521842259">“<ph name="DESK_TEMPLATE_NAME" />”会被永久删除</translation>
 <translation id="890616557918890486">更改来源</translation>
 <translation id="8909138438987180327">剩余的电池电量为 <ph name="PERCENTAGE" />%。</translation>
-<translation id="8913384980486163186">带主题背景（默认值）</translation>
 <translation id="8921554779039049422">H+</translation>
 <translation id="8921624153894383499">Google 助理不支持此语言。</translation>
 <translation id="8926951137623668982">任务栏始终处于隐藏状态</translation>
@@ -1162,6 +1182,7 @@
 <translation id="8983038754672563810">HSPA</translation>
 <translation id="8990809378771970590">目前使用的是“<ph name="IME_NAME" />”</translation>
 <translation id="899350903320462459">以 <ph name="LOGIN_ID" /> 身份解锁设备即可执行通知操作</translation>
+<translation id="9000771174482730261">管理存储空间</translation>
 <translation id="9017320285115481645">输入 Family Link 家长访问码。</translation>
 <translation id="9024331582947483881">全屏</translation>
 <translation id="9047624247355796468">打开“<ph name="NETWORK_NAME" />”的设置。</translation>
@@ -1207,6 +1228,7 @@
 <translation id="938963181863597773">我的日历中有哪些活动？</translation>
 <translation id="945522503751344254">发送反馈</translation>
 <translation id="951991426597076286">拒绝</translation>
+<translation id="954052413789300507">空间不足，无法下载“<ph name="FILENAME" />”。请先释放空间。</translation>
 <translation id="974545358917229949">显示了 <ph name="RESULT_COUNT" /> 条与“<ph name="QUERY" />”相符的结果</translation>
 <translation id="98515147261107953">横向</translation>
 <translation id="990277280839877440">已关闭窗口“<ph name="WINDOW_TITILE" />”。</translation>

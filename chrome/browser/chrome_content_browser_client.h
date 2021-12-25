@@ -164,8 +164,6 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
                                        const GURL& site_url) override;
   bool DoesSiteRequireDedicatedProcess(content::BrowserContext* browser_context,
                                        const GURL& effective_site_url) override;
-  bool ShouldLockProcessToSite(content::BrowserContext* browser_context,
-                               const GURL& effective_site_url) override;
   bool DoesWebUISchemeRequireProcessLock(base::StringPiece scheme) override;
   bool ShouldTreatURLSchemeAsFirstPartyWhenTopLevel(
       base::StringPiece scheme,
@@ -616,6 +614,7 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
       ui::PageTransition page_transition,
       bool has_user_gesture,
       const absl::optional<url::Origin>& initiating_origin,
+      content::RenderFrameHost* initiator_document,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory)
       override;
   std::unique_ptr<content::OverlayWindow> CreateWindowForPictureInPicture(
@@ -628,11 +627,11 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
       network::OriginPolicyState error_reason,
       content::NavigationHandle* handle) override;
   bool CanAcceptUntrustedExchangesIfNeeded() override;
-  void OnNetworkServiceDataUseUpdate(int process_id,
-                                     int routing_id,
-                                     int32_t network_traffic_annotation_id_hash,
-                                     int64_t recv_bytes,
-                                     int64_t sent_bytes) override;
+  void OnNetworkServiceDataUseUpdate(
+      content::GlobalRenderFrameHostId render_frame_host_id,
+      int32_t network_traffic_annotation_id_hash,
+      int64_t recv_bytes,
+      int64_t sent_bytes) override;
   base::FilePath GetSandboxedStorageServiceDataDirectory() override;
   bool ShouldSandboxAudioService() override;
   bool ShouldSandboxNetworkService() override;
@@ -768,8 +767,11 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   void OnWebContentsCreated(content::WebContents* web_contents) override;
 
   bool IsFindInPageDisabledForOrigin(const url::Origin& origin) override;
+  bool IsFirstPartySetsEnabled() override;
 
   void FlushBackgroundAttributions(base::OnceClosure callback) override;
+  bool ShouldPreconnectNavigation(
+      content::BrowserContext* browser_context) override;
 
   enum UserAgentReductionEnterprisePolicyState {
     kDefault = 0,

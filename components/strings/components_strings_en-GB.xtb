@@ -112,6 +112,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="1308113895091915999">Offer available</translation>
 <translation id="1312803275555673949">What evidence supports it?</translation>
 <translation id="131405271941274527"><ph name="URL" /> wants to send and receive info when you tap your phone on an NFC device</translation>
+<translation id="1314311879718644478">View augmented reality content</translation>
 <translation id="1314509827145471431">Bind right</translation>
 <translation id="1318023360584041678">Saved in tab group</translation>
 <translation id="1319245136674974084">Don’t ask again for this app</translation>
@@ -215,6 +216,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="1583429793053364125">Something went wrong while displaying this web page.</translation>
 <translation id="1586541204584340881">Which extensions you have installed</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Install ARCore?</translation>
 <translation id="1592005682883173041">Local Data Access</translation>
 <translation id="1594030484168838125">Choose</translation>
 <translation id="160851722280695521">Play the Dino Run game in Chrome</translation>
@@ -1261,6 +1263,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="4968522289500246572">This app is designed for mobile and may not resize well. The app may experience issues or restart.</translation>
 <translation id="4969341057194253438">Delete recording</translation>
 <translation id="4973922308112707173">Dual punch top</translation>
+<translation id="4976702386844183910">Last visited <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Use microphone?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">See all</translation>
@@ -1346,6 +1349,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="5215116848420601511">Payment methods and addresses using Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Tray 13</translation>
+<translation id="5216942107514965959">Last visited today</translation>
 <translation id="5222812217790122047">Email (required)</translation>
 <translation id="5230733896359313003">Delivery Address</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1393,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="5333022057423422993">Chrome found the password that you just used in a data breach. To secure your accounts, we recommend checking your saved passwords.</translation>
 <translation id="5334013548165032829">Detailed system logs</translation>
 <translation id="5334145288572353250">Save address?</translation>
+<translation id="5335920952954443287">Beating heart</translation>
 <translation id="5340250774223869109">Application is blocked</translation>
 <translation id="534295439873310000">NFC devices</translation>
 <translation id="5344579389779391559">This page may try to charge you money</translation>
@@ -1531,6 +1536,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="5869522115854928033">Saved passwords</translation>
 <translation id="5873013647450402046">Your bank wants to confirm that it's you.</translation>
 <translation id="5887400589839399685">Card saved</translation>
+<translation id="5887687176710214216">Last visited yesterday</translation>
 <translation id="5895138241574237353">Restart</translation>
 <translation id="5895187275912066135">Issued On</translation>
 <translation id="5901630391730855834">Yellow</translation>
@@ -1724,6 +1730,7 @@ This will otherwise be blocked by your privacy settings. This will allow the con
 <translation id="6529602333819889595">&amp;Redo Delete</translation>
 <translation id="6545864417968258051">Bluetooth scanning</translation>
 <translation id="6547208576736763147">Dual punch left</translation>
+<translation id="6554732001434021288">Last visited <ph name="NUM_DAYS" /> days ago</translation>
 <translation id="6556866813142980365">Redo</translation>
 <translation id="6569060085658103619">You're viewing an extension page</translation>
 <translation id="6573200754375280815">Dual punch right</translation>
@@ -2059,6 +2066,7 @@ Additional details:
 <translation id="7654909834015434372">When you edit annotations, this document will return to its original rotation</translation>
 <translation id="765676359832457558">Hide advanced settings ...</translation>
 <translation id="7658239707568436148">Cancel</translation>
+<translation id="7659878911471462949">Tears of joy</translation>
 <translation id="7662298039739062396">Setting controlled by an extension</translation>
 <translation id="7663736086183791259">Certificate <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Not allowed in Incognito</translation>
@@ -2159,7 +2167,6 @@ Additional details:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Can ask to use virtual reality devices and data</translation>
 <translation id="7984945080620862648">You cannot visit <ph name="SITE" /> at the moment because the website sent scrambled credentials that Chrome cannot process. Network errors and attacks are usually temporary, so this page will probably work later.</translation>
-<translation id="79859296434321399">To view augmented reality content, install ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Bind</translation>
 <translation id="7992044431894087211">Screen sharing with <ph name="APPLICATION_TITLE" /> was resumed</translation>
@@ -2263,6 +2270,7 @@ Additional details:
 <translation id="830498451218851433">Fold half</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Apps installed and how often they are used</translation>
+<translation id="8317207217658302555">Update ARCore?</translation>
 <translation id="831997045666694187">Evening</translation>
 <translation id="8321476692217554900">notifications</translation>
 <translation id="8328484624016508118">After closing all Incognito tabs, Chrome clears:
@@ -2333,7 +2341,6 @@ Additional details:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Reset permission}other{Reset permissions}}</translation>
 <translation id="8555010941760982128">Use this code at checkout</translation>
 <translation id="8557066899867184262">The CVC is located behind your card.</translation>
-<translation id="8558485628462305855">To view augmented reality content, update ARCore</translation>
 <translation id="8559762987265718583">A private connection to <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> can't be established because your device's date and time (<ph name="DATE_AND_TIME" />) are incorrect.</translation>
 <translation id="8564182942834072828">Separate documents/Uncollated copies</translation>
 <translation id="8564985650692024650">Chromium recommends resetting your <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> password if you reused it on other sites.</translation>

@@ -20,6 +20,7 @@
 #include "content/browser/renderer_host/render_frame_host_impl.h"
 #include "content/browser/renderer_host/render_frame_host_manager.h"
 #include "content/common/content_export.h"
+#include "content/public/browser/frame_type.h"
 #include "services/network/public/mojom/content_security_policy.mojom-forward.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/blink/public/common/frame/frame_owner_element_type.h"
@@ -112,10 +113,12 @@ class CONTENT_EXPORT FrameTreeNode {
 
   RenderFrameHostManager* render_manager() { return &render_manager_; }
   int frame_tree_node_id() const { return frame_tree_node_id_; }
-  const std::string& frame_name() const { return replication_state_->name; }
+  const std::string& frame_name() const {
+    return render_manager_.current_replication_state().name;
+  }
 
   const std::string& unique_name() const {
-    return replication_state_->unique_name;
+    return render_manager_.current_replication_state().unique_name;
   }
 
   // See comment on the member declaration.
@@ -143,9 +146,8 @@ class CONTENT_EXPORT FrameTreeNode {
     return opener_devtools_frame_token_;
   }
 
-  // Gets the total number of descendants to this FrameTreeNode in addition to
-  // this node.
-  size_t GetFrameTreeSize() const;
+  // Returns the type of the frame. Refer to frame_type.h for the details.
+  FrameType GetFrameType() const;
 
   // Assigns a new opener for this node and, if |opener| is non-null, registers
   // an observer that will clear this node's opener if |opener| is ever
@@ -216,24 +218,11 @@ class CONTENT_EXPORT FrameTreeNode {
   // which will behave correctly even when the RenderFrameHost is not the
   // current one for this frame (such as when it's pending deletion).
   const url::Origin& current_origin() const {
-    return replication_state_->origin;
+    return render_manager_.current_replication_state().origin;
   }
-
-  // Set the current origin and notify proxies about the update.
-  void SetCurrentOrigin(const url::Origin& origin,
-                        bool is_potentially_trustworthy_unique_origin);
 
   // Set the current name and notify proxies about the update.
   void SetFrameName(const std::string& name, const std::string& unique_name);
-
-  // Sets the current insecure request policy, and notifies proxies about the
-  // update.
-  void SetInsecureRequestPolicy(blink::mojom::InsecureRequestPolicy policy);
-
-  // Sets the current set of insecure urls to upgrade, and notifies proxies
-  // about the update.
-  void SetInsecureNavigationsSet(
-      const std::vector<uint32_t>& insecure_navigations_set);
 
   // Returns the latest frame policy (sandbox flags and container policy) for
   // this frame. This includes flags inherited from parent frames and the latest
@@ -266,7 +255,7 @@ class CONTENT_EXPORT FrameTreeNode {
   // element attributes since the frame was last navigated; use
   // pending_frame_policy() for those.
   const blink::FramePolicy& effective_frame_policy() const {
-    return replication_state_->frame_policy;
+    return render_manager_.current_replication_state().frame_policy;
   }
 
   // Set the frame_policy provided in function parameter as active frame policy,
@@ -297,12 +286,12 @@ class CONTENT_EXPORT FrameTreeNode {
   void set_anonymous(bool anonymous) { anonymous_ = anonymous; }
 
   bool HasSameOrigin(const FrameTreeNode& node) const {
-    return replication_state_->origin.IsSameOriginWith(
-        node.replication_state_->origin);
+    return render_manager_.current_replication_state().origin.IsSameOriginWith(
+        node.current_replication_state().origin);
   }
 
   const blink::mojom::FrameReplicationState& current_replication_state() const {
-    return *replication_state_;
+    return render_manager_.current_replication_state();
   }
 
   RenderFrameHostImpl* current_frame_host() const {
@@ -386,8 +375,6 @@ class CONTENT_EXPORT FrameTreeNode {
       blink::mojom::UserActivationUpdateType update_type,
       blink::mojom::UserActivationNotificationType notification_type);
 
-  void OnSetHadStickyUserActivationBeforeNavigation(bool value);
-
   // Returns the sandbox flags currently in effect for this frame. This includes
   // flags inherited from parent frames, the currently active flags from the
   // <iframe> element hosting this frame, as well as any flags set from a
@@ -397,7 +384,7 @@ class CONTENT_EXPORT FrameTreeNode {
   // on navigation (which does not include the CSP-set flags), use
   // effective_frame_policy().
   network::mojom::WebSandboxFlags active_sandbox_flags() const {
-    return replication_state_->active_sandbox_flags;
+    return render_manager_.current_replication_state().active_sandbox_flags;
   }
 
   // Updates the active sandbox flags in this frame, in response to a
@@ -415,7 +402,8 @@ class CONTENT_EXPORT FrameTreeNode {
   // Returns whether the frame received a user gesture on a previous navigation
   // on the same eTLD+1.
   bool has_received_user_gesture_before_nav() const {
-    return replication_state_->has_received_user_gesture_before_nav;
+    return render_manager_.current_replication_state()
+        .has_received_user_gesture_before_nav;
   }
 
   // When a tab is discarded, WebContents sets was_discarded on its
@@ -451,8 +439,6 @@ class CONTENT_EXPORT FrameTreeNode {
   blink::mojom::TreeScopeType tree_scope_type() const {
     return tree_scope_type_;
   }
-
-  void SetIsAdSubframe(bool is_ad_subframe);
 
   // The initial popup URL for new window opened using:
   // `window.open(initial_popup_url)`.
@@ -527,12 +513,11 @@ class CONTENT_EXPORT FrameTreeNode {
   // correct after the RenderFrameHost is moved between FrameTreeNodes. The
   // renderers should already have the correct value, so unlike
   // FrameTreeNode::SetFrameName, we do not notify them here.
-  // TODO(https://crbug.com/1237091): Remove this once the Browsing Instance
-  // Frame State is implemented.
+  // TODO(https://crbug.com/1237091): Remove this once the BrowsingContextState
+  //  is implemented to utilize the new path.
   void set_frame_name_for_activation(const std::string& unique_name,
                                      const std::string& name) {
-    replication_state_->unique_name = unique_name;
-    replication_state_->name = name;
+    render_manager_.browsing_context_state()->set_frame_name(unique_name, name);
   }
 
   // Returns true if error page isolation is enabled.
@@ -641,15 +626,12 @@ class CONTENT_EXPORT FrameTreeNode {
   const blink::mojom::TreeScopeType tree_scope_type_ =
       blink::mojom::TreeScopeType::kDocument;
 
-  // Track information that needs to be replicated to processes that have
-  // proxies for this frame.
-  blink::mojom::FrameReplicationStatePtr replication_state_;
-
   // Track the pending sandbox flags and container policy for this frame. When a
   // parent frame dynamically updates 'sandbox', 'allow', 'allowfullscreen',
   // 'allowpaymentrequest' or 'src' attributes, the updated policy for the frame
-  // is stored here, and transferred into replication_state_->frame_policy when
-  // they take effect on the next frame navigation.
+  // is stored here, and transferred into
+  // render_manager_.current_replication_state().frame_policy when they take
+  // effect on the next frame navigation.
   blink::FramePolicy pending_frame_policy_;
 
   // Whether the frame was created by javascript.  This is useful to prune

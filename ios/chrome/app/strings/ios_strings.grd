@@ -240,8 +240,14 @@ locale.  The strings in this file are specific to iOS.
       <message name="IDS_IOS_SUGGESTED_PASSWORD_HINT" desc="Text shown alongside a suggested password to tell user that generated passwords are recorded by chrome. [Length: unlimited] [iOS only]">
         Chrome will remember this password for you. You don't have to remember it.
       </message>
+      <message name="IDS_IOS_SUGGESTED_STRONG_PASSWORD" desc="Text that shows a suggested generated password at user's request [Length: unlimited] [iOS only]">
+        Use Strong Password:
+      </message>
       <message name="IDS_IOS_USE_SUGGESTED_PASSWORD" desc="Button title in a suggested password popup asking user if they want to use the suggested password. [Length: 20em] [iOS only]">
         Use Suggested Password
+      </message>
+      <message name="IDS_IOS_USE_SUGGESTED_STRONG_PASSWORD" desc="Button title in a suggested password popup asking user if they want to use the suggested password. [Length: 20em] [iOS only]">
+        Use Password
       </message>
       <message name="IDS_IOS_APPLICATION_SHORTCUT_INCOGNITOSEARCH_TITLE" desc="Message when opening a New Incognito Search from springboard force touch static shortcuts. [Length: unlimited] [iOS only]." meaning="3D Touch entry to create a new Incognito tab.">
        Incognito Search
@@ -1187,7 +1193,7 @@ See your search engine’s instructions for deleting your search history, if app
         Manage Your Google Account
       </message>
       <message name="IDS_IOS_REMOVE_GOOGLE_ACCOUNT_TITLE" desc="Title for the button that removes a Google account from the device">
-      Remove Account from this Device
+        Remove from this Device
       </message>
       <message name="IDS_IOS_MANAGE_SYNC_SETTINGS_TITLE" desc="Title for the view in the Settings for enabling/disabling Sync. [iOS only]">
         Manage Sync
@@ -1598,6 +1604,9 @@ While in Incognito, sites can't use cookies to see your browsing activity across
       <message name="IDS_SAVE_PASSWORD_FOOTER" desc="The footer text of the infobar that offers user to save/update a password to Chrome.">
         Passwords are saved in your Google Account so you can use them on any device.
       </message>
+      <message name="IDS_SAVE_PASSWORD_FOOTER_DISPLAYING_USER_EMAIL" desc="The footer text of the infobar that offers user to save/update a password to Chrome; also display's current user's email.">
+        You can use saved passwords on any device. They're saved to Google Password Manager for <ph name="EMAIL">$1<ex>johndoe@gmail.com</ex></ph>
+      </message>
       <message name="IDS_IOS_PHOTO_LIBRARY_ADD_USAGE_DESCRIPTION" desc="Specifies the reason for writing to the user's photo library while the app is in use [Length: unlimited] [iOS only].">
         This lets you save photos to your photo library.
       </message>
@@ -1672,6 +1681,12 @@ While in Incognito, sites can't use cookies to see your browsing activity across
       </message>
       <message name="IDS_IOS_SCANNER_TORCH_ON_ACCESSIBILITY_VALUE" desc="Accessibility value of the button to turn torch off in the Scanner. The button communicates that the torch is currently on. [Length: unlimited] [iOS only]" meaning="The user will put on the torch [20em] [Read by Text-to-Speech]">
         On
+      </message>
+      <message name="IDS_IOS_TRACK_PRICES_ON_TABS" desc="This text shows in the price tracking settings dialog. It tells users the switch on the side can be used to turn on/off the 'Track prices on tabs' feature.">
+        Track Prices on Tabs
+      </message>
+      <message name="IDS_IOS_TRACK_PRICES_ON_TABS_DESCRIPTION" desc="This text shows below 'Track prices on tabs'. It describes what will happen when turning on this feature.">
+        See price drops on your tabs.
       </message>
       <message name="IDS_IOS_QR_SCANNER_VIEWPORT_CAPTION" desc="Message displayed below the QR scanner viewport instructing the user to position the scanned QR or bar code inside the viewport. [Length: unlimited] [iOS only]">
         Position QR code or barcode in this frame
@@ -1916,6 +1931,9 @@ While in Incognito, sites can't use cookies to see your browsing activity across
       <message name="IDS_IOS_PASSWORDS" desc="Title for the view in Settings for managing saved passwords. [Length: 15em] [iOS only]">
         Passwords
       </message>
+      <message name="IDS_IOS_PASSWORD_MANAGER" desc="Title for the view in Settings for managing saved passwords. [Length: 15em] [iOS only]">
+        Password Manager
+      </message>
       <message name="IDS_IOS_ENTERPRISE_MANAGED_BY_YOUR_ORGANIZATION" desc="Text displayed to inform the user that the browser is managed by Enterprise policies (without link). [iOS only]">
         Managed by your organization
       </message>
@@ -2002,6 +2020,9 @@ Follow the steps below:
       </message>
       <message name="IDS_IOS_SAVE_PASSWORDS_MANAGE_ACCOUNT" desc="Header text with link for the view in Settings for managing saved passwords. [Length: unlimited] [iOS only]">
         View and manage saved passwords at <ph name="BEGIN_LINK">BEGIN_LINK</ph>passwords.google.com<ph name="END_LINK">END_LINK</ph>
+      </message>
+      <message name="IDS_IOS_SAVE_PASSWORDS_MANAGE_ACCOUNT_HEADER" desc="Header text with link for the view in Settings for managing saved passwords. [Length: unlimited] [iOS only]">
+        Create, save, and manage your passwords so you can easily sign in to sites and apps. <ph name="BEGIN_LINK">BEGIN_LINK</ph>Learn more<ph name="END_LINK">END_LINK</ph>
       </message>
       <message name="IDS_IOS_CHECK_PASSWORDS" desc="Title for the item in Settings for Password Check feature" meaning="Label tells the user about status of Password Check [CHAR_LIMIT=25] [iOS only]">
         Check Passwords
@@ -2109,6 +2130,9 @@ Try to use a unique password for every site.
       </message>
       <message name="IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE" desc="The subtitle of the view that teaches users to turn on iOS auto-fill from Chrome password manager">
         Use the passwords you saved to Chrome in other apps on your device
+      </message>
+      <message name="IDS_IOS_SETTINGS_PASSWORDS_IN_OTHER_APPS_SUBTITLE_SYNCING_ENABLED" desc="The subtitle of the view that teaches password-syncing users they can access passwords from their other devices">
+        You can also use saved passwords on your other devices.
       </message>
       <message name="IDS_IOS_SETTINGS_SAFETY_CHECK_PASSWORDS_TITLE" desc="Title for the passwords element of safety check" meaning="Row title to access the passowrd check subpage if a probelm is found with user's saved passwords [CHAR_LIMIT=20]">
         Passwords
@@ -2809,6 +2833,12 @@ Your data was encrypted with your sync passphrase on <ph name="TIME">$2<ex>Sept 
       <message name="IDS_IOS_TOOLS_MENU_ENTERPRISE_LEARN_MORE" desc="Link displayed to allow the user to learn more why the browser is managed by Enterprise policies. Shown at the bottom of the overflow menu. [iOS only]">
         Learn More
       </message>
+      <message name="IDS_IOS_TOOLS_MENU_FOLLOW" desc="The iOS menu item for following web content. [iOS only]">
+        Follow
+      </message>
+      <message name="IDS_IOS_TOOLS_MENU_UNFOLLOW" desc="The iOS menu item for unfollowing web content. [iOS only]">
+        Unfollow
+      </message>
       <message name="IDS_IOS_TOOLS_MENU_TRANSLATE" desc="The iOS menu item for translating the current page [iOS only]" meaning="Open the translate infobar [Length: unlimited]">
         Translate
       </message>
@@ -2835,6 +2865,9 @@ New Search
 </message>
       <message name="IDS_IOS_TOOLS_MENU_NEW_TAB" desc="The iOS menu item for opening a new tab [iOS only]" meaning="Tools menu entry to create a new tab. [Length: Unlimited]">
         New Tab
+      </message>
+      <message name="IDS_IOS_TOOLS_MENU_PASSWORD_MANAGER" desc="The iOS menu item for opening the passwords list [iOS only]">
+        Password Manager
       </message>
       <message name="IDS_IOS_TOOLS_MENU_PASSWORDS" desc="The iOS menu item for opening the passwords list [iOS only]">
         Passwords
@@ -3113,6 +3146,18 @@ New Search
       </message>
       <message name="IDS_IOS_CARD_WILL_BE_SAVED_TO_ACCOUNT" desc="A message to inform the user that a credit card will be saved to their Google Account.">
         Cards are saved to your Google Account.
+      </message>
+      <message name="IDS_IOS_SHARED_HIGHLIGHT_MENU_TITLE" desc="The title at the top of a menu which appears after a user taps on a highlighted passage in a web page. Title-cased.">
+        Highlighted Text
+      </message>
+      <message name="IDS_IOS_SHARED_HIGHLIGHT_LEARN_MORE" desc="An option in a menu which appears after a user taps on a highlighted passage in a web page. When selected, the user will be taken to a help article explaining how the highlighting feature works. Title-cased. [Length: 25em]">
+        Learn More...
+      </message>
+      <message name="IDS_IOS_SHARED_HIGHLIGHT_RESHARE" desc="An option in a menu which appears after a user taps on a highlighted passage in a web page. Selecting this option allows the user to share a link directly to the passage on which they tapped. Title-cased. [Length: 25em]">
+        Share Highlight
+      </message>
+      <message name="IDS_IOS_SHARED_HIGHLIGHT_REMOVE" desc="An option in a menu which appears after a user taps on a highlighted passage in a web page. Selecting this option causes the passage to no longer be highlighted. Title-cased. [Length: 25em]">
+        Remove
       </message>
     </messages>
   </release>

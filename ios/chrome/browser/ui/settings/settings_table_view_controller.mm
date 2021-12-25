@@ -31,6 +31,7 @@
 #include "ios/chrome/browser/application_context.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/main/browser.h"
+#include "ios/chrome/browser/net/crurl.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_check_manager.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_check_manager_factory.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
@@ -777,18 +778,27 @@ SyncState GetSyncStateFromBrowserState(ChromeBrowserState* browserState) {
 - (TableViewItem*)passwordsDetailItem {
   BOOL passwordsEnabled = _browserState->GetPrefs()->GetBoolean(
       password_manager::prefs::kCredentialsEnableService);
+  BOOL passwordsRebrandingEnabled = base::FeatureList::IsEnabled(
+      password_manager::features::kIOSEnablePasswordManagerBrandingUpdate);
+
   NSString* passwordsDetail = passwordsEnabled
                                   ? l10n_util::GetNSString(IDS_IOS_SETTING_ON)
                                   : l10n_util::GetNSString(IDS_IOS_SETTING_OFF);
-  _passwordsDetailItem =
-      [self detailItemWithType:SettingsItemTypePasswords
-                          text:l10n_util::GetNSString(IDS_IOS_PASSWORDS)
-                    detailText:passwordsDetail
-                 iconImageName:(base::FeatureList::IsEnabled(
-                                                             password_manager::features::kIOSEnablePasswordManagerBrandingUpdate)
-                                    ? kSettingsPasswordsImageName
-                                    : kLegacySettingsPasswordsImageName)
-                 accessibilityIdentifier:kSettingsPasswordsCellId];
+
+  NSString* passwordsSectionTitle =
+      passwordsRebrandingEnabled
+          ? l10n_util::GetNSString(IDS_IOS_PASSWORD_MANAGER)
+          : l10n_util::GetNSString(IDS_IOS_PASSWORDS);
+
+  NSString* passwordsIconImageName = passwordsRebrandingEnabled
+                                         ? kSettingsPasswordsImageName
+                                         : kLegacySettingsPasswordsImageName;
+
+  _passwordsDetailItem = [self detailItemWithType:SettingsItemTypePasswords
+                                             text:passwordsSectionTitle
+                                       detailText:passwordsDetail
+                                    iconImageName:passwordsIconImageName
+                          accessibilityIdentifier:kSettingsPasswordsCellId];
 
   return _passwordsDetailItem;
 }
@@ -1247,8 +1257,8 @@ SyncState GetSyncStateFromBrowserState(ChromeBrowserState* browserState) {
     }
     case SettingsItemTypeContentSettings:
       base::RecordAction(base::UserMetricsAction("Settings.ContentSettings"));
-      controller = [[ContentSettingsTableViewController alloc]
-          initWithBrowserState:_browserState];
+      controller =
+          [[ContentSettingsTableViewController alloc] initWithBrowser:_browser];
       break;
     case SettingsItemTypeBandwidth:
       base::RecordAction(base::UserMetricsAction("Settings.Bandwidth"));
@@ -1631,7 +1641,7 @@ SyncState GetSyncStateFromBrowserState(ChromeBrowserState* browserState) {
 
 // Check if the default search engine is managed by policy.
 - (BOOL)isDefaultSearchEngineManagedByPolicy {
-  const base::DictionaryValue* dict = _browserState->GetPrefs()->GetDictionary(
+  const base::Value* dict = _browserState->GetPrefs()->GetDictionary(
       DefaultSearchManager::kDefaultSearchProviderDataPrefName);
 
   if (dict) {
@@ -1644,7 +1654,7 @@ SyncState GetSyncStateFromBrowserState(ChromeBrowserState* browserState) {
 
 // Returns the text to be displayed by the managed Search Engine item.
 - (NSString*)managedSearchEngineDetailText {
-  const base::DictionaryValue* dict = _browserState->GetPrefs()->GetDictionary(
+  const base::Value* dict = _browserState->GetPrefs()->GetDictionary(
       DefaultSearchManager::kDefaultSearchProviderDataPrefName);
   if (dict->FindBoolPath(DefaultSearchManager::kDisabledByPolicy)) {
     // Default search engine is disabled by policy.
@@ -1987,8 +1997,7 @@ SyncState GetSyncStateFromBrowserState(ChromeBrowserState* browserState) {
 #pragma mark - PopoverLabelViewControllerDelegate
 
 - (void)didTapLinkURL:(NSURL*)URL {
-  GURL convertedURL = net::GURLWithNSURL(URL);
-  [self view:nil didTapLinkURL:convertedURL];
+  [self view:nil didTapLinkURL:[[CrURL alloc] initWithNSURL:URL]];
 }
 
 #pragma mark - ManageSyncSettingsCoordinatorDelegate

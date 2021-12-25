@@ -23,10 +23,10 @@
 #include "chrome/browser/devtools/chrome_devtools_manager_delegate.h"
 #include "chrome/browser/devtools/devtools_eye_dropper.h"
 #include "chrome/browser/file_select_helper.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/task_manager/web_contents_tags.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -1653,7 +1653,8 @@ void DevToolsWindow::SetOpenNewWindowForPopups(bool value) {
 
 void DevToolsWindow::CreateDevToolsBrowser() {
   PrefService* prefs = profile_->GetPrefs();
-  if (!prefs->GetDictionary(prefs::kAppWindowPlacement)->HasKey(kDevToolsApp)) {
+  if (!prefs->GetDictionary(prefs::kAppWindowPlacement)
+           ->FindKey(kDevToolsApp)) {
     // Ensure there is always a default size so that
     // BrowserFrame::InitBrowserFrame can retrieve it later.
     DictionaryPrefUpdate update(prefs, prefs::kAppWindowPlacement);

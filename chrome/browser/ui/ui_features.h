@@ -37,6 +37,8 @@ extern const base::Feature kChromeWhatsNewInMainMenuNewBadge;
 
 extern const base::Feature kCommander;
 
+extern const base::Feature kDownloadBubble;
+
 #if !defined(ANDROID)
 extern const base::Feature kAccessCodeCastUI;
 #endif
@@ -124,6 +126,8 @@ extern const char kTabSearchSearchThresholdName[];
 extern const base::FeatureParam<bool> kTabSearchSearchIgnoreLocation;
 
 extern const base::Feature kTabSearchMediaTabs;
+
+extern const char kTabSearchAlsoShowMediaTabsinOpenTabsSectionParameterName[];
 
 // Determines how close the match must be to the beginning of the string. Eg a
 // distance of 100 and threshold of 0.8 would require a perfect match to be

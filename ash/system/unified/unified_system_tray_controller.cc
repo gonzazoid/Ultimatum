@@ -9,8 +9,6 @@
 #include "ash/constants/ash_pref_names.h"
 #include "ash/metrics/user_metrics_action.h"
 #include "ash/metrics/user_metrics_recorder.h"
-#include "ash/projector/projector_controller_impl.h"
-#include "ash/projector/projector_feature_pod_controller.h"
 #include "ash/public/cpp/metrics_util.h"
 #include "ash/public/cpp/pagination/pagination_controller.h"
 #include "ash/public/cpp/system_tray_client.h"
@@ -28,7 +26,6 @@
 #include "ash/system/brightness/unified_brightness_slider_controller.h"
 #include "ash/system/cast/cast_feature_pod_controller.h"
 #include "ash/system/cast/unified_cast_detailed_view_controller.h"
-#include "ash/system/dark_mode/dark_mode_detailed_view_controller.h"
 #include "ash/system/dark_mode/dark_mode_feature_pod_controller.h"
 #include "ash/system/ime/ime_feature_pod_controller.h"
 #include "ash/system/ime/unified_ime_detailed_view_controller.h"
@@ -391,10 +388,6 @@ void UnifiedSystemTrayController::ShowAudioDetailedView() {
   showing_audio_detailed_view_ = true;
 }
 
-void UnifiedSystemTrayController::ShowDarkModeDetailedView() {
-  ShowDetailedView(std::make_unique<DarkModeDetailedViewController>(this));
-}
-
 void UnifiedSystemTrayController::ShowNotifierSettingsView() {
   DCHECK(Shell::Get()->session_controller()->ShouldShowNotificationTray());
   DCHECK(!Shell::Get()->session_controller()->IsScreenLocked());
@@ -507,10 +500,6 @@ void UnifiedSystemTrayController::InitFeaturePods() {
   AddFeaturePodItem(std::make_unique<RotationLockFeaturePodController>());
   AddFeaturePodItem(std::make_unique<PrivacyScreenFeaturePodController>());
   AddFeaturePodItem(std::make_unique<CaptureModeFeaturePodController>(this));
-  if (chromeos::features::IsProjectorFeaturePodEnabled() &&
-      Shell::Get()->projector_controller()->IsEligible()) {
-    AddFeaturePodItem(std::make_unique<ProjectorFeaturePodController>(this));
-  }
   AddFeaturePodItem(std::make_unique<NearbyShareFeaturePodController>(this));
   AddFeaturePodItem(std::make_unique<NightLightFeaturePodController>(this));
   AddFeaturePodItem(std::make_unique<CastFeaturePodController>(this));

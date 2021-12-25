@@ -112,6 +112,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="1308113895091915999">Angebot verfügbar</translation>
 <translation id="1312803275555673949">Welche Hinweise unterstützen dies?</translation>
 <translation id="131405271941274527"><ph name="URL" /> möchte Informationen senden und empfangen, wenn Sie Ihr Smartphone an NFC-Geräte halten</translation>
+<translation id="1314311879718644478">Augmented-Reality-Inhalte anzeigen</translation>
 <translation id="1314509827145471431">Bindung rechts</translation>
 <translation id="1318023360584041678">In Tabgruppe gespeichert</translation>
 <translation id="1319245136674974084">Für diese App nicht mehr nachfragen</translation>
@@ -176,6 +177,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="1472675084647422956">Mehr anzeigen</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Suchen Sie die Browser-Version? Gehen Sie zu</translation>
 <translation id="1476595624592550506">Passwort ändern</translation>
 <translation id="1483493594462132177">Senden</translation>
 <translation id="1484290072879560759">Versandadresse auswählen</translation>
@@ -214,6 +216,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="1583429793053364125">Fehler beim Anzeigen dieser Webseite.</translation>
 <translation id="1586541204584340881">Welche Erweiterungen Sie installiert haben</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">ARCore installieren?</translation>
 <translation id="1592005682883173041">Zugriff auf lokale Daten</translation>
 <translation id="1594030484168838125">Auswählen</translation>
 <translation id="160851722280695521">Chrome Dino in Chrome spielen</translation>
@@ -1250,6 +1253,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="4968522289500246572">Diese App wurde für Mobilgeräte entwickelt. Ihre Größe kann deshalb eventuell nicht richtig angepasst werden. Außerdem können Probleme auftreten und sie wird möglicherweise neu gestartet.</translation>
 <translation id="4969341057194253438">Aufnahme löschen</translation>
 <translation id="4973922308112707173">Doppelte Lochung oben</translation>
+<translation id="4976702386844183910">Zuletzt besucht am <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Mikrofon verwenden?</translation>
 <translation id="4984339528288761049">Prc5 (Umschlag)</translation>
 <translation id="4989163558385430922">Alle ansehen</translation>
@@ -1335,6 +1339,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="5215116848420601511">Bei Google Pay gespeicherte Zahlungsmethoden und Adressen</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Fach 13</translation>
+<translation id="5216942107514965959">Heute zuletzt besucht</translation>
 <translation id="5222812217790122047">E-Mail-Adresse erforderlich</translation>
 <translation id="5230733896359313003">Versandadresse</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1378,6 +1383,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="5333022057423422993">Chrome hat das Passwort, das Sie gerade verwendet haben, in einer Datenpanne gefunden. Wir empfehlen Ihnen, Ihre gespeicherten Passwörter zu prüfen, um Ihre Konten besser zu schützen.</translation>
 <translation id="5334013548165032829">Detaillierte Systemprotokolle</translation>
 <translation id="5334145288572353250">Adresse speichern?</translation>
+<translation id="5335920952954443287">Schlagendes Herz</translation>
 <translation id="5340250774223869109">Die App ist blockiert</translation>
 <translation id="534295439873310000">NFC-Geräte</translation>
 <translation id="5344579389779391559">Auf dieser Seite wird möglicherweise versucht, Ihnen etwas in Rechnung zu stellen</translation>
@@ -1520,6 +1526,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="5869522115854928033">Gespeicherte Passwörter</translation>
 <translation id="5873013647450402046">Ihre Bank muss Ihre Identität bestätigen.</translation>
 <translation id="5887400589839399685">Karte gespeichert</translation>
+<translation id="5887687176710214216">Gestern zuletzt besucht</translation>
 <translation id="5895138241574237353">Neu starten</translation>
 <translation id="5895187275912066135">Ausgestellt am</translation>
 <translation id="5901630391730855834">Gelb</translation>
@@ -1713,6 +1720,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="6529602333819889595">&amp;Löschen wiederholen</translation>
 <translation id="6545864417968258051">Bluetooth-Suche</translation>
 <translation id="6547208576736763147">Doppelte Lochung links</translation>
+<translation id="6554732001434021288">Vor <ph name="NUM_DAYS" /> Tagen zuletzt besucht</translation>
 <translation id="6556866813142980365">Wiederholen</translation>
 <translation id="6569060085658103619">Dies ist eine Erweiterungsseite</translation>
 <translation id="6573200754375280815">Doppelte Lochung rechts</translation>
@@ -1875,6 +1883,7 @@ Sie werden sonst gemäß Ihren Datenschutzeinstellungen blockiert. Wenn Cookies 
 <translation id="7118618213916969306">Nach URL aus Zwischenablage suchen, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Andere Tabs oder Programme schließen</translation>
 <translation id="7129409597930077180">Der Versand an diese Adresse ist nicht möglich. Bitte wählen Sie eine andere Adresse aus.</translation>
+<translation id="7132939140423847331">Ihr Administrator hat das Kopieren dieser Daten untersagt.</translation>
 <translation id="7135130955892390533">Status anzeigen</translation>
 <translation id="7138472120740807366">Lieferoption</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2047,6 +2056,7 @@ Weitere Details:
 <translation id="7654909834015434372">Wenn Sie Anmerkungen bearbeiten, wechselt das Dokument zu seiner ursprünglichen Ausrichtung zurück</translation>
 <translation id="765676359832457558">Erweiterte Einstellungen ausblenden</translation>
 <translation id="7658239707568436148">Abbrechen</translation>
+<translation id="7659878911471462949">Freudentränen</translation>
 <translation id="7662298039739062396">Einstellung wird von einer Erweiterung gesteuert</translation>
 <translation id="7663736086183791259">Zertifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Nicht zulässig im Inkognitomodus</translation>
@@ -2147,7 +2157,6 @@ Weitere Details:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Darf nachfragen, wenn sie Virtual-Reality-Geräte und -Daten verwenden möchte</translation>
 <translation id="7984945080620862648">Sie können <ph name="SITE" /> zurzeit nicht aufrufen, weil die Website verschlüsselte Anmeldedaten gesendet hat, die von Chrome nicht verarbeitet werden können. Netzwerkfehler und Angriffe sind in der Regel nur vorübergehend, sodass die Seite wahrscheinlich später wieder funktioniert.</translation>
-<translation id="79859296434321399">ARCore installieren, um Augmented-Reality-Inhalte zu sehen</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Binden</translation>
 <translation id="7992044431894087211">Die Bildschirmfreigabe mit <ph name="APPLICATION_TITLE" /> wurde fortgesetzt</translation>
@@ -2251,6 +2260,7 @@ Weitere Details:
 <translation id="830498451218851433">Zur Hälfte falten</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Installierte Apps und Häufigkeit ihrer Verwendung</translation>
+<translation id="8317207217658302555">ARCore aktualisieren?</translation>
 <translation id="831997045666694187">Abends</translation>
 <translation id="8321476692217554900">Benachrichtigungen</translation>
 <translation id="8328484624016508118">Nach dem Schließen aller Inkognitotabs löscht Chrome Folgendes:
@@ -2321,7 +2331,6 @@ Weitere Details:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Berechtigung zurücksetzen}other{Berechtigungen zurücksetzen}}</translation>
 <translation id="8555010941760982128">Diesen Code beim Bezahlen verwenden</translation>
 <translation id="8557066899867184262">Der CVC befindet sich auf der Rückseite Ihrer Karte.</translation>
-<translation id="8558485628462305855">ARCore aktualisieren, um Augmented-Reality-Inhalte zu sehen</translation>
 <translation id="8559762987265718583">Es kann keine private Verbindung zu <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> hergestellt werden, weil Datum und Uhrzeit Ihres Geräts falsch sind (<ph name="DATE_AND_TIME" />).</translation>
 <translation id="8564182942834072828">Getrennte Dokumente/nicht sortierte Kopien</translation>
 <translation id="8564985650692024650">Chromium empfiehlt, Ihr Passwort für <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> zurückzusetzen, wenn Sie es auf anderen Websites verwendet haben.</translation>
@@ -2434,6 +2443,7 @@ Weitere Details:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" /> – drücken Sie die Tabulatortaste und dann die Eingabetaste, um Ihren Browserverlauf in Chrome aufzurufen</translation>
 <translation id="8987927404178983737">Monat</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Suchen Sie die Systemversion? Gehen Sie zu</translation>
 <translation id="899688752321268742"><ph name="URL" /> möchte Informationen zu Ihrer aktiven Nutzung dieses Geräts abrufen</translation>
 <translation id="8996941253935762404">Die Website, die Sie aufrufen möchten, enthält schädliche Programme</translation>
 <translation id="8997023839087525404">Der Server präsentierte ein Zertifikat, das nicht gemäß der Richtlinie zur Zertifikatstransparenz öffentlich offengelegt wurde. Dies ist für einige Zertifikate jedoch eine Voraussetzung, mit der sichergestellt wird, dass sie vertrauenswürdig sind und vor Angriffen schützen.</translation>

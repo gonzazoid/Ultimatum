@@ -306,6 +306,12 @@ CalendarView::CalendarView(DetailedViewDelegate* delegate,
   scroll_view_->SetDrawOverflowIndicator(false);
   scroll_view_->SetVerticalScrollBarMode(
       views::ScrollView::ScrollBarMode::kHiddenButEnabled);
+  scroll_view_->GetViewAccessibility().OverrideRole(ax::mojom::Role::kGroup);
+  scroll_view_->GetViewAccessibility().OverrideName(l10n_util::GetStringFUTF16(
+      IDS_ASH_CALENDAR_BUBBLE_ACCESSIBLE_DESCRIPTION,
+      base::TimeFormatWithPattern(calendar_view_controller_->current_date(),
+                                  "MMMM yyyy")));
+  scroll_view_->SetFocusBehavior(FocusBehavior::ALWAYS);
   on_contents_scrolled_subscription_ =
       scroll_view_->AddContentsScrolledCallback(base::BindRepeating(
           &CalendarView::OnContentsScrolled, base::Unretained(this)));
@@ -329,10 +335,12 @@ CalendarView::CalendarView(DetailedViewDelegate* delegate,
 }
 
 CalendarView::~CalendarView() {
-  // Removes child views including month views to remove its dependency from
-  // `CalendarViewController`, since month views are destructed after the
-  // controller.
+  // Removes child views including month views and event list to remove their
+  // dependency from `CalendarViewController`, since these views are destructed
+  // after the controller.
   content_view_->RemoveAllChildViews();
+  if (event_list_container_)
+    event_list_container_->RemoveAllChildViews();
 }
 
 void CalendarView::Init() {
@@ -346,6 +354,8 @@ void CalendarView::CreateExtraTitleRowButtons() {
   reset_to_today_button_ = CreateInfoButton(
       base::BindRepeating(&CalendarView::ResetToToday, base::Unretained(this)),
       IDS_ASH_CALENDAR_INFO_BUTTON_ACCESSIBLE_DESCRIPTION);
+  reset_to_today_button_->SetTooltipText(
+      l10n_util::GetStringUTF16(IDS_ASH_CALENDA_TODAY_BUTTON_TOOLTIP));
   tri_view()->AddView(TriView::Container::END, reset_to_today_button_);
 
   DCHECK(!settings_button_);
@@ -354,6 +364,8 @@ void CalendarView::CreateExtraTitleRowButtons() {
           &UnifiedSystemTrayController::HandleOpenDateTimeSettingsAction,
           base::Unretained(controller_)),
       IDS_ASH_CALENDAR_SETTINGS);
+  settings_button_->SetTooltipText(
+      l10n_util::GetStringUTF16(IDS_ASH_CALENDAR_SETTINGS_TOOLTIP));
   tri_view()->AddView(TriView::Container::END, settings_button_);
 }
 
@@ -410,7 +422,7 @@ int CalendarView::PositionOfSelectedDate() const {
 }
 
 void CalendarView::ResetToToday() {
-  if (event_list_)
+  if (event_list_container_)
     return;
 
   calendar_view_controller_->UpdateMonth(base::Time::Now());
@@ -516,6 +528,11 @@ void CalendarView::MaybeResetContentViewFocusBehavior() {
   }
 
   content_view_->SetFocusBehavior(FocusBehavior::ALWAYS);
+
+  // Also disable the focus behavior of the `event_list_container_`, since now
+  // the focusing ring is out of the date cells.
+  if (event_list_container_)
+    event_list_container_->SetFocusBehavior(FocusBehavior::NEVER);
 }
 
 void CalendarView::OnViewBoundsChanged(views::View* observed_view) {
@@ -535,12 +552,24 @@ void CalendarView::OnViewFocused(View* observed_view) {
   if (observed_view != content_view_ || IsDateCellViewFocused())
     return;
 
-  // When focusing on the `content_view_`, we decide which is the to-be-focued
-  // cell based on the current position.
+  auto* focus_manager = GetFocusManager();
   previous_month_->EnableFocus();
   current_month_->EnableFocus();
   next_month_->EnableFocus();
-  auto* focus_manager = GetFocusManager();
+
+  // If the event list is showing, focus on the first cell in the current row or
+  // today's cell if today is in this row.
+  if (event_list_container_) {
+    focus_manager->SetFocusedView(
+        current_month_->focused_cells()[calendar_view_controller_
+                                            ->GetExpandedRowIndex()]);
+    content_view_->SetFocusBehavior(FocusBehavior::NEVER);
+    event_list_container_->SetFocusBehavior(FocusBehavior::ALWAYS);
+    return;
+  }
+
+  // When focusing on the `content_view_`, we decide which is the to-be-focued
+  // cell based on the current position.
   const int position = scroll_view_->GetVisibleRect().y();
   const int row_height = calendar_view_controller_->row_height();
 
@@ -647,8 +676,27 @@ void CalendarView::OnEventsFetched(
 }
 
 void CalendarView::OpenEventList() {
-  if (event_list_)
+  if (event_list_container_)
     return;
+
+  // Updates `scroll_view_`'s accessible name with the selected date.
+  absl::optional<base::Time::Exploded> selected_date =
+      calendar_view_controller_->selected_date();
+  DCHECK(selected_date.has_value());
+  base::Time unexploded_selected_date;
+  bool result = base::Time::FromUTCExploded(selected_date.value(),
+                                            &unexploded_selected_date);
+  DCHECK(result);
+  scroll_view_->GetViewAccessibility().OverrideName(l10n_util::GetStringFUTF16(
+      IDS_ASH_CALENDAR_CONTENT_ACCESSIBLE_DESCRIPTION,
+      base::TimeFormatWithPattern(calendar_view_controller_->current_date(),
+                                  "MMMM yyyy"),
+      base::TimeFormatWithPattern(unexploded_selected_date, "MMMMdyyyy")));
+  scroll_view_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged,
+                                         /*send_native_event=*/true);
+
+  scroll_view_->SetVerticalScrollBarMode(
+      views::ScrollView::ScrollBarMode::kHiddenButEnabled);
 
   if (!calendar_view_controller_->IsSelectedDateInCurrentMonth())
     ScrollDownOneMonth();
@@ -660,16 +708,36 @@ void CalendarView::OpenEventList() {
                                     calendar_view_controller_->row_height());
   scroll_view_->SetVerticalScrollBarMode(
       views::ScrollView::ScrollBarMode::kDisabled);
-  event_list_ = AddChildView(
+
+  // The event list is in a container, which will be used for escaping the
+  // focusing from the date cells.
+  event_list_container_ = AddChildView(std::make_unique<views::View>());
+  event_list_container_->SetLayoutManager(std::make_unique<views::BoxLayout>(
+      views::BoxLayout::Orientation::kVertical));
+  event_list_container_->GetViewAccessibility().OverrideName(GetClassName());
+  event_list_container_->SetFocusBehavior(
+      IsDateCellViewFocused() ? FocusBehavior::ALWAYS : FocusBehavior::NEVER);
+
+  event_list_ = event_list_container_->AddChildView(
       std::make_unique<CalendarEventListView>(calendar_view_controller_.get()));
+  event_list_->GetViewAccessibility().OverrideName(GetClassName());
+  event_list_->SetFocusBehavior(FocusBehavior::ALWAYS);
   calendar_view_controller_->OnEventListOpened();
 }
 
 void CalendarView::CloseEventList() {
+  // Updates `scroll_view_`'s accessible name without the selected date.
+  scroll_view_->GetViewAccessibility().OverrideName(l10n_util::GetStringFUTF16(
+      IDS_ASH_CALENDAR_BUBBLE_ACCESSIBLE_DESCRIPTION,
+      base::TimeFormatWithPattern(calendar_view_controller_->current_date(),
+                                  "MMMM yyyy")));
+  scroll_view_->NotifyAccessibilityEvent(ax::mojom::Event::kTextChanged,
+                                         /*send_native_event=*/true);
   scroll_view_->ClipHeightTo(0, INT_MAX);
   scroll_view_->SetVerticalScrollBarMode(
       views::ScrollView::ScrollBarMode::kHiddenButEnabled);
-  RemoveChildViewT(event_list_);
+  RemoveChildViewT(event_list_container_);
+  event_list_container_ = nullptr;
   event_list_ = nullptr;
   calendar_view_controller_->OnEventListClosed();
 }
@@ -767,7 +835,7 @@ void CalendarView::ScrollOneMonthWithAnimation(bool is_scrolling_up) {
   if (is_resetting_scroll_)
     return;
 
-  if (event_list_) {
+  if (event_list_container_) {
     ScrollOneRowWithAnimation(is_scrolling_up);
     return;
   }
@@ -921,13 +989,23 @@ void CalendarView::OnEvent(ui::Event* event) {
   // goes to the next focusable button in the header.
   if (key_event->type() == ui::EventType::ET_KEY_PRESSED &&
       views::FocusManager::IsTabTraversalKeyEvent(*key_event)) {
-    // Set focus on null pointer first. Otherwise the it will auto
-    // `AdvanceFocus` when the focused cell is on blur.
-    focus_manager->SetFocusedView(nullptr);
+    // Set focus on `scroll_view_`/`event_list_` or null pointer to escape the
+    // focusing on the date cell.
+    if (key_event->IsShiftDown()) {
+      scroll_view_->RequestFocus();
+    } else if (event_list_container_) {
+      event_list_container_->RequestFocus();
+      event_list_container_->SetFocusBehavior(FocusBehavior::NEVER);
+    } else {
+      focus_manager->SetFocusedView(nullptr);
+    }
+
     current_month_->DisableFocus();
     previous_month_->DisableFocus();
     next_month_->DisableFocus();
+
     TrayDetailedView::OnEvent(event);
+
     content_view_->SetFocusBehavior(FocusBehavior::ALWAYS);
     return;
   }
@@ -943,6 +1021,10 @@ void CalendarView::OnEvent(ui::Event* event) {
     case ui::VKEY_UP:
     case ui::VKEY_DOWN: {
       auto* current_focusable_view = focus_manager->GetFocusedView();
+      // Enable the scroll bar mode, in case it is disabled when the event list
+      // is showing.
+      scroll_view_->SetVerticalScrollBarMode(
+          views::ScrollView::ScrollBarMode::kHiddenButEnabled);
 
       // Moving 7 (`kDateInOneWeek`) steps will focus on the cell which is right
       // above or below the current cell, since each row has 7 days.
@@ -994,13 +1076,36 @@ void CalendarView::OnEvent(ui::Event* event) {
         }
       }
       focus_manager->SetFocusedView(current_focusable_view);
+      // After focusing on the new cell the view should have scrolled already
+      // if needed, disable the scroll bar mode if the even list is showing.
+      if (event_list_container_)
+        scroll_view_->SetVerticalScrollBarMode(
+            views::ScrollView::ScrollBarMode::kDisabled);
+      const int current_height =
+          scroll_view_->GetVisibleRect().y() - PositionOfCurrentMonth();
+      calendar_view_controller_->set_expanded_row_index(
+          current_height / calendar_view_controller_->row_height());
       return;
     }
     case ui::VKEY_LEFT:
     case ui::VKEY_RIGHT: {
+      // Enable the scroll bar mode, in case it is disabled when the event list
+      // is showing.
+      scroll_view_->SetVerticalScrollBarMode(
+          views::ScrollView::ScrollBarMode::kHiddenButEnabled);
       bool is_reverse = base::i18n::IsRTL() ? key_code == ui::VKEY_RIGHT
                                             : key_code == ui::VKEY_LEFT;
       focus_manager->AdvanceFocus(/*reverse=*/is_reverse);
+      // After focusing on the new cell the view should have scrolled already
+      // if needed, disable the scroll bar mode if the even list is showing.
+      if (event_list_container_)
+        scroll_view_->SetVerticalScrollBarMode(
+            views::ScrollView::ScrollBarMode::kDisabled);
+
+      const int current_height =
+          scroll_view_->GetVisibleRect().y() - PositionOfCurrentMonth();
+      calendar_view_controller_->set_expanded_row_index(
+          current_height / calendar_view_controller_->row_height());
       return;
     }
     default:

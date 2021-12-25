@@ -176,6 +176,7 @@
 
 #if defined(OS_WIN)
 #include "base/win/windows_version.h"
+#include "chrome/renderer/render_frame_font_family_accessor.h"
 #endif
 
 #if BUILDFLAG(ENABLE_FEED_V2)
@@ -699,8 +700,11 @@ void ChromeContentRendererClient::RenderFrameCreated(
     new SearchBox(render_frame);
   }
 
+  // We should create CommerceHintAgent only for a primary main frame. A fenced
+  // frame is the main frame as well, so we should check if |render_frame|
+  // is the primary main frame.
   if (base::FeatureList::IsEnabled(ntp_features::kNtpChromeCartModule) &&
-      render_frame->IsMainFrame()) {
+      render_frame->IsMainFrame() && !render_frame->IsInFencedFrameTree()) {
     new cart::CommerceHintAgent(render_frame);
   }
 #endif  // !defined(OS_ANDROID)
@@ -724,6 +728,13 @@ void ChromeContentRendererClient::RenderFrameCreated(
     associated_interfaces->AddInterface(
         base::BindRepeating(&pdf::PdfFindInPageFactory::BindReceiver,
                             render_frame->GetRoutingID()));
+  }
+#endif
+
+#if defined(OS_WIN)
+  if (render_frame->IsMainFrame()) {
+    associated_interfaces->AddInterface(base::BindRepeating(
+        &RenderFrameFontFamilyAccessor::Bind, render_frame));
   }
 #endif
 }
@@ -845,6 +856,7 @@ bool ChromeContentRendererClient::OverrideCreatePlugin(
   return true;
 }
 
+#if BUILDFLAG(ENABLE_PLUGINS)
 WebPlugin* ChromeContentRendererClient::CreatePluginReplacement(
     content::RenderFrame* render_frame,
     const base::FilePath& plugin_path) {
@@ -852,6 +864,7 @@ WebPlugin* ChromeContentRendererClient::CreatePluginReplacement(
       render_frame, plugin_path);
   return placeholder->plugin();
 }
+#endif  // BUILDFLAG(ENABLE_PLUGINS)
 
 bool ChromeContentRendererClient::DeferMediaLoad(
     content::RenderFrame* render_frame,

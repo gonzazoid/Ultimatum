@@ -76,6 +76,7 @@
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
 #include "content/public/common/use_zoom_for_dsf_policy.h"
+#include "third_party/blink/public/mojom/input/input_handler.mojom-blink.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -799,13 +800,11 @@ bool RenderWidgetHostViewAndroid::IsShowing() {
   return is_showing_ && view_.parent();
 }
 
-void RenderWidgetHostViewAndroid::SelectWordAroundCaretAck(bool did_select,
-                                                           int start_adjust,
-                                                           int end_adjust) {
+void RenderWidgetHostViewAndroid::SelectAroundCaretAck(
+    blink::mojom::SelectAroundCaretResultPtr result) {
   if (!selection_popup_controller_)
     return;
-  selection_popup_controller_->OnSelectWordAroundCaretAck(
-      did_select, start_adjust, end_adjust);
+  selection_popup_controller_->OnSelectAroundCaretAck(std::move(result));
 }
 
 gfx::Rect RenderWidgetHostViewAndroid::GetViewBounds() {
@@ -1234,15 +1233,6 @@ uint32_t RenderWidgetHostViewAndroid::GetCaptureSequenceNumber() const {
   return latest_capture_sequence_number_;
 }
 
-void RenderWidgetHostViewAndroid::OnInterstitialPageAttached() {
-  if (view_.parent())
-    view_.parent()->MoveToFront(&view_);
-}
-
-void RenderWidgetHostViewAndroid::OnInterstitialPageGoingAway() {
-  ResetSynchronousCompositor();
-}
-
 bool RenderWidgetHostViewAndroid::CanSynchronizeVisualProperties() {
   // When a rotation begins, the new visual properties are not all notified to
   // RenderWidgetHostViewAndroid at the same time. The process begins when
@@ -1278,6 +1268,11 @@ void RenderWidgetHostViewAndroid::UpdateWebViewBackgroundColorIfNecessary() {
   if (!using_browser_compositor_ && host()->delegate()->IsFullscreen()) {
     SetContentBackgroundColor(SK_ColorBLACK);
   }
+}
+
+void RenderWidgetHostViewAndroid::ClearFallbackSurfaceForCommitPending() {
+  delegated_frame_host_->ClearFallbackSurfaceForCommitPending();
+  local_surface_id_allocator_.Invalidate();
 }
 
 void RenderWidgetHostViewAndroid::ResetFallbackToFirstNavigationSurface() {

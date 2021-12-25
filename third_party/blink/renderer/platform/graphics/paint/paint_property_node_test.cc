@@ -180,8 +180,10 @@ TEST_F(PaintPropertyNodeTest, InitialStateAndReset) {
 TEST_F(PaintPropertyNodeTest, TransformChangeAncestor) {
   ResetAllChanged();
   ExpectUnchangedState();
-  transform.ancestor->Update(
-      *transform.root, TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            transform.ancestor->Update(
+                *transform.root,
+                TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
 
   // Test descendant->Changed(ancestor).
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
@@ -211,10 +213,12 @@ TEST_F(PaintPropertyNodeTest, TransformChangeAncestor) {
 TEST_F(PaintPropertyNodeTest, ClipChangeAncestor) {
   ResetAllChanged();
   ExpectUnchangedState();
-  clip.ancestor->Update(
-      *clip.root, ClipPaintPropertyNode::State(transform.ancestor.get(),
-                                               gfx::RectF(1, 2, 3, 4),
-                                               FloatRoundedRect(1, 2, 3, 4)));
+  EXPECT_EQ(
+      PaintPropertyChangeType::kChangedOnlyValues,
+      clip.ancestor->Update(
+          *clip.root, ClipPaintPropertyNode::State(
+                          transform.ancestor.get(), gfx::RectF(1, 2, 3, 4),
+                          FloatRoundedRect(1, 2, 3, 4))));
 
   // Test descendant->Changed(ancestor).
   EXPECT_TRUE(clip.ancestor->Changed(
@@ -252,7 +256,8 @@ TEST_F(PaintPropertyNodeTest, EffectChangeAncestor) {
   // The initial test starts with opacity 0.5, and we're changing it to 0.9
   // here.
   state.opacity = 0.9;
-  effect.ancestor->Update(*effect.root, std::move(state));
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            effect.ancestor->Update(*effect.root, std::move(state)));
 
   // Test descendant->Changed(ancestor).
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
@@ -278,15 +283,44 @@ TEST_F(PaintPropertyNodeTest, EffectChangeAncestor) {
   ExpectUnchangedState();
 }
 
-TEST_F(PaintPropertyNodeTest, EffectOpacityChangesToOne) {
+TEST_F(PaintPropertyNodeTest, ChangeOpacityDuringCompositedAnimation) {
   ResetAllChanged();
   ExpectUnchangedState();
-  EffectPaintPropertyNode::State state{transform.ancestor.get(),
-                                       clip.ancestor.get()};
-  // The initial test starts with opacity 0.5, and we're changing it to 1
+
+  EffectPaintPropertyNode::State state{transform.child1.get(),
+                                       clip.child1.get()};
+  state.compositor_element_id = effect.child1->GetCompositorElementId();
+  // The initial test starts with opacity 0.5, and we're changing it to 0.9
   // here.
-  state.opacity = 1.f;
-  effect.ancestor->Update(*effect.root, std::move(state));
+  state.opacity = 0.9;
+
+  EffectPaintPropertyNode::AnimationState animation_state;
+  animation_state.is_running_opacity_animation_on_compositor = true;
+
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyCompositedValues,
+            effect.child1->Update(*effect.ancestor, std::move(state),
+                                  animation_state));
+
+  EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlyCompositedValues,
+                   effect.child1, STATE(root), nullptr);
+
+  ResetAllChanged();
+  ExpectUnchangedState();
+}
+
+TEST_F(PaintPropertyNodeTest, EffectOpacityChangesToOneAndFromOne) {
+  ResetAllChanged();
+  ExpectUnchangedState();
+
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    // The initial test starts with opacity 0.5, and we're changing it to 1
+    // here.
+    state.opacity = 1.f;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
 
   // Test descendant->Changed(ancestor).
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlyValues, effect.ancestor,
@@ -309,8 +343,72 @@ TEST_F(PaintPropertyNodeTest, EffectOpacityChangesToOne) {
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlyValues,
                    effect.grandchild1, STATE(grandchild2), nullptr);
 
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    state.opacity = 0.7f;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
+
   ResetAllChanged();
   ExpectUnchangedState();
+}
+
+TEST_F(PaintPropertyNodeTest, EffectWillChangeOpacityChangesToAndFromOne) {
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    state.opacity = 0.5f;  // Same as the initial opacity of |effect.ancestor|.
+    state.direct_compositing_reasons = CompositingReason::kWillChangeOpacity;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyNonRerasterValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    // Change only opacity to 1.
+    state.opacity = 1.f;
+    state.direct_compositing_reasons = CompositingReason::kWillChangeOpacity;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    state.direct_compositing_reasons = CompositingReason::kWillChangeOpacity;
+    // Change only opacity to 0.7f.
+    state.opacity = 0.7f;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
+}
+
+TEST_F(PaintPropertyNodeTest, EffectAnimatingOpacityChangesToAndFromOne) {
+  {
+    EffectPaintPropertyNode::State state{transform.ancestor.get(),
+                                         clip.ancestor.get()};
+    state.opacity = 0.5f;  // Same as the initial opacity of |effect.ancestor|.
+    state.has_active_opacity_animation = true;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyNonRerasterValues,
+              effect.ancestor->Update(*effect.root, std::move(state)));
+  }
+  {
+    EffectPaintPropertyNode::State state1{transform.ancestor.get(),
+                                          clip.ancestor.get()};
+    state1.opacity = 1.f;
+    state1.has_active_opacity_animation = true;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+              effect.ancestor->Update(*effect.root, std::move(state1)));
+  }
+  {
+    EffectPaintPropertyNode::State state2{transform.ancestor.get(),
+                                          clip.ancestor.get()};
+    state2.opacity = 0.7f;
+    state2.has_active_opacity_animation = true;
+    EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+              effect.ancestor->Update(*effect.root, std::move(state2)));
+  }
 }
 
 TEST_F(PaintPropertyNodeTest, ChangeDirectCompositingReason) {
@@ -318,7 +416,8 @@ TEST_F(PaintPropertyNodeTest, ChangeDirectCompositingReason) {
   ExpectUnchangedState();
   TransformPaintPropertyNode::State state;
   state.direct_compositing_reasons = CompositingReason::kWillChangeTransform;
-  transform.child1->Update(*transform.ancestor, std::move(state));
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyNonRerasterValues,
+            transform.child1->Update(*transform.ancestor, std::move(state)));
 
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kChangedOnlyNonRerasterValues,
                    transform.child1, *transform.root);
@@ -332,10 +431,11 @@ TEST_F(PaintPropertyNodeTest, ChangeTransformDuringCompositedAnimation) {
   ExpectUnchangedState();
   TransformPaintPropertyNode::AnimationState animation_state;
   animation_state.is_running_animation_on_compositor = true;
-  transform.child1->Update(
-      *transform.ancestor,
-      TransformPaintPropertyNode::State{TransformationMatrix().Scale(2)},
-      animation_state);
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyCompositedValues,
+            transform.child1->Update(*transform.ancestor,
+                                     TransformPaintPropertyNode::State{
+                                         TransformationMatrix().Scale(2)},
+                                     animation_state));
 
   EXPECT_FALSE(transform.child1->Changed(
       PaintPropertyChangeType::kChangedOnlyValues, *transform.root));
@@ -353,10 +453,12 @@ TEST_F(PaintPropertyNodeTest, ChangeTransformOriginDuringCompositedAnimation) {
   ExpectUnchangedState();
   TransformPaintPropertyNode::AnimationState animation_state;
   animation_state.is_running_animation_on_compositor = true;
-  transform.child1->Update(*transform.ancestor,
-                           TransformPaintPropertyNode::State{
-                               {TransformationMatrix(), FloatPoint3D(1, 2, 3)}},
-                           animation_state);
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            transform.child1->Update(
+                *transform.ancestor,
+                TransformPaintPropertyNode::State{
+                    {TransformationMatrix(), FloatPoint3D(1, 2, 3)}},
+                animation_state));
 
   EXPECT_TRUE(transform.child1->Changed(
       PaintPropertyChangeType::kChangedOnlySimpleValues, *transform.root));
@@ -368,9 +470,10 @@ TEST_F(PaintPropertyNodeTest, ChangeTransformOriginDuringCompositedAnimation) {
 TEST_F(PaintPropertyNodeTest, TransformChangeOneChild) {
   ResetAllChanged();
   ExpectUnchangedState();
-  transform.child1->Update(
-      *transform.ancestor,
-      TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            transform.child1->Update(
+                *transform.ancestor,
+                TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
 
   // Test descendant->Changed(ancestor).
   EXPECT_CHANGE_EQ(PaintPropertyChangeType::kUnchanged, transform.ancestor,
@@ -416,10 +519,11 @@ TEST_F(PaintPropertyNodeTest, TransformChangeOneChild) {
 TEST_F(PaintPropertyNodeTest, ClipChangeOneChild) {
   ResetAllChanged();
   ExpectUnchangedState();
-  clip.child1->Update(
-      *clip.root, ClipPaintPropertyNode::State(transform.ancestor.get(),
-                                               gfx::RectF(1, 2, 3, 4),
-                                               FloatRoundedRect(1, 2, 3, 4)));
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+            clip.child1->Update(*clip.root, ClipPaintPropertyNode::State(
+                                                transform.ancestor.get(),
+                                                gfx::RectF(1, 2, 3, 4),
+                                                FloatRoundedRect(1, 2, 3, 4))));
 
   // Test descendant->Changed(ancestor).
   EXPECT_FALSE(clip.ancestor->Changed(
@@ -471,7 +575,8 @@ TEST_F(PaintPropertyNodeTest, EffectChangeOneChild) {
   EffectPaintPropertyNode::State state{transform.ancestor.get(),
                                        clip.ancestor.get()};
   state.opacity = 0.9;
-  effect.child1->Update(*effect.root, std::move(state));
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+            effect.child1->Update(*effect.root, std::move(state)));
 
   // Test descendant->Changed(PaintPropertyChangeType::kChangedOnlyValues,
   // ancestor).
@@ -523,8 +628,10 @@ TEST_F(PaintPropertyNodeTest, EffectChangeOneChild) {
 TEST_F(PaintPropertyNodeTest, TransformReparent) {
   ResetAllChanged();
   ExpectUnchangedState();
-  transform.child1->Update(*transform.child2, TransformPaintPropertyNode::State{
-                                                  gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+            transform.child1->Update(
+                *transform.child2,
+                TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
   EXPECT_FALSE(transform.ancestor->Changed(
       PaintPropertyChangeType::kChangedOnlyValues, *transform.root));
   EXPECT_TRUE(transform.child1->Changed(
@@ -547,9 +654,10 @@ TEST_F(PaintPropertyNodeTest, TransformReparent) {
 TEST_F(PaintPropertyNodeTest, ClipLocalTransformSpaceChange) {
   ResetAllChanged();
   ExpectUnchangedState();
-  transform.child1->Update(
-      *transform.ancestor,
-      TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            transform.child1->Update(
+                *transform.ancestor,
+                TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
 
   // We check that we detect the change from the transform. However, right now
   // we report simple value change which may be a bit confusing. See
@@ -594,8 +702,10 @@ TEST_F(PaintPropertyNodeTest, EffectLocalTransformSpaceChange) {
 
   ResetAllChanged();
   ExpectUnchangedState();
-  transform.ancestor->Update(
-      *transform.root, TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            transform.ancestor->Update(
+                *transform.root,
+                TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
 
   // We check that we detect the change from the transform. However, right now
   // we report simple value change which may be a bit confusing. See
@@ -639,42 +749,51 @@ TEST_F(PaintPropertyNodeTest, TransformChange2dAxisAlignment) {
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Translation doesn't affect 2d axis alignment.
-  t->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(30, 40)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            t->Update(t0(), TransformPaintPropertyNode::State{
+                                gfx::Vector2dF(30, 40)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Scale doesn't affect 2d axis alignment.
-  t->Update(t0(), TransformPaintPropertyNode::State{
-                      TransformationMatrix().Scale3d(2, 3, 4)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues,
+            t->Update(t0(), TransformPaintPropertyNode::State{
+                                TransformationMatrix().Scale3d(2, 3, 4)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Rotation affects 2d axis alignment.
-  t->Update(t0(), TransformPaintPropertyNode::State{
-                      TransformationMatrix(t->Matrix()).Rotate(45)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+            t->Update(t0(), TransformPaintPropertyNode::State{
+                                TransformationMatrix(t->Matrix()).Rotate(45)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Changing scale but keeping original rotation doesn't change 2d axis
   // alignment and is treated as simple.
-  t->Update(t0(), TransformPaintPropertyNode::State{
-                      TransformationMatrix(t->Matrix()).Scale3d(3, 4, 5)});
+  EXPECT_EQ(
+      PaintPropertyChangeType::kChangedOnlySimpleValues,
+      t->Update(t0(), TransformPaintPropertyNode::State{
+                          TransformationMatrix(t->Matrix()).Scale3d(3, 4, 5)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlySimpleValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Change rotation rotation again changes 2d axis alignment.
-  t->Update(t0(), TransformPaintPropertyNode::State{
-                      TransformationMatrix(t->Matrix()).Rotate(10)});
+  EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues,
+            t->Update(t0(), TransformPaintPropertyNode::State{
+                                TransformationMatrix(t->Matrix()).Rotate(10)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));
 
   // Reset the transform back to simple translation changes 2d axis alignment.
-  t->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)});
+  EXPECT_EQ(
+      PaintPropertyChangeType::kChangedOnlyValues,
+      t->Update(t0(), TransformPaintPropertyNode::State{gfx::Vector2dF(1, 2)}));
   EXPECT_EQ(PaintPropertyChangeType::kChangedOnlyValues, NodeChanged(*t));
   t->ClearChangedToRoot();
   EXPECT_EQ(PaintPropertyChangeType::kUnchanged, NodeChanged(*t));

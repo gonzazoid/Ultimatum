@@ -55,6 +55,7 @@ static_library("safe_browsing") {
     "//components/sessions",
     "//components/signin/public/identity_manager",
     "//components/url_formatter",
+    "//components/vector_icons:vector_icons",
     "//mojo/public/cpp/platform",
     "//mojo/public/cpp/system",
     "//services/preferences/public/cpp",
@@ -127,6 +128,8 @@ static_library("safe_browsing") {
       "safe_browsing_service.h",
       "services_delegate.cc",
       "services_delegate.h",
+      "tailored_security/chrome_tailored_security_service.cc",
+      "tailored_security/chrome_tailored_security_service.h",
       "tailored_security/tailored_security_outcome.h",
       "tailored_security/tailored_security_service_factory.cc",
       "tailored_security/tailored_security_service_factory.h",
@@ -292,8 +295,9 @@ static_library("safe_browsing") {
         "incident_reporting/tracked_preference_incident.h",
         "services_delegate_desktop.cc",
         "services_delegate_desktop.h",
-        "tailored_security/consented_notification_desktop.cc",
-        "tailored_security/consented_notification_desktop.h",
+        "services_delegate_desktop.h",
+        "tailored_security/notification_handler_desktop.cc",
+        "tailored_security/notification_handler_desktop.h",
       ]
       if (is_mac) {
         sources += [

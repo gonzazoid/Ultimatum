@@ -187,6 +187,9 @@ enum class AppListState {
   kStateLast = kInvalidState,  // Don't use over IPC
 };
 
+// Sub-pages of the app list bubble (with ProductivityLauncher).
+enum class AppListBubblePage { kApps, kSearch, kAssistant };
+
 // All possible states of the app list view.
 enum class AppListViewState {
   // Closes |app_list_main_view_| and dismisses the delegate.
@@ -293,7 +296,8 @@ enum class AppListSearchResultCategory {
 // Which UI container(s) the result should be displayed in.
 // Do not change the order of these as they are used for metrics.
 //
-// TODO(1258415): kChip can be deprecated once the new launcher is launched.
+// TODO(https://crbug.com/1258415): kChip can be deprecated once
+// ProductivityLauncher is launched.
 enum SearchResultDisplayType {
   kNone = 0,
   kList = 1,  // Displays in search list
@@ -302,6 +306,7 @@ enum SearchResultDisplayType {
   kAnswerCard = 4,  // Displays in answer cards
   kChip = 5,        // Displays in suggestion chips
   kContinue = 6,    // Displays in the Continue section
+  kRecentApps = 7,  // Displays in recent apps row
   // Add new values here
   kLast,  // Don't use over IPC
 };

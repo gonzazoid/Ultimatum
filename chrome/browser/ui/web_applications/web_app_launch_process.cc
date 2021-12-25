@@ -27,7 +27,7 @@
 #include "chrome/browser/web_applications/web_app_registrar.h"
 #include "chrome/browser/web_applications/web_app_sync_bridge.h"
 #include "chrome/browser/web_applications/web_app_tab_helper.h"
-#include "chrome/browser/web_launch/web_launch_files_helper.h"
+#include "chrome/browser/web_applications/web_launch_params_helper.h"
 #include "components/services/app_service/public/cpp/intent_util.h"
 #include "components/site_engagement/content/site_engagement_service.h"
 #include "extensions/common/constants.h"
@@ -295,8 +295,8 @@ WebAppLaunchProcess::NavigateResult WebAppLaunchProcess::MaybeNavigateBrowser(
   if (share_target) {
     // TODO(crbug.com/1213776): Expose share target in the LaunchParams and
     // don't navigate if navigate_existing_client: never is in effect.
-    NavigateParams nav_params =
-        NavigateParamsForShareTarget(browser, *share_target, *params_.intent);
+    NavigateParams nav_params = NavigateParamsForShareTarget(
+        browser, *share_target, *params_.intent, params_.launch_files);
     nav_params.disposition = navigation_disposition;
     return {
         .web_contents = NavigateWebAppUsingParams(params_.app_id, nav_params),
@@ -346,8 +346,8 @@ void WebAppLaunchProcess::MaybeEnqueueWebLaunchParams(
     content::WebContents* web_contents,
     bool is_navigating) {
   if (is_file_handling || web_app_->launch_handler().has_value()) {
-    web_launch::WebLaunchFilesHelper::EnqueueLaunchParams(
-        web_contents, provider_.registrar().GetAppScope(web_app_->app_id()),
+    WebLaunchParamsHelper::EnqueueLaunchParams(
+        web_contents, provider_.registrar(), web_app_->app_id(),
         /*await_navigation=*/is_navigating, launch_url,
         /*launch_dir=*/{},
         is_file_handling ? params_.launch_files

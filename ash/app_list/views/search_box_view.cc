@@ -34,6 +34,7 @@
 #include "base/metrics/user_metrics.h"
 #include "base/notreached.h"
 #include "chromeos/ui/vector_icons/vector_icons.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/ime/composition_text.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -143,6 +144,14 @@ void SearchBoxView::ResetForShow() {
   }
 }
 
+void SearchBoxView::UpdateSearchTextfieldAccessibleNodeData(
+    ui::AXNodeData* node_data) {
+  if (a11y_active_descendant_) {
+    node_data->AddIntAttribute(ax::mojom::IntAttribute::kActivedescendantId,
+                               *a11y_active_descendant_);
+  }
+}
+
 void SearchBoxView::ClearSearch() {
   SearchBoxViewBase::ClearSearch();
   current_query_.clear();
@@ -209,8 +218,9 @@ void SearchBoxView::UpdateModel(bool initiated_by_user) {
 void SearchBoxView::UpdateSearchIcon() {
   const bool search_engine_is_google =
       AppListModelProvider::Get()->search_model()->search_engine_is_google();
-  const gfx::VectorIcon& google_icon =
-      is_search_box_active() ? kGoogleColorIcon : kGoogleBlackIcon;
+  const gfx::VectorIcon& google_icon = is_search_box_active()
+                                           ? vector_icons::kGoogleColorIcon
+                                           : kGoogleBlackIcon;
   const gfx::VectorIcon& icon =
       search_engine_is_google ? google_icon : kSearchEngineNotGoogleIcon;
   SetSearchIconImage(
@@ -442,7 +452,9 @@ int SearchBoxView::GetSearchBoxBorderCornerRadiusForState(
     AppListState state) const {
   if (state == AppListState::kStateSearchResults && app_list_view_ &&
       !app_list_view_->is_in_drag()) {
-    return kSearchBoxBorderCornerRadiusSearchResult;
+    return features::IsProductivityLauncherEnabled()
+               ? kExpandedSearchBoxCornerRadiusForProductivityLauncher
+               : kSearchBoxBorderCornerRadiusSearchResult;
   }
   return kSearchBoxBorderCornerRadius;
 }
@@ -593,10 +605,8 @@ void SearchBoxView::ClearAutocompleteText() {
 }
 
 void SearchBoxView::OnBeforeUserAction(views::Textfield* sender) {
-  if (a11y_selection_on_search_result_) {
-    a11y_selection_on_search_result_ = false;
-    search_box()->NotifyAccessibilityEvent(ax::mojom::Event::kSelection, true);
-  }
+  if (a11y_active_descendant_)
+    SetA11yActiveDescendant(absl::nullopt);
 }
 
 void SearchBoxView::ContentsChanged(views::Textfield* sender,
@@ -669,9 +679,16 @@ void SearchBoxView::ClearSearchAndDeactivateSearchBox() {
   if (!is_search_box_active())
     return;
 
-  a11y_selection_on_search_result_ = false;
+  SetA11yActiveDescendant(absl::nullopt);
   ClearSearch();
   SetSearchBoxActive(false, ui::ET_UNKNOWN);
+}
+
+void SearchBoxView::SetA11yActiveDescendant(
+    const absl::optional<int32_t>& active_descendant) {
+  a11y_active_descendant_ = active_descendant;
+  search_box()->NotifyAccessibilityEvent(
+      ax::mojom::Event::kActiveDescendantChanged, true);
 }
 
 bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
@@ -795,9 +812,7 @@ bool SearchBoxView::HandleKeyEvent(views::Textfield* sender,
 
       DCHECK(close_button()->GetVisible());
       close_button()->RequestFocus();
-      close_button()->NotifyAccessibilityEvent(ax::mojom::Event::kSelection,
-                                               true);
-      a11y_selection_on_search_result_ = false;
+      SetA11yActiveDescendant(absl::nullopt);
       break;
     case ResultSelectionController::MoveResult::kResultChanged:
       UpdateSearchBoxTextForSelectedResult(

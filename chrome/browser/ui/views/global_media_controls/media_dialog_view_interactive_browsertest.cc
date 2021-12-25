@@ -325,7 +325,7 @@ class TestMediaRouter : public media_router::MockMediaRouter {
   void NotifyMediaRoutesChanged(
       const std::vector<media_router::MediaRoute>& routes) {
     for (auto* observer : routes_observers_)
-      observer->OnRoutesUpdated(routes, {});
+      observer->OnRoutesUpdated(routes);
   }
 
  private:
@@ -538,16 +538,18 @@ class MediaDialogViewBrowserTest : public InProcessBrowserTest {
   }
 
   void OnSodaProgress(int progress) {
-    MediaDialogView::GetDialogViewForTesting()->OnSodaProgress(progress);
+    speech::SodaInstaller::GetInstance()->NotifySodaDownloadProgressForTesting(
+        progress);
   }
 
   void OnSodaInstalled() {
-    MediaDialogView::GetDialogViewForTesting()->OnSodaInstalled();
+    speech::SodaInstaller::GetInstance()->NotifySodaInstalledForTesting();
   }
 
   void OnSodaLanguagePackInstalled() {
-    MediaDialogView::GetDialogViewForTesting()->OnSodaLanguagePackInstalled(
-        speech::LanguageCode::kEnUs);
+    speech::SodaInstaller::GetInstance()
+        ->NotifyOnSodaLanguagePackInstalledForTesting(
+            speech::LanguageCode::kEnUs);
   }
 
  protected:
@@ -802,7 +804,7 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest, ShowsCastSession) {
   const std::string route_description = "Casting: Big Buck Bunny";
   const std::string sink_name = "My Sink";
   media_router::MediaRoute route("id", media_router::MediaSource("source_id"),
-                                 "sink_id", route_description, true, true);
+                                 "sink_id", route_description, true);
   route.set_media_sink_name(sink_name);
   route.set_controller_type(media_router::RouteControllerType::kGeneric);
   media_router_->NotifyMediaRoutesChanged({route});
@@ -995,6 +997,28 @@ IN_PROC_BROWSER_TEST_F(MediaDialogViewBrowserTest,
 
   OnSodaProgress(12);
   EXPECT_EQ("Downloading… 12%",
+            base::UTF16ToUTF8(GetLiveCaptionTitleLabel()->GetText()));
+
+  // Click the Live Caption toggle again to toggle it off.
+  ClickEnableLiveCaptionOnDialog();
+  EXPECT_FALSE(
+      browser()->profile()->GetPrefs()->GetBoolean(prefs::kLiveCaptionEnabled));
+  EXPECT_TRUE(GetLiveCaptionTitleLabel()->GetVisible());
+  EXPECT_EQ("Downloading… 12%",
+            base::UTF16ToUTF8(GetLiveCaptionTitleLabel()->GetText()));
+
+  // Download progress should continue to update when the Live Caption toggle is
+  // off.
+  OnSodaProgress(42);
+  EXPECT_EQ("Downloading… 42%",
+            base::UTF16ToUTF8(GetLiveCaptionTitleLabel()->GetText()));
+
+  // Click the Live Caption toggle again to toggle it on.
+  ClickEnableLiveCaptionOnDialog();
+  EXPECT_TRUE(
+      browser()->profile()->GetPrefs()->GetBoolean(prefs::kLiveCaptionEnabled));
+  EXPECT_TRUE(GetLiveCaptionTitleLabel()->GetVisible());
+  EXPECT_EQ("Downloading… 42%",
             base::UTF16ToUTF8(GetLiveCaptionTitleLabel()->GetText()));
 
   OnSodaProgress(100);

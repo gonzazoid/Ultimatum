@@ -10,7 +10,7 @@ export {CloudPrintInterface, CloudPrintInterfaceEventType} from './cloud_print_i
 export {CloudPrintInterfaceImpl} from './cloud_print_interface_impl.js';
 export {Cdd, MediaSizeCapability, MediaSizeOption, VendorCapabilityValueType} from './data/cdd.js';
 export {ColorMode, createDestinationKey, Destination, DestinationCertificateStatus, DestinationConnectionStatus, DestinationOrigin, DestinationType, GooglePromotedDestinationId, makeRecentDestination, RecentDestination} from './data/destination.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {SAVE_TO_DRIVE_CROS_DESTINATION_KEY} from './data/destination.js';
 // </if>
 export {PrinterType} from './data/destination_match.js';
@@ -20,17 +20,18 @@ export {LocalDestinationInfo, ProvisionalDestinationInfo} from './data/local_par
 export {CustomMarginsOrientation, Margins, MarginsSetting, MarginsType} from './data/margins.js';
 export {MeasurementSystem, MeasurementSystemUnitType} from './data/measurement_system.js';
 export {DuplexMode, DuplexType, getInstance, PolicyObjectEntry, PrintPreviewModelElement, PrintTicket, SerializedSettings, Setting, whenReady} from './data/model.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PrintServerStore, PrintServerStoreEventType} from './data/print_server_store.js';
 // </if>
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PrinterState, PrinterStatus, PrinterStatusReason, PrinterStatusSeverity} from './data/printer_status_cros.js';
 // </if>
 export {ScalingType} from './data/scaling.js';
 export {Size} from './data/size.js';
 export {Error, State} from './data/state.js';
+export {PrintPreviewUserManagerElement} from './data/user_manager.js';
 export {BackgroundGraphicsModeRestriction, CapabilitiesResponse, ColorModeRestriction, DuplexModeRestriction, NativeInitialSettings, NativeLayer, NativeLayerImpl} from './native_layer.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PinModeRestriction} from './native_layer.js';
 export {NativeLayerCros, NativeLayerCrosImpl, PrinterSetupResponse, PrintServersConfig} from './native_layer_cros.js';
 // </if>
@@ -45,7 +46,7 @@ export {DEFAULT_MAX_COPIES, PrintPreviewCopiesSettingsElement} from './ui/copies
 // <if expr="not chromeos and not lacros">
 export {PrintPreviewDestinationDialogElement} from './ui/destination_dialog.js';
 // </if>
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PrintPreviewDestinationDialogCrosElement} from './ui/destination_dialog_cros.js';
 export {PrintPreviewDestinationDropdownCrosElement} from './ui/destination_dropdown_cros.js';
 // </if>
@@ -54,7 +55,7 @@ export {PrintPreviewDestinationListItemElement} from './ui/destination_list_item
 // <if expr="not chromeos and not lacros">
 export {PrintPreviewDestinationSelectElement} from './ui/destination_select.js';
 // </if>
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PrintPreviewDestinationSelectCrosElement} from './ui/destination_select_cros.js';
 // </if>
 export {DestinationState, NUM_PERSISTED_DESTINATIONS, PrintPreviewDestinationSettingsElement} from './ui/destination_settings.js';
@@ -73,14 +74,14 @@ export {PrintPreviewNumberSettingsSectionElement} from './ui/number_settings_sec
 export {PrintPreviewOtherOptionsSettingsElement} from './ui/other_options_settings.js';
 export {PrintPreviewPagesPerSheetSettingsElement} from './ui/pages_per_sheet_settings.js';
 export {PagesValue, PrintPreviewPagesSettingsElement} from './ui/pages_settings.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 export {PrintPreviewPinSettingsElement} from './ui/pin_settings.js';
 // </if>
 export {PluginProxy, PluginProxyImpl, ViewportChangedCallback} from './ui/plugin_proxy.js';
 export {PreviewAreaState, PreviewTicket, PrintPreviewPreviewAreaElement} from './ui/preview_area.js';
 export {PrintPreviewSearchBoxElement} from './ui/print_preview_search_box.js';
 export {PrintPreviewScalingSettingsElement} from './ui/scaling_settings.js';
-export {SelectMixin} from './ui/select_mixin.js';
+export {SelectMixin, SelectMixinInterface} from './ui/select_mixin.js';
 export {SettingsMixinInterface} from './ui/settings_mixin.js';
 export {PrintPreviewSettingsSelectElement} from './ui/settings_select.js';
 export {PrintPreviewSidebarElement} from './ui/sidebar.js';

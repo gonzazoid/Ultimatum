@@ -271,7 +271,8 @@ bool CustomizationDocument::LoadManifestFromString(
     const std::string& manifest) {
   base::JSONReader::ValueWithError parsed_json =
       base::JSONReader::ReadAndReturnValueWithError(
-          manifest, base::JSON_ALLOW_TRAILING_COMMAS);
+          manifest,
+          base::JSON_ALLOW_TRAILING_COMMAS | base::JSON_ALLOW_COMMENTS);
   if (!parsed_json.value) {
     LOG(ERROR) << parsed_json.error_message;
     NOTREACHED();
@@ -779,8 +780,8 @@ extensions::ExternalLoader* ServicesCustomizationDocument::CreateExternalLoader(
     loader->SetCurrentApps(GetDefaultAppsInProviderFormat(*root_));
     SetOemFolderName(profile, *root_);
   } else {
-    const base::DictionaryValue* root =
-        profile->GetPrefs()->GetDictionary(kServicesCustomizationKey);
+    const base::DictionaryValue* root = &base::Value::AsDictionaryValue(
+        *profile->GetPrefs()->GetDictionary(kServicesCustomizationKey));
     std::string version;
     if (root && root->GetString(kVersionAttr, &version)) {
       // If version exists, profile has cached version of customization.

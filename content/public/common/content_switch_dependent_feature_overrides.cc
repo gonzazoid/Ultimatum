@@ -31,9 +31,6 @@ GetSwitchDependentFeatureOverrides(const base::CommandLine& command_line) {
      std::cref(net::features::kCookieSameSiteConsidersRedirectChain),
      base::FeatureList::OVERRIDE_ENABLE_FEATURE},
     {switches::kEnableExperimentalWebPlatformFeatures,
-     std::cref(network::features::kCrossOriginEmbedderPolicyCredentialless),
-     base::FeatureList::OVERRIDE_ENABLE_FEATURE},
-    {switches::kEnableExperimentalWebPlatformFeatures,
      std::cref(features::kDocumentPolicyNegotiation),
      base::FeatureList::OVERRIDE_ENABLE_FEATURE},
 #if BUILDFLAG(ENABLE_REPORTING)
@@ -129,10 +126,21 @@ GetSwitchDependentFeatureOverrides(const base::CommandLine& command_line) {
     {::switches::kHeadless, std::cref(blink::features::kPaintHolding),
      base::FeatureList::OVERRIDE_DISABLE_FEATURE},
 
+    // Override for --force-major-version-to-minor.
+    {switches::kForceMajorVersionToMinorPosition,
+     std::cref(blink::features::kForceMajorVersionInMinorPositionInUserAgent),
+     base::FeatureList::OVERRIDE_ENABLE_FEATURE},
+
     // Override for --force-major-version-to-100.
     {switches::kForceMajorVersionTo100,
      std::cref(blink::features::kForceMajorVersion100InUserAgent),
      base::FeatureList::OVERRIDE_ENABLE_FEATURE},
+
+    // Override for --force-minor-version-to-100.
+    {switches::kForceMinorVersionTo100,
+     std::cref(blink::features::kForceMinorVersion100InUserAgent),
+     base::FeatureList::OVERRIDE_ENABLE_FEATURE},
+
   };
 
   std::vector<base::FeatureList::FeatureOverrideInfo> overrides;

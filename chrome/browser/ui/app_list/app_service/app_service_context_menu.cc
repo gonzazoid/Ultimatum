@@ -40,6 +40,7 @@
 #include "content/public/browser/browser_task_traits.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/context_menu_params.h"
+#include "ui/base/l10n/l10n_util.h"
 #include "ui/display/scoped_display_for_new_windows.h"
 #include "ui/gfx/vector_icon_types.h"
 
@@ -104,6 +105,20 @@ void ShowOptionsPage(AppListControllerDelegate* controller,
   controller->ShowOptionsPage(profile, app_id);
 }
 
+void ExecuteLaunchCommand(app_list::AppContextMenuDelegate* delegate,
+                          int event_flags,
+                          bool post_task) {
+  DCHECK(delegate);
+  if (post_task) {
+    content::GetUIThreadTaskRunner({})->PostTask(
+        FROM_HERE, base::BindOnce(ExecuteLaunchCommand, delegate, event_flags,
+                                  /*post_task=*/false));
+    return;
+  }
+
+  delegate->ExecuteLaunchCommand(event_flags);
+}
+
 }  // namespace
 
 AppServiceContextMenu::AppServiceContextMenu(
@@ -164,7 +179,7 @@ void AppServiceContextMenu::ExecuteCommand(int command_id, int event_flags) {
       controller()->GetAppListDisplayId());
   switch (command_id) {
     case ash::LAUNCH_NEW:
-      delegate()->ExecuteLaunchCommand(event_flags);
+      ExecuteLaunchCommand(delegate(), event_flags, /*post_task=*/true);
       ash::full_restore::FullRestoreService::MaybeCloseNotification(profile());
       break;
 
@@ -377,21 +392,23 @@ void AppServiceContextMenu::OnGetMenuModel(
     reorder_submenu_ = std::make_unique<ui::SimpleMenuModel>(this);
     // As all the options below are only for tests and are expected to change in
     // the future, the strings are directly written as the parameters.
-    // TODO(crbug.com/1269386): Change the testing strings to the strings we
-    // want when the feature is enabled by default and use string ids to
-    // interpret them.
-    reorder_submenu_->AddItem(ash::REORDER_BY_NAME_ALPHABETICAL,
-                              u"Alphabetical");
-    reorder_submenu_->AddItem(ash::REORDER_BY_NAME_REVERSE_ALPHABETICAL,
-                              u"Reverse alphabetical");
+    reorder_submenu_->AddItemWithIcon(
+        ash::REORDER_BY_NAME_ALPHABETICAL,
+        l10n_util::GetStringUTF16(IDS_APP_LIST_CONTEXT_MENU_REORDER_BY_NAME),
+        ui::ImageModel::FromVectorIcon(GetMenuItemVectorIcon(
+            ash::REORDER_BY_NAME_ALPHABETICAL, /*string_id=*/-1)));
+    reorder_submenu_->AddItemWithIcon(
+        ash::REORDER_BY_COLOR,
+        l10n_util::GetStringUTF16(IDS_APP_LIST_CONTEXT_MENU_REORDER_BY_COLOR),
+        ui::ImageModel::FromVectorIcon(
+            GetMenuItemVectorIcon(ash::REORDER_BY_COLOR, /*string_id=*/-1)));
     menu_model->AddSeparator(ui::NORMAL_SEPARATOR);
     menu_model->AddSubMenuWithIcon(
-        ash::REORDER_SUBMENU, u"Reorder by name", reorder_submenu_.get(),
+        ash::REORDER_SUBMENU,
+        l10n_util::GetStringUTF16(IDS_APP_LIST_CONTEXT_MENU_REORDER_TITLE),
+        reorder_submenu_.get(),
         ui::ImageModel::FromVectorIcon(
             GetMenuItemVectorIcon(ash::REORDER_SUBMENU, /*string_id=*/-1)));
-    // TODO(crbug.com/1276230): Move reorder by color item to proper location
-    // and add a vector icon.
-    menu_model->AddItem(ash::REORDER_BY_COLOR, u"Color");
   }
 
   std::move(callback).Run(std::move(menu_model));

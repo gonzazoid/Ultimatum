@@ -1,4 +1,4 @@
-// Copyright 2020 The Chromium Authors. All rights reserved.
+// Copyright 2021 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -9,15 +9,16 @@
 #include "components/autofill_assistant/browser/service.pb.h"
 #include "testing/gmock/include/gmock/gmock.h"
 
-namespace {
+namespace autofill_assistant {
+
+namespace cup {
 
 class CUPTest : public testing::Test {
  public:
-  CUPTest() : cup_{autofill_assistant::CUP::CreateQuerySigner()} {}
+  CUPTest() = default;
   ~CUPTest() override = default;
 
  protected:
-  autofill_assistant::CUP cup_;
   base::test::ScopedFeatureList scoped_feature_list_;
 
   void InitCupFeatures(bool enableSigning, bool enableVerifying) {
@@ -25,21 +26,19 @@ class CUPTest : public testing::Test {
     std::vector<base::Feature> disabled_features;
 
     if (enableSigning) {
-      enabled_features.push_back(autofill_assistant::features::
-                                     kAutofillAssistantSignGetActionsRequests);
+      enabled_features.push_back(
+          features::kAutofillAssistantSignGetActionsRequests);
     } else {
-      disabled_features.push_back(autofill_assistant::features::
-                                      kAutofillAssistantSignGetActionsRequests);
+      disabled_features.push_back(
+          features::kAutofillAssistantSignGetActionsRequests);
     }
 
     if (enableVerifying) {
       enabled_features.push_back(
-          autofill_assistant::features::
-              kAutofillAssistantVerifyGetActionsResponses);
+          features::kAutofillAssistantVerifyGetActionsResponses);
     } else {
       disabled_features.push_back(
-          autofill_assistant::features::
-              kAutofillAssistantVerifyGetActionsResponses);
+          features::kAutofillAssistantVerifyGetActionsResponses);
     }
 
     scoped_feature_list_.Reset();
@@ -47,103 +46,44 @@ class CUPTest : public testing::Test {
   }
 };
 
-TEST_F(CUPTest, ShouldSignGetActionsRequestWhenFeatureActivated) {
-  InitCupFeatures(true, false);
+TEST_F(CUPTest, ShouldSignAndVerify) {
+  struct TestCase {
+    bool sign_requests;
+    bool verify_responses;
+    RpcType rpc_type;
+    bool expected_should_sign;
+    bool expected_should_verify;
+  };
+  std::vector<TestCase> test_cases = {
+      {true, true, RpcType::GET_ACTIONS, true, true},
+      {true, false, RpcType::GET_ACTIONS, true, false},
+      {false, true, RpcType::GET_ACTIONS, false, false},
+      {false, false, RpcType::GET_ACTIONS, false, false},
+      {false, false, RpcType::GET_TRIGGER_SCRIPTS, false, false},
+      {true, true, RpcType::GET_TRIGGER_SCRIPTS, false, false},
+  };
 
-  EXPECT_TRUE(autofill_assistant::CUP::ShouldSignRequests(
-      autofill_assistant::RpcType::GET_ACTIONS));
+  RpcType unsupported_rpc_types[] = {
+      RpcType::UNKNOWN,
+      RpcType::GET_TRIGGER_SCRIPTS,
+      RpcType::SUPPORTS_SCRIPT,
+  };
+  for (const auto& unsupported_type : unsupported_rpc_types) {
+    test_cases.push_back({true, true, unsupported_type, false, false});
+    test_cases.push_back({true, false, unsupported_type, false, false});
+    test_cases.push_back({false, true, unsupported_type, false, false});
+    test_cases.push_back({false, false, unsupported_type, false, false});
+  }
+
+  for (const auto& test_case : test_cases) {
+    InitCupFeatures(test_case.sign_requests, test_case.verify_responses);
+    EXPECT_EQ(ShouldSignRequests(test_case.rpc_type),
+              test_case.expected_should_sign);
+    EXPECT_EQ(ShouldVerifyResponses(test_case.rpc_type),
+              test_case.expected_should_verify);
+  }
 }
 
-TEST_F(CUPTest, ShouldNotSignGetActionsRequestWhenFeatureNotActivated) {
-  InitCupFeatures(false, false);
+}  // namespace cup
 
-  EXPECT_FALSE(autofill_assistant::CUP::ShouldSignRequests(
-      autofill_assistant::RpcType::GET_ACTIONS));
-}
-
-TEST_F(CUPTest, ShouldNotSignNotGetActionsRequest) {
-  InitCupFeatures(true, false);
-
-  EXPECT_FALSE(autofill_assistant::CUP::ShouldSignRequests(
-      autofill_assistant::RpcType::GET_TRIGGER_SCRIPTS));
-}
-
-TEST_F(CUPTest, ShouldVerifyGetActionsResponseWhenFeatureActivated) {
-  InitCupFeatures(true, true);
-
-  EXPECT_TRUE(autofill_assistant::CUP::ShouldVerifyResponses(
-      autofill_assistant::RpcType::GET_ACTIONS));
-}
-
-TEST_F(CUPTest, ShouldNotVerifyGetActionsResponseWhenFeatureNotActivated) {
-  InitCupFeatures(true, false);
-
-  EXPECT_FALSE(autofill_assistant::CUP::ShouldVerifyResponses(
-      autofill_assistant::RpcType::GET_ACTIONS));
-}
-
-TEST_F(CUPTest, ShouldNotVerifyGetActionsResponseWhenSigningNotActivated) {
-  InitCupFeatures(false, true);
-
-  EXPECT_FALSE(autofill_assistant::CUP::ShouldVerifyResponses(
-      autofill_assistant::RpcType::GET_ACTIONS));
-}
-
-TEST_F(CUPTest, ShouldNotVerifyNotGetActionsResponse) {
-  InitCupFeatures(true, true);
-
-  EXPECT_FALSE(autofill_assistant::CUP::ShouldVerifyResponses(
-      autofill_assistant::RpcType::GET_TRIGGER_SCRIPTS));
-}
-
-TEST_F(CUPTest, PacksAndSignsGetActionsRequest) {
-  InitCupFeatures(true, false);
-
-  autofill_assistant::ScriptActionRequestProto user_request;
-  user_request.mutable_client_context()->set_experiment_ids("test");
-  std::string user_request_str;
-  user_request.SerializeToString(&user_request_str);
-
-  auto packed_request_str = cup_.PackAndSignRequest(user_request_str);
-
-  autofill_assistant::ScriptActionRequestProto packed_request;
-  EXPECT_TRUE(packed_request.ParseFromString(packed_request_str));
-  EXPECT_TRUE(packed_request.client_context().experiment_ids().empty());
-  EXPECT_FALSE(packed_request.cup_data().request().empty());
-  EXPECT_FALSE(packed_request.cup_data().query_cup2key().empty());
-  EXPECT_FALSE(packed_request.cup_data().hash_hex().empty());
-
-  autofill_assistant::ScriptActionRequestProto actual_user_request;
-  EXPECT_TRUE(
-      actual_user_request.ParseFromString(packed_request.cup_data().request()));
-  EXPECT_EQ(actual_user_request.client_context().experiment_ids(), "test");
-  EXPECT_FALSE(actual_user_request.has_cup_data());
-}
-
-TEST_F(CUPTest, UnpacksTrustedGetActionsResponse) {
-  // TODO(b/203031699): Write test for the successful case.
-}
-
-TEST_F(CUPTest, FailsToUnpackNonTrustedGetActionsResponse) {
-  InitCupFeatures(true, true);
-
-  autofill_assistant::ScriptActionRequestProto user_request;
-  user_request.mutable_client_context()->set_experiment_ids("123");
-  std::string user_request_str;
-  user_request.SerializeToString(&user_request_str);
-
-  cup_.PackAndSignRequest(user_request_str);
-  cup_.GetQuerySigner().OverrideNonceForTesting(8, 12345);
-
-  autofill_assistant::ActionsResponseProto user_response;
-  user_response.set_global_payload("adsf");
-  std::string user_response_str;
-  user_response.SerializeToString(&user_response_str);
-  autofill_assistant::ActionsResponseProto packed_response;
-  packed_response.mutable_cup_data()->set_response(user_response_str);
-  packed_response.mutable_cup_data()->set_ecdsa_signature("not a signature");
-
-  EXPECT_EQ(cup_.UnpackResponse(user_response_str), absl::nullopt);
-}
-
-}  // namespace
+}  // namespace autofill_assistant

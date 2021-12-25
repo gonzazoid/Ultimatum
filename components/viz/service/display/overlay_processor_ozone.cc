@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "base/logging.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/timer/elapsed_timer.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
 #include "components/viz/common/features.h"
@@ -140,18 +142,9 @@ bool OverlayProcessorOzone::NeedsSurfaceDamageRectList() const {
   return true;
 }
 
-void OverlayProcessorOzone::CheckOverlaySupport(
+void OverlayProcessorOzone::CheckOverlaySupportImpl(
     const OverlayProcessorInterface::OutputSurfaceOverlayPlane* primary_plane,
     OverlayCandidateList* surfaces) {
-  // This number is depended on what type of strategies we have. Currently we
-  // only overlay one video.
-#if DCHECK_IS_ON()
-  // TODO(petermcneeley) : Reconsider this check in light of delegated
-  // compositing and multiple overlay work.
-  if (!features::IsDelegatedCompositingEnabled()) {
-    DCHECK_EQ(1U, surfaces->size());
-  }
-#endif
   auto full_size = surfaces->size();
   if (primary_plane)
     full_size += 1;

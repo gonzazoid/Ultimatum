@@ -177,15 +177,10 @@ class TestInputMethodManager : public MockInputMethodManager {
   mojo::Receiver<ime::mojom::InputEngineManager> receiver_;
 };
 
-// TODO(crbug.com/1148157): Refactor NativeInputMethodEngine etc. to avoid
-// hidden dependencies on globals such as ImeBridge.
 class NativeInputMethodEngineTest : public ::testing::Test {
  public:
   void SetUp() override {
     EnableDefaultFeatureList();
-
-    // Needed by NativeInputMethodEngine to interact with the input field.
-    ui::IMEBridge::Initialize();
 
     // Needed by NativeInputMethodEngine for the virtual keyboard.
     keyboard_controller_client_test_helper_ =
@@ -700,8 +695,6 @@ TEST_F(NativeInputMethodEngineTest, DoesNotSendUnhandledNamedKeys) {
   InputMethodManager::Shutdown();
 }
 
-// TODO(crbug.com/1148157): Refactor NativeInputMethodEngine etc. to avoid
-// hidden dependencies on globals such as ImeBridge.
 class NativeInputMethodEngineWithRenderViewHostTest
     : public content::RenderViewHostTestHarness {
   void SetUp() override {
@@ -713,9 +706,6 @@ class NativeInputMethodEngineWithRenderViewHostTest
                               features::kAssistPersonalInfoEmail,
                               features::kAssistPersonalInfoName},
         /*disabled_features=*/{});
-
-    // Needed by NativeInputMethodEngine to interact with the input field.
-    ui::IMEBridge::Initialize();
 
     // Needed by NativeInputMethodEngine for the virtual keyboard.
     keyboard_controller_client_test_helper_ =

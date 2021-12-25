@@ -5,33 +5,19 @@
 -All/RenderFrameHostManagerTest.IgnoreRendererDebugURLsWhenCrashed/*
 -All/SitePerProcessBrowserTest.RenderFrameProxyNotRecreatedDuringProcessShutdown/*
 -All/StartupTracingTest.TestEnableTracing/*
--All/WebRtcCaptureFromElementBrowserTest.CaptureFromMediaElement/*
 -All/WorkerFromAnonymousIframeNikBrowserTest.SharedWorkerRequestIsDoneWithPartitionedNetworkState/*
 -All/WorkerTest.WebSocketSharedWorker/*
--AudioContextManagerTest.AudioContextPlaybackRecorded
--AudioContextManagerTest.AudioContextPlaybackTimeUkm
 -AutoPictureInPictureContentBrowserTest.AutoPictureInPictureTriggeredWhenFullscreen
 -BackForwardCacheBrowserTest.DoesNotCacheIfSpeechRecognitionIsStarted
--BackForwardCacheBrowserTest.VideoSuspendAndResume
 -BackForwardCacheBrowserTest.WebSocketCachedIfClosed
 -BackForwardCacheBrowserTest.WebSocketNotCached
 -ContentBrowserTest.BrowserCrashCallStack
 -ContentBrowserTest.RendererCrashCallStack
 -CrossPlatformAccessibilityBrowserTest.ControlsIdsForDateTimePopup
--DataDecoderBrowserTest.DecodeImage
--DataDecoderBrowserTest.DecodeImageIsolated
--DataDecoderBrowserTest.LaunchIsolated
 -DirectSocketsTcpBrowserTest.OpenTcp_MDNS
 -DnsHttpsProtocolUpgradeBrowserTest.HttpsProtocolUpgrade
--File/MediaTest.*
--Http/MediaTest.*
 -MHTMLGenerationSitePerProcessTest/*
 -MHTMLGenerationTest/*
--MSE_ClearKey/EncryptedMediaTest.*
--MediaRedirectTest.CanPlayHiddenWebm
--MediaSourceTest.*
--MediaSuspendTest.ForcedSrcSuspend
--MediaTest.Navigate
 -MemoryTracingTest.BrowserInitiatedDump
 -MidiBrowserTest.RequestMIDIAccess
 -MidiBrowserTest.SubscribeAll
@@ -41,14 +27,10 @@
 -NetworkServiceDataMigrationBrowserTest.MigratedPreviouslyAndMigrateAgain
 -NetworkServiceDataMigrationBrowserTest.NewDataDirWithMigrationTest
 -NetworkServiceDataMigrationBrowserTest.NewDataDirWithNoMigrationTest
--OpenCodec/WebRtcMediaRecorderTest.PeerConnection/*
 -OutOfProcess/NetworkServiceDataMigrationBrowserTestWithFailures.MigrateDataTest/*
 -PrerenderBrowserTest.AbandonIfRendererProcessCrashes
 -ProprietaryCodec/WebRtcMediaRecorderTest.PeerConnection/*
--RenderProcessHostTest.KillProcessZerosAudioStreams
 -SRC_ClearKey/EncryptedMediaTest.*
--SavePackageWebBundleBrowserTest.OnePageSimple
--SavePageAsWebBundleBrowserTest.GenerateOnePageSimpleWebBundle
 -SitePerProcessDelegatedInkBrowserTest.MetadataAndPointGoThroughOOPIF
 -SitePerProcessMouseWheelHitTestBrowserTest.MouseWheelEventPositionChange
 -SnapshotBrowserTest.AsyncMultiWindowTest
@@ -57,20 +39,10 @@
 -TtsSsmlBrowserTest.TestStripSSML
 -UnrestrictedSharedArrayBufferOriginTrialBrowserTest.*
 -UserMedia/WebRtcConstraintsBrowserTest.GetUserMediaConstraints/4
--WebBundleFileBrowserTest/WebBundleFileBrowserTest.*
--WebBundleNetworkBrowserTest.*
--WebBundleTrustableFileBrowserTest/WebBundleTrustableFileBrowserTest.*
 -WebContentsViewAuraTest.OverscrollNavigation
 -WebContentsViewAuraTest.OverscrollNavigationWithTouchHandler
 -WebContentsViewAuraTest.RepeatedQuickOverscrollGestures
--WebIdBrowserTest.AbsoluteURLs
--WebIdBrowserTest.FastLoginFlow
--WebIdBrowserTest.FullLoginFlow
--WebIdBrowserTest.TokenExchangePermissionDeclined
--WebRtcAudioBrowserTest.*
--WebRtcAudioDebugRecordingsBrowserTest.CallWithAudioDebugRecordings
 -WebRtcCaptureFromElementBrowserTest.VerifyCanvasCaptureWebGLFrames
--WebRtcMediaRecorderTest.TwoChannelAudioRecording
 -WebRtcVideoCaptureServiceBrowserTest.FramesSentThroughTextureVirtualDeviceGetDisplayedOnPage
 
 # crbug.com/1254563: run-test-component specific issues
@@ -86,11 +58,23 @@
 -WebRtcIPPermissionDeniedTest.GatherLocalCandidates
 -WebRtcIPPolicyPublicAndPrivateInterfacesTest.GatherLocalCandidates
 
-# crbug.com/1260245: InterestGroupBrowserTest failures
+# crbug.com/1260245: Failing due to using jitless v8 out of renderer
+-DataDecoderBrowserTest.DecodeImage
+-DataDecoderBrowserTest.DecodeImageIsolated
+-DataDecoderBrowserTest.LaunchIsolated
 -InterestGroupBrowserTest*
 -*/InterestGroupFencedFrameBrowserTest.*
 -InterestGroupPrivateNetworkBrowserTest.*
 -InterestGroupRestrictedPermissionsPolicyBrowserTest.*
+-SavePackageWebBundleBrowserTest.OnePageSimple
+-SavePageAsWebBundleBrowserTest.GenerateOnePageSimpleWebBundle
+-WebBundleFileBrowserTest/WebBundleFileBrowserTest.*
+-WebBundleNetworkBrowserTest.*
+-WebBundleTrustableFileBrowserTest/WebBundleTrustableFileBrowserTest.*
+-WebIdBrowserTest.AbsoluteURLs
+-WebIdBrowserTest.FastLoginFlow
+-WebIdBrowserTest.FullLoginFlow
+-WebIdBrowserTest.TokenExchangePermissionDeclined
 
 # crbug.com/1212491: WebSQL is being deprecated, these are low priority
 -BackForwardCacheBrowserTest.DoesNotCacheIfWebDatabase

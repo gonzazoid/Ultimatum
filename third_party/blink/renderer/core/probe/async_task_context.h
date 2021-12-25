@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PROBE_ASYNC_TASK_CONTEXT_H_
 #define THIRD_PARTY_BLINK_RENDERER_CORE_PROBE_ASYNC_TASK_CONTEXT_H_
 
-#include "third_party/blink/renderer/core/probe/async_task_id.h"
+#include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/blink/renderer/core/core_export.h"
 
 namespace v8 {
 class Isolate;
@@ -27,7 +28,7 @@ class CORE_EXPORT AsyncTaskContext {
   AsyncTaskContext() = default;
   ~AsyncTaskContext();
 
-  // Not copyable or movable. The address of the async_task_id_ is used
+  // Not copyable or movable. The address of `AsyncTaskContext` is used
   // to identify this task and corresponding runs/invocations via `AsyncTask`.
   AsyncTaskContext(const AsyncTaskContext&) = delete;
   AsyncTaskContext& operator=(const AsyncTaskContext&) = delete;
@@ -40,10 +41,17 @@ class CORE_EXPORT AsyncTaskContext {
   // this context after `Cancel` was called.
   void Cancel();
 
+  void SetAdTask() { ad_task_ = true; }
+  bool IsAdTask() const { return ad_task_; }
+
+  // The Id uniquely identifies this task with the V8 debugger. The Id is
+  // calculated based on the address of `AsyncTaskContext`.
+  void* Id() const;
+
  private:
   friend class AsyncTask;
 
-  AsyncTaskId async_task_id_;
+  bool ad_task_ = false;
   v8::Isolate* isolate_ = nullptr;
 };
 

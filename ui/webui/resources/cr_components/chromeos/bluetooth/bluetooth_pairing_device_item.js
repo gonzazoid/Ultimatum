@@ -39,7 +39,7 @@ export class SettingsBluetoothPairingDeviceItemElement extends
   static get properties() {
     return {
       /**
-       * @type {!chromeos.bluetoothConfig.mojom.BluetoothDeviceProperties}
+       * @type {?chromeos.bluetoothConfig.mojom.BluetoothDeviceProperties}
        */
       device: Object,
 
@@ -145,6 +145,10 @@ export class SettingsBluetoothPairingDeviceItemElement extends
    * @private
    */
   getAriaLabel_() {
+    if (!this.device) {
+      return '';
+    }
+
     return this.i18n(
         this.getA11yLabelMessageId_(), this.itemIndex + 1, this.listSize,
         this.getDeviceName_());

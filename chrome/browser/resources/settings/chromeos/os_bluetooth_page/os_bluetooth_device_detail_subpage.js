@@ -14,6 +14,7 @@ import '//resources/cr_elements/policy/cr_tooltip_icon.m.js';
 import './os_bluetooth_change_device_name_dialog.js';
 import 'chrome://resources/cr_components/chromeos/bluetooth/bluetooth_device_battery_info.js';
 
+import {BluetoothUiSurface, recordBluetoothUiSurfaceMetrics} from '//resources/cr_components/chromeos/bluetooth/bluetooth_metrics_utils.js';
 import {assertNotReached} from '//resources/js/assert.m.js';
 import {I18nBehavior, I18nBehaviorInterface} from '//resources/js/i18n_behavior.m.js';
 import {html, mixinBehaviors, PolymerElement} from '//resources/polymer/v3_0/polymer/polymer_bundled.min.js';
@@ -118,6 +119,7 @@ class SettingsBluetoothDeviceDetailSubpageElement extends
   currentRouteChanged(route) {
     if (route !== routes.BLUETOOTH_DEVICE_DETAIL) {
       this.deviceId_ = '';
+      this.pageState_ = PageState.DISCONNECTED;
       return;
     }
 
@@ -128,6 +130,8 @@ class SettingsBluetoothDeviceDetailSubpageElement extends
       return;
     }
     this.deviceId_ = decodeURIComponent(deviceId);
+    recordBluetoothUiSurfaceMetrics(
+        BluetoothUiSurface.SETTINGS_DEVICE_DETAIL_SUBPAGE);
   }
 
   /** @private */
@@ -217,12 +221,26 @@ class SettingsBluetoothDeviceDetailSubpageElement extends
         mojom.AudioOutputCapability.kCapableOfAudioOutput;
   }
 
+  /**
+   * @return {boolean}
+   * @private
+   */
+  shouldShowForgetBtn_() {
+    return !!this.device_;
+  }
+
   /** @private */
   onDeviceChanged_() {
     if (!this.device_) {
       return;
     }
     this.parentNode.pageTitle = getDeviceName(this.device_);
+
+    if (this.pageState_ === PageState.CONNECTION_FAILED &&
+        this.device_.deviceProperties.connectionState ===
+            mojom.DeviceConnectionState.kNotConnected) {
+      return;
+    }
 
     switch (this.device_.deviceProperties.connectionState) {
       case mojom.DeviceConnectionState.kConnected:
@@ -508,6 +526,15 @@ class SettingsBluetoothDeviceDetailSubpageElement extends
   /** @private */
   onKeyboardRowClick_() {
     Router.getInstance().navigateTo(routes.KEYBOARD);
+  }
+
+  /**
+   * @return {string}
+   * @private
+   */
+  getForgetA11yLabel_() {
+    return this.i18n(
+        'bluetoothDeviceDetailForgetA11yLabel', this.getDeviceName_());
   }
 }
 

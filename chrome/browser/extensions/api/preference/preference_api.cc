@@ -18,7 +18,6 @@
 #include "base/values.h"
 #include "build/build_config.h"
 #include "build/chromeos_buildflags.h"
-#include "chrome/browser/extensions/api/content_settings/content_settings_service.h"
 #include "chrome/browser/extensions/api/preference/preference_api_constants.h"
 #include "chrome/browser/extensions/api/preference/preference_helpers.h"
 #include "chrome/browser/extensions/api/proxy/proxy_api.h"
@@ -39,6 +38,7 @@
 #include "components/safe_browsing/core/common/safe_browsing_prefs.h"
 #include "components/spellcheck/browser/pref_names.h"
 #include "components/translate/core/browser/translate_pref_names.h"
+#include "extensions/browser/api/content_settings/content_settings_service.h"
 #include "extensions/browser/extension_pref_value_map.h"
 #include "extensions/browser/extension_pref_value_map_factory.h"
 #include "extensions/browser/extension_prefs.h"
@@ -446,13 +446,13 @@ void PreferenceEventRouter::OnPrefChanged(PrefService* pref_service,
     return;
   }
 
-  auto dict = std::make_unique<base::DictionaryValue>();
-  dict->Set(extensions::preference_api_constants::kValue,
-            std::move(transformed_value));
+  base::Value dict(base::Value::Type::DICTIONARY);
+  dict.SetKey(extensions::preference_api_constants::kValue,
+              std::move(*transformed_value));
   if (incognito) {
     ExtensionPrefs* ep = ExtensionPrefs::Get(profile_);
-    dict->SetBoolean(extensions::preference_api_constants::kIncognitoSpecific,
-                     ep->HasIncognitoPrefValue(browser_pref));
+    dict.SetBoolKey(extensions::preference_api_constants::kIncognitoSpecific,
+                    ep->HasIncognitoPrefValue(browser_pref));
   }
   args.Append(std::move(dict));
 

@@ -442,6 +442,8 @@ blink_core_sources_layout = [
   "ng/layout_ng_text_control_multi_line.h",
   "ng/layout_ng_text_control_single_line.cc",
   "ng/layout_ng_text_control_single_line.h",
+  "ng/layout_ng_view.cc",
+  "ng/layout_ng_view.h",
   "ng/legacy_layout_tree_walking.h",
   "ng/list/layout_ng_inside_list_marker.cc",
   "ng/list/layout_ng_inside_list_marker.h",
@@ -754,6 +756,8 @@ if (is_win) {
     "layout_theme_win.cc",
     "layout_theme_win.h",
     "web_font_rendering_win.cc",
+    "layout_font_accessor_win.h",
+    "layout_font_accessor_win.cc",
   ]
 } else {  # Not Windows.
   blink_core_sources_layout += [ "layout_theme_font_provider_default.cc" ]

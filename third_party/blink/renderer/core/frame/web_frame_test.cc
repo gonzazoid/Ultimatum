@@ -43,6 +43,7 @@
 #include "cc/input/overscroll_behavior.h"
 #include "cc/layers/picture_layer.h"
 #include "cc/paint/paint_op_buffer.h"
+#include "cc/paint/paint_recorder.h"
 #include "cc/trees/layer_tree_host.h"
 #include "cc/trees/scroll_node.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
@@ -169,7 +170,6 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/scoped_page_pauser.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollbar.h"
@@ -188,7 +188,6 @@
 #include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/blob/testing/fake_blob.h"
 #include "third_party/blink/renderer/platform/exported/wrapped_resource_request.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_context.h"
 #include "third_party/blink/renderer/platform/loader/fetch/raw_resource.h"
@@ -5150,8 +5149,7 @@ TEST_F(WebFrameTest, FindInPageMatchRects) {
   int rects_version = main_frame->GetFindInPage()->FindMatchMarkersVersion();
 
   for (int result_index = 0; result_index < kNumResults; ++result_index) {
-    FloatRect result_rect =
-        static_cast<FloatRect>(web_match_rects[result_index]);
+    const gfx::RectF& result_rect = web_match_rects[result_index];
 
     // Select the match by the center of its rect.
     EXPECT_EQ(main_frame->EnsureTextFinder().SelectNearestFindMatch(
@@ -5170,8 +5168,8 @@ TEST_F(WebFrameTest, FindInPageMatchRects) {
     // CSS transforms.
     gfx::RectF active_match =
         main_frame->GetFindInPage()->ActiveFindMatchRect();
-    EXPECT_EQ(ToEnclosingRect(FloatRect(active_match)),
-              ToEnclosingRect(result_rect));
+    EXPECT_EQ(gfx::ToEnclosingRect(active_match),
+              gfx::ToEnclosingRect(result_rect));
 
     // The rects version should not have changed.
     EXPECT_EQ(main_frame->GetFindInPage()->FindMatchMarkersVersion(),
@@ -6593,35 +6591,19 @@ class CompositedSelectionBoundsTest
     RunTest(test_file);
   }
 
-  static GraphicsLayer* GetExpectedLayerForSelection(blink::Node* node) {
-    CompositedLayerMapping* clm = node->GetLayoutObject()
-                                      ->EnclosingLayer()
-                                      ->EnclosingLayerForPaintInvalidation()
-                                      ->GetCompositedLayerMapping();
-
-    // If the Node is a scroller, the selection will be relative to its
-    // scrolling contents layer.
-    return clm->ScrollingContentsLayer() ? clm->ScrollingContentsLayer()
-                                         : clm->MainGraphicsLayer();
-  }
-
   static int LayerIdFromNode(const cc::Layer* root_layer, blink::Node* node) {
-    if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-      return GetExpectedLayerForSelection(node)->CcLayer().id();
+    Vector<const cc::Layer*> layers;
+    if (node->IsDocumentNode()) {
+      layers = CcLayersByName(root_layer,
+                              "Scrolling background of LayoutView #document");
     } else {
-      Vector<const cc::Layer*> layers;
-      if (node->IsDocumentNode()) {
-        layers = CcLayersByName(root_layer,
-                                "Scrolling background of LayoutView #document");
-      } else {
-        DCHECK(node->IsElementNode());
-        layers = CcLayersByDOMElementId(root_layer,
-                                        To<Element>(node)->GetIdAttribute());
-      }
-
-      EXPECT_EQ(layers.size(), 1u);
-      return layers[0]->id();
+      DCHECK(node->IsElementNode());
+      layers = CcLayersByDOMElementId(root_layer,
+                                      To<Element>(node)->GetIdAttribute());
     }
+
+    EXPECT_EQ(layers.size(), 1u);
+    return layers[0]->id();
   }
 
   frame_test_helpers::WebViewHelper web_view_helper_;
@@ -12247,13 +12229,13 @@ TEST_F(WebFrameSimTest, FindInPageSelectNextMatch) {
       frame->EnsureTextFinder().FindMatchRects();
   ASSERT_EQ(2ul, web_match_rects.size());
 
-  FloatRect result_rect = static_cast<FloatRect>(web_match_rects[0]);
+  gfx::RectF result_rect = web_match_rects[0];
   frame->EnsureTextFinder().SelectNearestFindMatch(result_rect.CenterPoint(),
                                                    nullptr);
 
   EXPECT_TRUE(frame_view->GetScrollableArea()->VisibleContentRect().Contains(
       box1_rect));
-  result_rect = static_cast<FloatRect>(web_match_rects[1]);
+  result_rect = web_match_rects[1];
   frame->EnsureTextFinder().SelectNearestFindMatch(result_rect.CenterPoint(),
                                                    nullptr);
 
@@ -13448,7 +13430,7 @@ static void TestFramePrinting(WebLocalFrameImpl* frame) {
   gfx::Size page_size(500, 500);
   print_params.print_content_area.set_size(page_size);
   EXPECT_EQ(1u, frame->PrintBegin(print_params, WebNode()));
-  PaintRecorder recorder;
+  cc::PaintRecorder recorder;
   frame->PrintPagesForTesting(recorder.beginRecording(SkRect::MakeEmpty()),
                               page_size, page_size);
   frame->PrintEnd();
@@ -13526,7 +13508,7 @@ TEST_F(WebFrameTest, FirstLetterHasDOMNodeIdWhenPrinting) {
   print_params.print_content_area.set_size(page_size);
   WebLocalFrameImpl* frame = web_view_helper.LocalMainFrame();
   EXPECT_EQ(1u, frame->PrintBegin(print_params, WebNode()));
-  PaintRecorder recorder;
+  cc::PaintRecorder recorder;
   frame->PrintPagesForTesting(recorder.beginRecording(SkRect::MakeEmpty()),
                               page_size, page_size);
   frame->PrintEnd();

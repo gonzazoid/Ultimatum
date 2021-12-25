@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/core/layout/layout_table.h"
 #include "third_party/blink/renderer/core/layout/layout_table_cell.h"
 #include "third_party/blink/renderer/core/layout/layout_video.h"
+#include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/min_max_sizes.h"
 #include "third_party/blink/renderer/core/layout/ng/custom/layout_ng_custom.h"
 #include "third_party/blink/renderer/core/layout/ng/custom/ng_custom_layout_algorithm.h"
@@ -76,10 +77,10 @@
 #include "third_party/blink/renderer/core/mathml/mathml_under_over_element.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
-#include "third_party/blink/renderer/platform/geometry/float_size.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/text/writing_mode.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/allocator.h"
+#include "ui/gfx/geometry/size_f.h"
 
 namespace blink {
 
@@ -189,11 +190,13 @@ NOINLINE void DetermineAlgorithmAndRun(const NGLayoutAlgorithmParams& params,
     // we would have done block fragmentation with the legacy engine.
     // Otherwise writing data back into the legacy tree will fail. Look for
     // the flow thread.
-  } else if (GetFlowThread(box)) {
-    if (style.SpecifiesColumns())
-      CreateAlgorithmAndRun<NGColumnLayoutAlgorithm>(params, callback);
-    else
-      CreateAlgorithmAndRun<NGPageLayoutAlgorithm>(params, callback);
+  } else if (GetFlowThread(box) && style.SpecifiesColumns()) {
+    CreateAlgorithmAndRun<NGColumnLayoutAlgorithm>(params, callback);
+  } else if (!box.Parent() &&
+             LayoutView::ShouldUsePrintingLayout(box.GetDocument())) {
+    DCHECK(box.IsLayoutView());
+    DCHECK(RuntimeEnabledFeatures::LayoutNGPrintingEnabled());
+    CreateAlgorithmAndRun<NGPageLayoutAlgorithm>(params, callback);
   } else {
     CreateAlgorithmAndRun<NGBlockLayoutAlgorithm>(params, callback);
   }
@@ -1912,6 +1915,9 @@ void NGBlockNode::UpdateShapeOutsideInfoIfNeeded(
     const NGLayoutResult& layout_result,
     LayoutUnit percentage_resolution_inline_size) const {
   if (!box_->IsFloating() || !box_->GetShapeOutsideInfo())
+    return;
+
+  if (layout_result.Status() != NGLayoutResult::kSuccess)
     return;
 
   // The box_ may not have a valid size yet (due to an intermediate layout),

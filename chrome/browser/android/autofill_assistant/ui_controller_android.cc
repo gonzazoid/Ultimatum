@@ -28,15 +28,12 @@
 #include "chrome/android/features/autofill_assistant/jni_headers/AssistantOverlayModel_jni.h"
 #include "chrome/android/features/autofill_assistant/jni_headers/AssistantPlaceholdersConfiguration_jni.h"
 #include "chrome/android/features/autofill_assistant/jni_headers/AutofillAssistantUiController_jni.h"
+#include "chrome/android/features/autofill_assistant/jni_headers_public/AssistantDependencies_jni.h"
 #include "chrome/browser/android/autofill_assistant/client_android.h"
+#include "chrome/browser/android/autofill_assistant/dependencies.h"
 #include "chrome/browser/android/autofill_assistant/generic_ui_root_controller_android.h"
 #include "chrome/browser/android/autofill_assistant/ui_controller_android_utils.h"
-#include "chrome/browser/android/feedback/screenshot_mode.h"
 #include "chrome/browser/autofill/android/personal_data_manager_android.h"
-#include "chrome/browser/autofill/personal_data_manager_factory.h"
-#include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/signin/identity_manager_factory.h"
 #include "components/autofill/core/browser/data_model/autofill_profile.h"
 #include "components/autofill/core/browser/data_model/credit_card.h"
 #include "components/autofill_assistant/browser/bottom_sheet_state.h"
@@ -50,8 +47,6 @@
 #include "components/autofill_assistant/browser/user_data.h"
 #include "components/autofill_assistant/browser/user_data_util.h"
 #include "components/autofill_assistant/browser/user_model.h"
-#include "components/signin/public/identity_manager/account_info.h"
-#include "components/signin/public/identity_manager/identity_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/version_info/channel.h"
 #include "content/public/browser/browser_task_traits.h"
@@ -67,9 +62,9 @@ using ::base::android::AttachCurrentThread;
 using ::base::android::ConvertUTF8ToJavaString;
 using ::base::android::JavaParamRef;
 using ::base::android::JavaRef;
+using ::base::android::ScopedJavaGlobalRef;
 using ::base::android::ScopedJavaLocalRef;
 using ::base::android::ToJavaArrayOfStrings;
-using ::chrome::android::ScreenshotMode;
 
 namespace autofill_assistant {
 
@@ -105,11 +100,12 @@ base::android::ScopedJavaLocalRef<jobject> CreateJavaDate(
 ScopedJavaLocalRef<jobject> CreateOptionalJavaInfoPopup(
     JNIEnv* env,
     const LoginChoice& login_choice,
-    const ClientSettings& client_settings) {
+    const ClientSettings& client_settings,
+    const base::android::ScopedJavaGlobalRef<jobject> jinfo_page_util) {
   ScopedJavaLocalRef<jobject> jinfo_popup = nullptr;
   if (login_choice.info_popup.has_value()) {
     jinfo_popup = CreateJavaInfoPopup(
-        env, *login_choice.info_popup,
+        env, *login_choice.info_popup, jinfo_page_util,
         GetDisplayStringUTF8(ClientSettingsProto::CLOSE, client_settings));
   }
   return jinfo_popup;
@@ -118,7 +114,8 @@ ScopedJavaLocalRef<jobject> CreateOptionalJavaInfoPopup(
 ScopedJavaLocalRef<jobject> CreateJavaLoginChoice(
     JNIEnv* env,
     const LoginChoice& login_choice,
-    const ClientSettings& client_settings) {
+    const ClientSettings& client_settings,
+    const base::android::ScopedJavaGlobalRef<jobject> jinfo_page_util) {
   return Java_AssistantCollectUserDataModel_createLoginChoice(
       env, ConvertUTF8ToJavaString(env, login_choice.identifier),
       ConvertUTF8ToJavaString(env, login_choice.label),
@@ -126,7 +123,8 @@ ScopedJavaLocalRef<jobject> CreateJavaLoginChoice(
       ConvertNativeOptionalStringToJava(
           env, login_choice.sublabel_accessibility_hint),
       login_choice.preselect_priority,
-      CreateOptionalJavaInfoPopup(env, login_choice, client_settings),
+      CreateOptionalJavaInfoPopup(env, login_choice, client_settings,
+                                  jinfo_page_util),
       ConvertNativeOptionalStringToJava(
           env, login_choice.edit_button_content_description));
 }
@@ -135,7 +133,8 @@ ScopedJavaLocalRef<jobject> CreateJavaLoginChoice(
 ScopedJavaLocalRef<jobject> CreateJavaLoginChoiceList(
     JNIEnv* env,
     const std::vector<LoginChoice>& login_choices,
-    const ClientSettings& client_settings) {
+    const ClientSettings& client_settings,
+    const base::android::ScopedJavaGlobalRef<jobject> jinfo_page_util) {
   auto jlist = Java_AssistantCollectUserDataModel_createLoginChoiceList(env);
   for (const auto& login_choice : login_choices) {
     Java_AssistantCollectUserDataModel_addLoginChoice(
@@ -145,7 +144,8 @@ ScopedJavaLocalRef<jobject> CreateJavaLoginChoiceList(
         ConvertNativeOptionalStringToJava(
             env, login_choice.sublabel_accessibility_hint),
         login_choice.preselect_priority,
-        CreateOptionalJavaInfoPopup(env, login_choice, client_settings),
+        CreateOptionalJavaInfoPopup(env, login_choice, client_settings,
+                                    jinfo_page_util),
         ConvertNativeOptionalStringToJava(
             env, login_choice.edit_button_content_description));
   }
@@ -274,18 +274,17 @@ std::unique_ptr<UiControllerAndroid> UiControllerAndroid::CreateFromWebContents(
     const base::android::JavaRef<jobject>& jdependencies,
     const base::android::JavaRef<jobject>& joverlay_coordinator) {
   JNIEnv* env = AttachCurrentThread();
-  auto jactivity = Java_AutofillAssistantUiController_findAppropriateActivity(
-      env, web_contents->GetJavaWebContents());
-  if (!jactivity) {
+  if (!Java_AutofillAssistantUiController_shouldCreateNewInstance(
+          env, web_contents->GetJavaWebContents(), jdependencies)) {
     return nullptr;
   }
-  return std::make_unique<UiControllerAndroid>(env, jactivity, jdependencies,
+
+  return std::make_unique<UiControllerAndroid>(env, jdependencies,
                                                joverlay_coordinator);
 }
 
 UiControllerAndroid::UiControllerAndroid(
     JNIEnv* env,
-    const base::android::JavaRef<jobject>& jactivity,
     const base::android::JavaRef<jobject>& jdependencies,
     const base::android::JavaRef<jobject>& joverlay_coordinator)
     : overlay_delegate_(this),
@@ -293,12 +292,15 @@ UiControllerAndroid::UiControllerAndroid(
       collect_user_data_delegate_(this),
       form_delegate_(this),
       generic_ui_delegate_(this),
-      bottom_bar_delegate_(this) {
-  java_object_ = Java_AutofillAssistantUiController_create(
-      env, jactivity,
+      bottom_bar_delegate_(this),
+      jstatic_dependencies_(
+          Java_AssistantDependencies_getStaticDependencies(env,
+                                                           jdependencies)) {
+  java_object_ = Java_AutofillAssistantUiController_Constructor(
+      env, reinterpret_cast<intptr_t>(this), jdependencies,
       /* allowTabSwitching= */
       base::FeatureList::IsEnabled(features::kAutofillAssistantChromeEntry),
-      reinterpret_cast<intptr_t>(this), jdependencies, joverlay_coordinator);
+      joverlay_coordinator);
   header_model_ = std::make_unique<AssistantHeaderModel>(
       Java_AssistantModel_getHeaderModel(env, GetModel()));
 
@@ -536,7 +538,7 @@ void UiControllerAndroid::OnHeaderFeedbackButtonClicked() {
   Java_AutofillAssistantUiController_showFeedback(
       env, java_object_,
       ConvertUTF8ToJavaString(env, ui_delegate_->GetDebugContext()),
-      ScreenshotMode::DEFAULT);
+      /* screenshotMode */ 0);
 }
 
 void UiControllerAndroid::OnViewEvent(const EventHandler::EventKey& key) {
@@ -874,7 +876,7 @@ void UiControllerAndroid::OnFeedbackButtonClicked(
   Java_AutofillAssistantUiController_showFeedback(
       env, java_object_,
       ConvertUTF8ToJavaString(env, ui_delegate_->GetDebugContext()),
-      ScreenshotMode::COMPOSITOR);
+      /* screenshotMode */ 1);
 
   OnUserActionSelected(env, jcaller, index);
 }
@@ -1206,6 +1208,10 @@ void UiControllerAndroid::HideKeyboardIfFocusNotOnText() {
       AttachCurrentThread(), java_object_);
 }
 
+ScopedJavaGlobalRef<jobject> UiControllerAndroid::GetInfoPageUtil() const {
+  return Dependencies::GetInfoPageUtil(jstatic_dependencies_);
+}
+
 void UiControllerAndroid::OnCollectUserDataOptionsChanged(
     const CollectUserDataOptions* collect_user_data_options) {
   JNIEnv* env = AttachCurrentThread();
@@ -1271,9 +1277,9 @@ void UiControllerAndroid::OnCollectUserDataOptionsChanged(
       base::android::ToJavaArrayOfStrings(
           env, collect_user_data_options->supported_basic_card_networks));
   if (collect_user_data_options->request_login_choice) {
-    auto jlist =
-        CreateJavaLoginChoiceList(env, collect_user_data_options->login_choices,
-                                  ui_delegate_->GetClientSettings());
+    auto jlist = CreateJavaLoginChoiceList(
+        env, collect_user_data_options->login_choices,
+        ui_delegate_->GetClientSettings(), GetInfoPageUtil());
     Java_AssistantCollectUserDataModel_setLoginChoices(env, jmodel, jlist);
   }
   Java_AssistantCollectUserDataModel_setRequestDateRange(
@@ -1625,7 +1631,8 @@ void UiControllerAndroid::OnUserDataChanged(
         user_data.selected_login_choice() == nullptr
             ? nullptr
             : CreateJavaLoginChoice(env, *user_data.selected_login_choice(),
-                                    ui_delegate_->GetClientSettings());
+                                    ui_delegate_->GetClientSettings(),
+                                    GetInfoPageUtil());
 
     Java_AssistantCollectUserDataModel_setSelectedLoginChoice(
         env, jmodel, jselected_login_choice);
@@ -1739,7 +1746,7 @@ void UiControllerAndroid::OnFormChanged(const FormProto* form,
     Java_AssistantFormModel_setInfoPopup(
         env, GetFormModel(),
         ui_controller_android_utils::CreateJavaInfoPopup(
-            env, form->info_popup(),
+            env, form->info_popup(), GetInfoPageUtil(),
             GetDisplayStringUTF8(ClientSettingsProto::CLOSE,
                                  ui_delegate_->GetClientSettings())));
   } else {
@@ -1978,8 +1985,9 @@ UiControllerAndroid::CreateGenericUiControllerForProto(
       Java_AutofillAssistantUiController_getContext(env, java_object_);
   return GenericUiRootControllerAndroid::CreateFromProto(
       proto, base::android::ScopedJavaGlobalRef<jobject>(jcontext),
-      generic_ui_delegate_.GetJavaObject(), ui_delegate_->GetEventHandler(),
-      ui_delegate_->GetUserModel(), ui_delegate_->GetBasicInteractions());
+      GetInfoPageUtil(), generic_ui_delegate_.GetJavaObject(),
+      ui_delegate_->GetEventHandler(), ui_delegate_->GetUserModel(),
+      ui_delegate_->GetBasicInteractions());
 }
 
 base::android::ScopedJavaLocalRef<jobject>

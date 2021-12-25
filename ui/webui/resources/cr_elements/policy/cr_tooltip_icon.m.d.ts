@@ -10,7 +10,7 @@ interface CrTooltipIconElement extends LegacyElementMixin, HTMLElement {
   };
   iconAriaLabel: string;
   iconClass: string;
-  tooltipTex: string;
+  tooltipText: string;
   tooltipPosition: string;
   getFocusableElement(): Element;
 }

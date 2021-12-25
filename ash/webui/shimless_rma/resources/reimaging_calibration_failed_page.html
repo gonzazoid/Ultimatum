@@ -1,0 +1,30 @@
+<style include="cr-shared-style shimless-rma-shared">
+  iron-icon {
+    height: 200px;
+    width: 300px;
+  }
+</style>
+
+<base-page orientation="column">
+  <div slot="header">
+    <h1>[[i18n('calibrationFailedTitleText')]]</h1>
+    <div>[[i18n('calibrationFailedInstructionsText')]]</div>
+    <div>
+      <cr-button id="retryCalibrationButton" class="cancel-button"
+          on-click="onRetryCalibrationButtonClicked_">
+        [[i18n('calibrationFailedRetryButtonLabel')]]
+      </cr-button>
+    </div>
+  </div>
+  <div slot="body">
+    <div>
+      <template is="dom-repeat" items="{{componentCheckboxes_}}" as="component">
+        <calibration-component-chip id="[[component.id]]"
+          checked="{{component.checked}}"
+          failed="[[component.failed]]"
+          component-name="[[component.name]]">
+        </calibration-component-chip>
+      </template>
+    </div>
+  </div>
+</base-page>

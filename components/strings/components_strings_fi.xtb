@@ -112,6 +112,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="1308113895091915999">Tarjous saatavilla</translation>
 <translation id="1312803275555673949">Mikä todiste tukee sitä?</translation>
 <translation id="131405271941274527"><ph name="URL" /> haluaa lähettää ja vastaanottaa tietoja, kun kosketat puhelimella NFC-laitetta</translation>
+<translation id="1314311879718644478">Katsele lisätyn todellisuuden sisältöä</translation>
 <translation id="1314509827145471431">Oikealla sidottu</translation>
 <translation id="1318023360584041678">Tallennettu välilehtiryhmään</translation>
 <translation id="1319245136674974084">Älä kysy uudestaan tämän sovelluksen kohdalla</translation>
@@ -176,6 +177,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="1472675084647422956">Näytä enemmän</translation>
 <translation id="1473183651233018052">JIS B10 (32 mm x 45 mm)</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Etsitkö selainversiota? Avaa</translation>
 <translation id="1476595624592550506">Vaihda salasana</translation>
 <translation id="1483493594462132177">Lähetä</translation>
 <translation id="1484290072879560759">Valitse toimitusosoite</translation>
@@ -214,6 +216,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="1583429793053364125">Jotain meni pieleen. tätä verkkosivua näytettäessä.</translation>
 <translation id="1586541204584340881">Asentamasi laajennukset</translation>
 <translation id="1588438908519853928">Normaali</translation>
+<translation id="1589050138437146318">Asennetaanko ARCore?</translation>
 <translation id="1592005682883173041">Tietojen paikallinen käyttö</translation>
 <translation id="1594030484168838125">Valitse</translation>
 <translation id="160851722280695521">Pelaa Dino Run ‑peliä Chromessa</translation>
@@ -1262,6 +1265,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="4968522289500246572">Sovellus on suunniteltu mobiililaitteille eikä se ehkä näy oikein, jos muutat sen kokoa. Sovellus voi käynnistyä uudelleen tai siinä voi esiintyä ongelmia.</translation>
 <translation id="4969341057194253438">Poista tallenne</translation>
 <translation id="4973922308112707173">Kaksi reikää yläreunassa</translation>
+<translation id="4976702386844183910">Viimeksi avattu <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Käytetäänkö mikrofonia?</translation>
 <translation id="4984339528288761049">Prc5 (kirjekuori)</translation>
 <translation id="4989163558385430922">Näytä kaikki</translation>
@@ -1347,6 +1351,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="5215116848420601511">Maksutavat ja osoitteet Google Paysta</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Lokero 13</translation>
+<translation id="5216942107514965959">Viimeksi avattu tänään</translation>
 <translation id="5222812217790122047">Sähköposti vaaditaan</translation>
 <translation id="5230733896359313003">Toimitusosoite</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1390,6 +1395,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="5333022057423422993">Chrome löysi juuri käyttämäsi salasanan tietosuojaloukkauksesta. Suosittelemme tarkistamaan tallennetut salasanasi tilisi suojaamiseksi.</translation>
 <translation id="5334013548165032829">Yksityiskohtaiset järjestelmälokit</translation>
 <translation id="5334145288572353250">Tallennetaanko osoite?</translation>
+<translation id="5335920952954443287">Sykkivä sydän</translation>
 <translation id="5340250774223869109">Sovellus on estetty</translation>
 <translation id="534295439873310000">NFC-laitteet</translation>
 <translation id="5344579389779391559">Tämä sivu voi yrittää veloittaa sinua</translation>
@@ -1532,6 +1538,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="5869522115854928033">Tallennetut salasanat</translation>
 <translation id="5873013647450402046">Pankkisi edellyttää henkilöllisyytesi vahvistamista.</translation>
 <translation id="5887400589839399685">Kortti tallennettu</translation>
+<translation id="5887687176710214216">Avattu viimeksi eilen</translation>
 <translation id="5895138241574237353">Käynnistä uudelleen</translation>
 <translation id="5895187275912066135">Myönnetty</translation>
 <translation id="5901630391730855834">Keltainen</translation>
@@ -1725,6 +1732,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="6529602333819889595">&amp;Toista poisto</translation>
 <translation id="6545864417968258051">Bluetooth-haku</translation>
 <translation id="6547208576736763147">Kaksi reikää vasemmalla</translation>
+<translation id="6554732001434021288">Viimeksi avattu <ph name="NUM_DAYS" /> päivää sitten</translation>
 <translation id="6556866813142980365">Tee uudelleen</translation>
 <translation id="6569060085658103619">Tämä on laajennussivu.</translation>
 <translation id="6573200754375280815">Kaksi reikää oikealla</translation>
@@ -1887,6 +1895,7 @@ Muussa tapauksessa tämä estetään tietosuoja-asetuksilla. Jos sallit tämän,
 <translation id="7118618213916969306">Hae leikepöydän URL-osoitetta, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Sulje muita välilehtiä tai ohjelmia.</translation>
 <translation id="7129409597930077180">Lähetys tähän osoitteeseen ei onnistu. Valitse eri osoite.</translation>
+<translation id="7132939140423847331">Järjestelmänvalvojasi on kieltänyt tämän datan kopioimisen.</translation>
 <translation id="7135130955892390533">Näytä tila</translation>
 <translation id="7138472120740807366">Toimitustapa</translation>
 <translation id="7139724024395191329">Emiirikunta</translation>
@@ -2059,6 +2068,7 @@ Lisätietoja:
 <translation id="7654909834015434372">Kun muokkaat merkintöjä, tämä dokumentti palaa alkuperäiseen asentoon</translation>
 <translation id="765676359832457558">Piilota lisäasetukset...</translation>
 <translation id="7658239707568436148">Peru</translation>
+<translation id="7659878911471462949">Ilon kyyneleet</translation>
 <translation id="7662298039739062396">Laajennuksen hallinnoima asetus</translation>
 <translation id="7663736086183791259">Varmenne <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Ei sallittu incognito-tilassa</translation>
@@ -2159,7 +2169,6 @@ Lisätietoja:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Saa pyytää virtuaalitodellisuuslaitteiden ja ‑datan käyttölupaa</translation>
 <translation id="7984945080620862648">Et voi siirtyä sivustoon <ph name="SITE" /> juuri nyt, koska sivusto lähetti sekoitetut tiedot, joita Chrome ei voi käsitellä. Verkkovirheet ja hyökkäykset ovat yleensä väliaikaisia, joten sivu luultavasti toimii myöhemmin.</translation>
-<translation id="79859296434321399">Asenna ARCore, niin voit nähdä AR-sisältöä.</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Sidonta</translation>
 <translation id="7992044431894087211">Näytön jakamista (<ph name="APPLICATION_TITLE" />) jatkettu</translation>
@@ -2263,6 +2272,7 @@ Lisätietoja:
 <translation id="830498451218851433">Keskitaite</translation>
 <translation id="8307358339886459768">Pieni kuva</translation>
 <translation id="8307888238279532626">Asennetut sovellukset ja se, miten usein niitä käytetään</translation>
+<translation id="8317207217658302555">Päivitetäänkö ARCore?</translation>
 <translation id="831997045666694187">Ilta</translation>
 <translation id="8321476692217554900">ilmoitukset</translation>
 <translation id="8328484624016508118">Suljettuasi kaikki incognito-välilehdet Chrome poistaa:
@@ -2333,7 +2343,6 @@ Lisätietoja:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Nollaa lupa}other{Nollaa luvat}}</translation>
 <translation id="8555010941760982128">Käytä kassalla tätä koodia</translation>
 <translation id="8557066899867184262">CVC sijaitsee kortin takapuolella.</translation>
-<translation id="8558485628462305855">Päivitä ARCore, niin voit nähdä AR-sisältöä.</translation>
 <translation id="8559762987265718583">Verkkotunnukseen <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> ei voi muodostaa salattua yhteyttä, koska laitteesi aika ja päivämäärä (<ph name="DATE_AND_TIME" />) ovat virheelliset.</translation>
 <translation id="8564182942834072828">Erilliset dokumentit / Kokoamattomat kopiot</translation>
 <translation id="8564985650692024650">Chromium suosittelee organisaation <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> salasanasi vaihtamista, jos olet käyttänyt sitä myös muilla sivustoilla.</translation>
@@ -2446,6 +2455,7 @@ Lisätietoja:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, katso selaushistoriaasi Chromessa painamalla sarkainta ja sitten Enter</translation>
 <translation id="8987927404178983737">Kuukausi</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Etsitkö järjestelmäversiota? Avaa</translation>
 <translation id="899688752321268742"><ph name="URL" /> haluaa tietää, kun käytät tätä laitetta aktiivisesti</translation>
 <translation id="8996941253935762404">Sivusto sisältää haitallisia ohjelmia</translation>
 <translation id="8997023839087525404">Palvelimen lähettämän varmenteen tietoja ei ole annettu yleiseen käyttöön Certificate Transparency ‑käytännön mukaisesti. Tietojen antamista edellytetään joiltakin varmenteilta, jotta niiden luotettavuus voidaan varmistaa ja käyttäjiä suojella hyökkääjiltä.</translation>

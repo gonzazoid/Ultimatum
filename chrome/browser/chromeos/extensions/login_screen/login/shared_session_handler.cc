@@ -6,15 +6,16 @@
 
 #include <utility>
 
+#include "ash/components/login/auth/user_context.h"
 #include "ash/components/settings/cros_settings_names.h"
 #include "base/bind.h"
+#include "base/no_destructor.h"
 #include "chrome/browser/ash/login/existing_user_controller.h"
 #include "chrome/browser/ash/settings/cros_settings.h"
 #include "chrome/browser/chromeos/extensions/login_screen/login/cleanup/cleanup_manager.h"
 #include "chrome/browser/chromeos/extensions/login_screen/login/login_api.h"
 #include "chrome/browser/chromeos/extensions/login_screen/login/login_api_lock_handler.h"
 #include "chrome/browser/ui/ash/session_controller_client_impl.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/session_manager_types.h"
 #include "components/user_manager/user.h"
@@ -95,9 +96,9 @@ SharedSessionHandler::LaunchSharedManagedGuestSession(
 
   session_secret_ = GenerateRandomString(kSessionSecretLength);
 
-  chromeos::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                                user->GetAccountId());
-  context.SetKey(chromeos::Key(session_secret_));
+  ash::UserContext context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+                           user->GetAccountId());
+  context.SetKey(ash::Key(session_secret_));
   context.SetManagedGuestSessionLaunchExtensionId(extension_id);
   existing_user_controller->Login(context, chromeos::SigninSpecifics());
 
@@ -286,9 +287,9 @@ void SharedSessionHandler::UnlockWithSessionSecret(
   const user_manager::User* active_user =
       user_manager::UserManager::Get()->GetActiveUser();
 
-  UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
-                           active_user->GetAccountId());
-  user_context.SetKey(chromeos::Key(session_secret_));
+  ash::UserContext user_context(user_manager::USER_TYPE_PUBLIC_ACCOUNT,
+                                active_user->GetAccountId());
+  user_context.SetKey(ash::Key(session_secret_));
   LoginApiLockHandler::Get()->Authenticate(user_context, std::move(callback));
 }
 

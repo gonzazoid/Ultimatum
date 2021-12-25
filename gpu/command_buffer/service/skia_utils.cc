@@ -16,6 +16,7 @@
 #include "third_party/skia/include/gpu/GrBackendSurface.h"
 #include "third_party/skia/include/gpu/GrContextThreadSafeProxy.h"
 #include "third_party/skia/include/gpu/gl/GrGLTypes.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/geometry/size.h"
 #include "ui/gl/gl_bindings.h"
 #include "ui/gl/gl_gl_api_implementation.h"
@@ -95,6 +96,9 @@ GrContextOptions GetDefaultGrContextOptions(GrContextType type) {
   options.fSuppressMipmapSupport =
       base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kDisableMipmapGeneration);
+
+  // fSupportBilerpFromGlyphAtlas is needed for Raw Draw.
+  options.fSupportBilerpFromGlyphAtlas = features::IsUsingRawDraw();
 
   return options;
 }
@@ -258,7 +262,7 @@ GrVkImageInfo CreateGrVkImageInfo(VulkanImage* image) {
   image_info.fImage = image->image();
   image_info.fAlloc = alloc;
   image_info.fImageTiling = image->image_tiling();
-  image_info.fImageLayout = image->image_layout();
+  image_info.fImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   image_info.fFormat = image->format();
   image_info.fImageUsageFlags = image->usage();
   image_info.fSampleCount = 1;

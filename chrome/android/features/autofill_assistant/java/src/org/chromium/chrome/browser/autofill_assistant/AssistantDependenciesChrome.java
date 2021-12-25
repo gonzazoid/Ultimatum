@@ -5,73 +5,81 @@
 package org.chromium.chrome.browser.autofill_assistant;
 
 import android.app.Activity;
-import android.content.Context;
 import android.view.View;
 
-import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import org.chromium.base.supplier.Supplier;
 import org.chromium.chrome.browser.ActivityTabProvider;
 import org.chromium.chrome.browser.ActivityUtils;
 import org.chromium.chrome.browser.app.ChromeActivity;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
+import org.chromium.chrome.browser.ui.TabObscuringHandler;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetControllerProvider;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.KeyboardVisibilityDelegate;
 import org.chromium.ui.base.ApplicationViewportInsetSupplier;
+import org.chromium.ui.base.WindowAndroid;
 
 /**
  * Implementation of {@link AssistantDependencies} for Chrome.
  */
 public class AssistantDependenciesChrome
-        implements AssistantDependencies, AssistantStaticDependenciesChrome {
-    private final WebContents mWebContents;
-
-    // Dependencies tied to the activity.
-    private Context mContext;
+        extends AssistantStaticDependenciesChrome implements AssistantDependencies {
+    private Activity mActivity;
+    private WindowAndroid mWindowAndroid;
     private BottomSheetController mBottomSheetController;
     private BrowserControlsStateProvider mBrowserControls;
     private KeyboardVisibilityDelegate mKeyboardVisibilityDelegate;
     private ApplicationViewportInsetSupplier mBottomInsetProvider;
     private ActivityTabProvider mActivityTabProvider;
+    private TabObscuringHandler mTabObscuringHandler;
     private View mRootView;
     private AssistantSnackbarFactory mSnackbarFactory;
 
-    public AssistantDependenciesChrome(@NonNull WebContents webContents) {
-        mWebContents = webContents;
-        onActivityAttachmentChanged();
+    public AssistantDependenciesChrome(Activity activity) {
+        maybeUpdateDependencies(activity);
     }
 
-    public boolean onActivityAttachmentChanged() {
-        Activity activity = ActivityUtils.getActivityFromWebContents(mWebContents);
+    @Override
+    public boolean maybeUpdateDependencies(Activity activity) {
+        if (activity == mActivity) return true;
         if (!(activity instanceof ChromeActivity)) return false;
         ChromeActivity chromeActivity = (ChromeActivity) activity;
 
         Supplier<View> rootView = chromeActivity.getCompositorViewHolderSupplier();
 
-        mContext = chromeActivity;
-        mBottomSheetController =
-                BottomSheetControllerProvider.from(chromeActivity.getWindowAndroid());
+        mActivity = chromeActivity;
+        mWindowAndroid = chromeActivity.getWindowAndroid();
+        mBottomSheetController = BottomSheetControllerProvider.from(mWindowAndroid);
         mBrowserControls = chromeActivity.getBrowserControlsManager();
-        mKeyboardVisibilityDelegate = chromeActivity.getWindowAndroid().getKeyboardDelegate();
-        mBottomInsetProvider =
-                chromeActivity.getWindowAndroid().getApplicationBottomInsetProvider();
+        mKeyboardVisibilityDelegate = mWindowAndroid.getKeyboardDelegate();
+        mBottomInsetProvider = mWindowAndroid.getApplicationBottomInsetProvider();
         mActivityTabProvider = chromeActivity.getActivityTabProvider();
+        mTabObscuringHandler = chromeActivity.getTabObscuringHandler();
         mRootView = rootView.get();
         mSnackbarFactory =
-                new AssistantSnackbarFactoryChrome(mContext, chromeActivity.getSnackbarManager());
+                new AssistantSnackbarFactoryChrome(mActivity, chromeActivity.getSnackbarManager());
         return true;
     }
 
     @Override
-    public WebContents getWebContents() {
-        return mWebContents;
+    public boolean maybeUpdateDependencies(WebContents webContents) {
+        @Nullable
+        Activity activity = ActivityUtils.getActivityFromWebContents(webContents);
+        if (activity == null) return false;
+        return maybeUpdateDependencies(activity);
     }
 
     @Override
-    public Context getContext() {
-        return mContext;
+    public Activity getActivity() {
+        return mActivity;
+    }
+
+    @Override
+    public WindowAndroid getWindowAndroid() {
+        return mWindowAndroid;
     }
 
     @Override
@@ -97,6 +105,11 @@ public class AssistantDependenciesChrome
     @Override
     public ActivityTabProvider getActivityTabProvider() {
         return mActivityTabProvider;
+    }
+
+    @Override
+    public TabObscuringHandler getTabObscuringHandler() {
+        return mTabObscuringHandler;
     }
 
     @Override

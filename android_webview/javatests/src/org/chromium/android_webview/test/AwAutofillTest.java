@@ -50,7 +50,6 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.task.PostTask;
 import org.chromium.base.test.util.CallbackHelper;
 import org.chromium.base.test.util.DisableIf;
-import org.chromium.base.test.util.DisabledTest;
 import org.chromium.base.test.util.Feature;
 import org.chromium.base.test.util.FlakyTest;
 import org.chromium.base.test.util.MetricsUtils;
@@ -1115,7 +1114,6 @@ public class AwAutofillTest {
     @Test
     @SmallTest
     @Feature({"AndroidWebView"})
-    @DisabledTest(message = "https://crbug.com/1153875")
     public void testAutofillTriggersAfterReload() throws Throwable {
         final String data = "<html><head></head><body><form action='a.html' name='formname'>"
                 + "<input type='text' id='text1' name='username'"

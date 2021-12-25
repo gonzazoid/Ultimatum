@@ -31,7 +31,6 @@
 <translation id="2478931088402984578">Wybierz <ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" /></translation>
 <translation id="2567507405773541360">Zwiększ produktywność, korzystając z prostej, bezpiecznej i wyjątkowo szybkiej przeglądarki Chromium</translation>
 <translation id="2590893390871230428">Synchronizuj dane Chromium</translation>
-<translation id="259094968798709429">Hasła są zapisywane w <ph name="BEGIN_LINK" />Menedżerze haseł<ph name="END_LINK" />, więc możesz ich używać na dowolnym urządzeniu.</translation>
 <translation id="2650312721222849884">Aby widzieć swoje karty zawsze, kiedy korzystasz z Chromium, włącz synchronizację</translation>
 <translation id="2684230048001240293">Ustaw Chromium jako przeglądarkę domyślną, aby synchronizować karty, hasła i dane kart płatniczych na wszystkich urządzeniach</translation>
 <translation id="2730884209570016437">Chromium nie może użyć aparatu, bo używa go już inna aplikacja</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">To konto razem z wszelkimi niezapisanymi danymi zostanie usunięte z Chromium.</translation>
 <translation id="894437814105052438">Gdy się wylogujesz, Chromium nie zsynchronizuje żadnych nowych danych z Twoim kontem Google. Dane, które zostały zsynchronizowane wcześniej, pozostaną na koncie.</translation>
 <translation id="9022552996538154597">Zaloguj się w Chromium</translation>
+<translation id="9059693977935746710">Nie musisz go zapamiętywać. Menedżer haseł zapisze je na koncie <ph name="EMAIL" /></translation>
 <translation id="9089354809943900324">Chromium jest nieaktualny</translation>
 <translation id="9110075932708282655">Używaj domyślnie Chromium</translation>
 <translation id="921174536258924340">Przeglądarce Chromium nie udało się sprawdzić wszystkich haseł. Spróbuj ponownie jutro lub <ph name="BEGIN_LINK" />sprawdź hasła na koncie Google<ph name="END_LINK" />.</translation>

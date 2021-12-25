@@ -469,6 +469,12 @@ const char kEnterpriseEnrollmentInitialModulus[] =
 const char kEnterpriseEnrollmentModulusLimit[] =
     "enterprise-enrollment-modulus-limit";
 
+// Disallow blocking developer mode through enterprise device policy:
+// - Fail enterprise enrollment if enrolling would block dev mode.
+// - Don't apply new device policy if it would block dev mode.
+// This is only usable on test builds.
+const char kDisallowPolicyBlockDevMode[] = "disallow-policy-block-dev-mode";
+
 // Write extension install events to chrome log for integration test.
 const char kExtensionInstallEventChromeLogForTests[] =
     "extension-install-event-chrome-log-for-tests";
@@ -516,10 +522,9 @@ const char kForceDevToolsAvailable[] = "force-devtools-available";
 // Forces first-run UI to be shown for every login.
 const char kForceFirstRunUI[] = "force-first-run-ui";
 
-// Forces Hardware ID check (happens during OOBE) to fail. Should be used only
-// for testing.
-const char kForceHWIDCheckFailureForTest[] =
-    "force-hwid-check-failure-for-test";
+// Forces Hardware ID check (happens during OOBE) to fail or succeed. Possible
+// values: "failure" or "success". Should be used only for testing.
+const char kForceHWIDCheckResultForTest[] = "force-hwid-check-result-for-test";
 
 // Force enables the Happiness Tracking System for the device. This ignores
 // user profile check and time limits and shows the notification every time

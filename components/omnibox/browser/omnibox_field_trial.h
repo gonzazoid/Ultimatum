@@ -552,9 +552,20 @@ extern const base::FeatureParam<int>
     kShortBookmarkSuggestionsByTotalInputLengthThreshold;
 
 // Zero Suggest
+// Indicates whether the user is in the counterfactual group in the experiment
+// for prefetching zero prefix suggestions on the NTP. Users in the
+// counterfactual group issue a follow-up non-cacheable request if the response
+// is loaded from the HTTP cache in order to determine HTTP cache validity.
+// This param is tied to omnibox::kZeroSuggestPrefetching and is to be used when
+// a valid HTTP cache duration is provided via kZeroSuggestCacheDurationSec.
+extern const base::FeatureParam<bool> kZeroSuggestCacheCounterfactual;
 // Specifies the HTTP cache duration for the zero prefix suggest responses. If
 // the provided value is a positive number, the cache duration will be sent as a
-// query string parameter in the zero suggest requests.
+// query string parameter in the zero suggest requests and relayed back in the
+// response cache control headers.
+// This param is tied to omnibox::kZeroSuggestPrefetching which controls
+// prefetching and theoretically works with any caching mechanism. If no valid
+// HTTP cache duration is provided the existing caching mechanism is used.
 extern const base::FeatureParam<int> kZeroSuggestCacheDurationSec;
 
 // New params should be inserted above this comment and formatted as:

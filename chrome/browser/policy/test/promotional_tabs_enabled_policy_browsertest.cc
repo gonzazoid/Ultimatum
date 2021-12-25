@@ -123,7 +123,7 @@ class PromotionalTabsEnabledPolicyWelcomeTest
 IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWelcomeTest, RunTest) {
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
-  const auto& url = tab_strip->GetWebContentsAt(0)->GetURL();
+  const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
   switch (GetParam()) {
     case BooleanPolicy::kFalse:
       // Only the NTP should show.
@@ -176,13 +176,13 @@ class PromotionalTabsEnabledPolicyWhatsNewTest
     // already been seen. This is necessary because welcome/onboarding takes
     // precedence over What's New.
     std::string json;
-    base::DictionaryValue prefs;
-    prefs.SetBoolean(prefs::kHasSeenWelcomePage, true);
+    base::Value prefs(base::Value::Type::DICTIONARY);
+    prefs.SetBoolPath(prefs::kHasSeenWelcomePage, true);
     // Set the session startup pref to NewTab. This enables consistent test
     // expectations across platforms - we should always expect to see the NTP.
     // Without this line, on ChromeOS only, the default type is LAST, which
     // tries to restore the last session and suppresses the NTP.
-    prefs.SetInteger(prefs::kRestoreOnStartup,
+    prefs.SetIntPath(prefs::kRestoreOnStartup,
                      SessionStartupPref::kPrefValueNewTab);
     base::JSONWriter::Write(prefs, &json);
 
@@ -196,8 +196,8 @@ class PromotionalTabsEnabledPolicyWhatsNewTest
         default_dir.Append(chrome::kPreferencesFilename), json));
 
     // Also set the version for What's New in the local state.
-    base::DictionaryValue local_state;
-    local_state.SetInteger(prefs::kLastWhatsNewVersion,
+    base::Value local_state(base::Value::Type::DICTIONARY);
+    local_state.SetIntPath(prefs::kLastWhatsNewVersion,
                            WhatsNewVersionForPref());
     std::string local_state_string;
     base::JSONWriter::Write(local_state, &local_state_string);
@@ -218,7 +218,7 @@ IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWhatsNewTest, RunTest) {
   run_loop.Run();
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
-  const auto& url = tab_strip->GetWebContentsAt(0)->GetURL();
+  const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
   switch (GetParam()) {
     case BooleanPolicy::kFalse:
       // Only the NTP should show.
@@ -233,7 +233,8 @@ IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWhatsNewTest, RunTest) {
       EXPECT_EQ(url.possibly_invalid_spec(), chrome::kChromeUIWhatsNewURL);
       EXPECT_EQ(0, tab_strip->active_index());
       // The second tab should be the NTP.
-      const auto& url_tab1 = tab_strip->GetWebContentsAt(1)->GetURL();
+      const auto& url_tab1 =
+          tab_strip->GetWebContentsAt(1)->GetLastCommittedURL();
       EXPECT_EQ(url_tab1.possibly_invalid_spec(), chrome::kChromeUINewTabURL);
       break;
   }
@@ -272,7 +273,7 @@ IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyWhatsNewInvalidTest,
   run_loop.Run();
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
-  const auto& url = tab_strip->GetWebContentsAt(0)->GetURL();
+  const auto& url = tab_strip->GetWebContentsAt(0)->GetLastCommittedURL();
   // Only the NTP should show. There are no other relevant tabs since
   // welcome and What's New have both already been shown.
   EXPECT_EQ(tab_strip->count(), 1);

@@ -36,7 +36,6 @@
 #include "third_party/blink/renderer/core/html/html_plugin_element.h"
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/embedded_content_painter.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "ui/gfx/geometry/point_conversions.h"
@@ -110,15 +109,6 @@ PaintLayerType LayoutEmbeddedContent::LayerTypeRequired() const {
   }
 
   return kForcedPaintLayer;
-}
-
-bool LayoutEmbeddedContent::ContentDocumentContainsGraphicsLayer() const {
-  NOT_DESTROYED();
-  if (PaintLayerCompositor* inner_compositor =
-          PaintLayerCompositor::FrameContentsCompositor(*this)) {
-    return inner_compositor->StaleInCompositingMode();
-  }
-  return false;
 }
 
 bool LayoutEmbeddedContent::NodeAtPointOverEmbeddedContentView(
@@ -360,14 +350,14 @@ void LayoutEmbeddedContent::UpdateGeometry(
   PhysicalRect replaced_rect = ReplacedContentRect();
   TransformState transform_state(TransformState::kApplyTransformDirection,
                                  gfx::PointF(),
-                                 FloatQuad(FloatRect(replaced_rect)));
+                                 FloatQuad(gfx::RectF(replaced_rect)));
   MapLocalToAncestor(nullptr, transform_state, 0);
   transform_state.Flatten();
   PhysicalOffset absolute_location =
       PhysicalOffset::FromPointFRound(transform_state.LastPlanarPoint());
   PhysicalRect absolute_replaced_rect = replaced_rect;
   absolute_replaced_rect.Move(absolute_location);
-  FloatRect absolute_bounding_box =
+  gfx::RectF absolute_bounding_box =
       transform_state.LastPlanarQuad().BoundingBox();
   gfx::Rect frame_rect(gfx::Point(),
                        ToPixelSnappedRect(absolute_replaced_rect).size());

@@ -56,12 +56,12 @@
 #include "chrome/browser/permissions/adaptive_quiet_notification_permission_ui_enabler.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/bookmark_model_loaded_observer.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_init_params.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
 #include "chrome/browser/profiles/profile_destroyer.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_key.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "chrome/browser/profiles/profile_metrics.h"
@@ -518,7 +518,7 @@ ProfileManager::~ProfileManager() {
       const ProfileInfo* profile_info = path_and_profile_info.second.get();
 
       Profile* profile = profile_info->GetRawProfile();
-      if (profile && profile->IsSystemProfile())
+      if (profile && !profile->IsRegularProfile())
         continue;
 
       for (const auto& origin_and_count : profile_info->keep_alives) {
@@ -1187,7 +1187,7 @@ void ProfileManager::CleanUpEphemeralProfiles() {
 void ProfileManager::CleanUpDeletedProfiles() {
   PrefService* local_state = g_browser_process->local_state();
   DCHECK(local_state);
-  const base::ListValue* deleted_profiles =
+  const base::Value* deleted_profiles =
       local_state->GetList(prefs::kProfilesDeleted);
   DCHECK(deleted_profiles);
 
@@ -2109,7 +2109,8 @@ ProfileManager::ProfileInfo* ProfileManager::RegisterOwnedProfile(
   ProfileInfo* info_raw = info.get();
   profiles_info_.insert(
       std::make_pair(profile_ptr->GetPath(), std::move(info)));
-  ever_loaded_profiles_.insert(profile_ptr->GetPath());
+  if (profile_ptr->IsRegularProfile())
+    ever_loaded_profiles_.insert(profile_ptr->GetPath());
   return info_raw;
 }
 
@@ -2120,7 +2121,8 @@ ProfileManager::ProfileInfo* ProfileManager::RegisterUnownedProfile(
   auto info = ProfileInfo::FromUnownedProfile(profile);
   ProfileInfo* info_raw = info.get();
   profiles_info_.insert(std::make_pair(path, std::move(info)));
-  ever_loaded_profiles_.insert(path);
+  if (profile->IsRegularProfile())
+    ever_loaded_profiles_.insert(path);
   return info_raw;
 }
 

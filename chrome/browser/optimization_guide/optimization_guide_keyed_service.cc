@@ -70,6 +70,28 @@ void DeleteOldStorePaths(const base::FilePath& profile_path) {
                   kOptimizationGuidePredictionModelAndFeaturesStore)));
 }
 
+// Returns the profile to use for when setting up the keyed service when the
+// profile is Off-The-Record. For guest profiles, returns a loaded profile if
+// one exists, otherwise just the original profile of the OTR profile. Note:
+// guest profiles are off-the-record and "original" profiles.
+Profile* GetProfileForOTROptimizationGuide(Profile* profile) {
+  DCHECK(profile);
+  DCHECK(profile->IsOffTheRecord());
+
+  if (profile->IsGuestSession()) {
+    // Guest sessions need to rely on the stores from real profiles
+    // as guest profiles cannot fetch or store new models. Note: only
+    // loaded profiles should be used as we do not want to force load
+    // another profile as that can lead to start up regressions.
+    std::vector<Profile*> profiles =
+        g_browser_process->profile_manager()->GetLoadedProfiles();
+    if (!profiles.empty()) {
+      return profiles[0];
+    }
+  }
+  return profile->GetOriginalProfile();
+}
+
 }  // namespace
 
 // static
@@ -113,48 +135,17 @@ void OptimizationGuideKeyedService::Initialize() {
                                 ->GetProtoDatabaseProvider();
   base::FilePath profile_path = profile->GetOriginalProfile()->GetPath();
 
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-  // Do not use the primary profile on ChromeOS since it basically is an
-  // ephemeral profile anyway and we cannot provide hints or models to it
-  // anyway. Additionally, sign in profiles do not go through the standard
-  // profile initialization flow, so a lot of things that are required are not
-  // available when the browser context for the signin profile is created.
-  if (profile->IsGuestSession()) {
-    Profile* primary_profile = ProfileManager::GetPrimaryUserProfile();
-    if (primary_profile) {
-      proto_db_provider = primary_profile->GetDefaultStoragePartition()
-                              ->GetProtoDatabaseProvider();
-      profile_path = primary_profile->GetPath();
-    }
-  }
-#endif
   // We have different behavior if |this| is created for an incognito profile.
   // For incognito profiles, we act in "read-only" mode of the original
   // profile's store and do not fetch any new hints or models.
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory;
-  optimization_guide::OptimizationGuideStore* hint_store;
-  optimization_guide::OptimizationGuideStore*
+  base::WeakPtr<optimization_guide::OptimizationGuideStore> hint_store;
+  base::WeakPtr<optimization_guide::OptimizationGuideStore>
       prediction_model_and_features_store;
   if (profile->IsOffTheRecord()) {
-#if !BUILDFLAG(IS_CHROMEOS_ASH)
-    // Do not use the primary profile on ChromeOS since it basically is an
-    // ephemeral profile anyway and we cannot provide hints or models to it
-    // anyway. Additionally, sign in profiles do not go through the standard
-    // profile initialization flow, so a lot of things that are required are not
-    // available when the browser context for the signin profile is created.
-
-    // For guest profiles, we want to use the primary profile as it is an
-    // original profile itself, unlike incognito. However, we still want
-    // read-only mode.
     OptimizationGuideKeyedService* original_ogks =
         OptimizationGuideKeyedServiceFactory::GetForProfile(
-            profile->IsGuestSession() ? ProfileManager::GetPrimaryUserProfile()
-                                      : profile->GetOriginalProfile());
-#else
-    OptimizationGuideKeyedService* original_ogks =
-        OptimizationGuideKeyedServiceFactory::GetForProfile(
-            profile->GetOriginalProfile());
-#endif
+            GetProfileForOTROptimizationGuide(profile));
     DCHECK(original_ogks);
     hint_store = original_ogks->GetHintsManager()->hint_store();
     prediction_model_and_features_store =
@@ -194,7 +185,7 @@ void OptimizationGuideKeyedService::Initialize() {
                   base::ThreadPool::CreateSequencedTaskRunner(
                       {base::MayBlock(), base::TaskPriority::BEST_EFFORT}))
             : nullptr;
-    hint_store = hint_store_.get();
+    hint_store = hint_store_ ? hint_store_->AsWeakPtr() : nullptr;
 
     prediction_model_and_features_store_ =
         std::make_unique<optimization_guide::OptimizationGuideStore>(
@@ -205,7 +196,7 @@ void OptimizationGuideKeyedService::Initialize() {
             base::ThreadPool::CreateSequencedTaskRunner(
                 {base::MayBlock(), base::TaskPriority::BEST_EFFORT}));
     prediction_model_and_features_store =
-        prediction_model_and_features_store_.get();
+        prediction_model_and_features_store_->AsWeakPtr();
   }
 
   hints_manager_ = std::make_unique<optimization_guide::ChromeHintsManager>(

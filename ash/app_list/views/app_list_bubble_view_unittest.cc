@@ -58,6 +58,8 @@ using views::Widget;
 namespace ash {
 namespace {
 
+constexpr int kBorderSize = 2;
+
 SearchModel* GetSearchModel() {
   return AppListModelProvider::Get()->search_model();
 }
@@ -120,6 +122,8 @@ class AppListBubbleViewTest : public AshTestBase {
 
   // Shows the app list on the primary display.
   void ShowAppList() { GetAppListTestHelper()->ShowAppList(); }
+
+  void DismissAppList() { GetAppListTestHelper()->Dismiss(); }
 
   void AddContinueSuggestionResult(int num_suggestions) {
     GetAppListTestHelper()->AddContinueSuggestionResults(num_suggestions);
@@ -197,9 +201,6 @@ TEST_F(AppListBubbleViewTest, LayerConfiguration) {
   EXPECT_FALSE(layer->fills_bounds_opaquely());
   EXPECT_TRUE(layer->is_fast_rounded_corner());
   EXPECT_EQ(layer->background_blur(), ColorProvider::kBackgroundBlurSigma);
-  EXPECT_EQ(layer->background_color(),
-            AshColorProvider::Get()->GetBaseLayerColor(
-                AshColorProvider::BaseLayerType::kTransparent80));
 }
 
 // Tests some basic layout coordinates, because we don't have screenshot tests.
@@ -207,12 +208,16 @@ TEST_F(AppListBubbleViewTest, LayerConfiguration) {
 TEST_F(AppListBubbleViewTest, Layout) {
   ShowAppList();
 
+  // The view has a background.
+  auto* app_list_bubble_view = GetAppListTestHelper()->GetBubbleView();
+  EXPECT_TRUE(app_list_bubble_view->background());
+
   // Check the bounds of the search box search icon.
   auto* search_box_view = GetSearchBoxView();
   auto* search_icon = search_box_view->search_icon();
   gfx::Rect search_icon_bounds =
       search_icon->ConvertRectToWidget(search_icon->GetLocalBounds());
-  EXPECT_EQ("16,16 24x24", search_icon_bounds.ToString());
+  EXPECT_EQ("18,18 24x24", search_icon_bounds.ToString());
 
   // Check height of search box view.
   EXPECT_EQ(56, search_box_view->height());
@@ -220,8 +225,8 @@ TEST_F(AppListBubbleViewTest, Layout) {
   // The separator is immediately under the search box.
   gfx::Point separator_origin;
   views::View::ConvertPointToWidget(GetSearchBoxSeparator(), &separator_origin);
-  EXPECT_EQ(0, separator_origin.x());
-  EXPECT_EQ(search_box_view->height(), separator_origin.y());
+  EXPECT_EQ(kBorderSize, separator_origin.x());
+  EXPECT_EQ(kBorderSize + search_box_view->height(), separator_origin.y());
 }
 
 TEST_F(AppListBubbleViewTest, OpeningBubbleTriggersAnimations) {
@@ -323,6 +328,28 @@ TEST_F(AppListBubbleViewTest, ShowAnimationDestroysAndRestoresGradientMask) {
   EXPECT_TRUE(scroll_view->layer()->layer_mask_layer());
 }
 
+TEST_F(AppListBubbleViewTest, ShowAnimationDestroysAndRestoresShadow) {
+  // Enable animations.
+  base::test::ScopedFeatureList feature(
+      features::kProductivityLauncherAnimation);
+  ui::ScopedAnimationDurationScaleMode duration(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  AddAppItems(20);
+  ShowAppList();
+
+  // Shadow is suppressed during show animation for performance.
+  auto* app_list_bubble_view = GetAppListTestHelper()->GetBubbleView();
+  EXPECT_FALSE(app_list_bubble_view->view_shadow_for_test());
+
+  // Finish the animation.
+  auto* apps_grid_view = GetAppsGridView();
+  WaitForLayerAnimation(apps_grid_view->layer());
+
+  // Shadow is restored.
+  EXPECT_TRUE(app_list_bubble_view->view_shadow_for_test());
+}
+
 TEST_F(AppListBubbleViewTest, ShowAnimationRecordsSmoothnessHistogram) {
   base::HistogramTester histograms;
 
@@ -405,6 +432,26 @@ TEST_F(AppListBubbleViewTest, OpeningBubbleFocusesSearchBox) {
   EXPECT_TRUE(search_box_view->is_search_box_active());
 }
 
+TEST_F(AppListBubbleViewTest, OpeningBubbleTwiceFocusesSearchBox) {
+  AddAppItems(1);
+  ShowAppList();
+
+  // Click on an item, which takes focus out of the search field.
+  AppListItemView* item =
+      GetAppListTestHelper()->GetScrollableAppsGridView()->GetItemViewAt(0);
+  LeftClickOn(item);
+  SearchBoxView* search_box_view = GetSearchBoxView();
+  ASSERT_FALSE(search_box_view->search_box()->HasFocus());
+
+  // The app list view and widget are cached after this close.
+  DismissAppList();
+
+  // Search box is focused on next show.
+  ShowAppList();
+  EXPECT_TRUE(search_box_view->search_box()->HasFocus());
+  EXPECT_TRUE(search_box_view->is_search_box_active());
+}
+
 TEST_F(AppListBubbleViewTest, SearchBoxTextUsesPrimaryTextColor) {
   ShowAppList();
 
@@ -459,7 +506,9 @@ TEST_F(AppListBubbleViewTest, AssistantPageLayout) {
   // Assistant fills the bubble view, so that any suggestion chips will appear
   // at the bottom.
   auto* app_list_bubble_view = GetAppListTestHelper()->GetBubbleView();
-  EXPECT_EQ(GetAssistantPage()->bounds(), app_list_bubble_view->bounds());
+  gfx::Rect expected_bounds = app_list_bubble_view->bounds();
+  expected_bounds.Inset(kBorderSize);
+  EXPECT_EQ(GetAssistantPage()->bounds(), expected_bounds);
 }
 
 TEST_F(AppListBubbleViewTest, SearchBoxCloseButton) {
@@ -814,6 +863,24 @@ TEST_F(AppListBubbleViewTest, ClickOnFolderOpensFolder) {
   // Folder opened.
   EXPECT_TRUE(GetAppListTestHelper()->IsInFolderView());
   EXPECT_TRUE(GetAppListTestHelper()->GetBubbleFolderView()->GetVisible());
+}
+
+TEST_F(AppListBubbleViewTest, FolderClosedOnAppListDismiss) {
+  AddFolderWithApps(3);
+  ShowAppList();
+
+  AppListItemView* folder_item = GetAppsGridView()->GetItemViewAt(0);
+  LeftClickOn(folder_item);
+  ASSERT_TRUE(GetAppListTestHelper()->IsInFolderView());
+  ASSERT_TRUE(GetAppListTestHelper()->GetBubbleFolderView()->GetVisible());
+
+  // The bubble view and widget are cached after dismiss.
+  DismissAppList();
+
+  // The folder is closed when the app list is reopened.
+  ShowAppList();
+  EXPECT_FALSE(GetAppListTestHelper()->IsInFolderView());
+  EXPECT_FALSE(GetAppListTestHelper()->GetBubbleFolderView()->GetVisible());
 }
 
 TEST_F(AppListBubbleViewTest, LargeFolderViewFitsInsideMainBubble) {

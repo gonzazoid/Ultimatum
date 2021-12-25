@@ -34,6 +34,7 @@
 <translation id="2313870531055795960">Confere se os URLs estão em uma lista de sites não seguros armazenada no Chromium. Se um site tentar roubar sua senha ou se você fizer o download de um arquivo nocivo, o Chromium também poderá enviar os URLs, incluindo partes do conteúdo da página, para o Navegação segura.</translation>
 <translation id="2343156876103232566">Para enviar um número daqui para seu smartphone Android, faça login no Chromium nos dois dispositivos.</translation>
 <translation id="2347108572062610441">Esta extensão alterou a página que é exibida quando você inicia o Chromium.</translation>
+<translation id="2359808026110333948">Continuar</translation>
 <translation id="2396765026452590966">A extensão "<ph name="EXTENSION_NAME" />" alterou a página que é exibida quando você inicia o Chromium.</translation>
 <translation id="2401032172288869980">O Chromium precisa da permissão de acesso ao microfone e à câmera para este site</translation>
 <translation id="2483889755041906834">No Chromium</translation>
@@ -106,20 +107,22 @@
 <translation id="4271805377592243930">Ajuda com o Chromium</translation>
 <translation id="4285930937574705105">Ocorreu uma falha na instalação devido a um erro não especificado. Se o Chromium estiver sendo executado, feche-o e tente novamente.</translation>
 <translation id="4407044323746248786">Sair do Chromium mesmo assim?</translation>
+<translation id="4414390922528416758">Personalize as opções de privacidade mais importantes para o Chromium. Este guia não inclui todas as configurações e opções.</translation>
 <translation id="4415566066719264597">Permitir a execução do Chromium em segundo plano</translation>
 <translation id="4423735387467980091">Personalizar e controlar o Chromium</translation>
+<translation id="4427306783828095590">A Proteção reforçada é mais eficiente no combate a golpes de phishing e malware</translation>
 <translation id="452711251841752011">Conheça o Chromium. Nova janela do navegador aberta</translation>
 <translation id="4544142686420020088">A atualização do Chromium não foi concluída. Algo deu errado. <ph name="BEGIN_LINK" />Corrija as atualizações com falhas e os problemas de atualização do Chromium<ph name="END_LINK" />.</translation>
 <translation id="454579500955453258">Continuar em um perfil novo do Chromium?</translation>
 <translation id="4567424176335768812">Você está conectado como <ph name="USER_EMAIL_ADDRESS" />. Agora você pode acessar seus favoritos, histórico e outras configurações em todos os seus dispositivos conectados.</translation>
 <translation id="459535195905078186">Aplicativos do Chromium</translation>
+<translation id="4621240073146040695">Atualização quase concluída. Reinicie o Chromium para concluí-la.</translation>
 <translation id="4665829708273112819">Aviso: o Chromium não impede que as extensões registrem seu histórico de navegação. Para desativar a extensão no modo de navegação anônima, desmarque esta opção.</translation>
 <translation id="4677944499843243528">O perfil parece estar em uso por outro processo do Chromium (<ph name="PROCESS_ID" />) em outro computador (<ph name="HOST_NAME" />). O Chromium bloqueou o perfil para que ele não seja corrompido. Se você tiver certeza de que nenhum outro processo está usando este perfil, pode desbloquear o perfil e reiniciar o Chromium.</translation>
 <translation id="469338717132742108">Ajuda com o Chromium OS</translation>
 <translation id="4708774505295300557">Anteriormente, alguém fez login no Chromium neste computador como <ph name="ACCOUNT_EMAIL_LAST" />. Crie um novo usuário do Chromium para manter suas informações separadas.</translation>
 <translation id="4746050847053251315">Sair do Chromium mesmo assim?</translation>
 <translation id="4748217263233248895">Uma atualização de segurança especial para o Chromium acabou de ser aplicada. Reinicie agora, e suas guias serão restauradas.</translation>
-<translation id="4750035648288509542">Falta pouco para a atualização terminar. Reinicie o Chromium para concluí-la. As janelas anônimas não serão abertas novamente.</translation>
 <translation id="4788777615168560705">Não foi possível verificar suas senhas. Tente novamente em 24 horas ou <ph name="BEGIN_LINK" />verifique-as na sua Conta do Google<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Esta opção usa o mesmo corretor ortográfico usado na Pesquisa Google. O texto digitado no navegador é enviado para o Google. É possível alterar esse comportamento nas configurações a qualquer momento.</translation>
 <translation id="4888717733111232871">Regra interna para que o Chromium permita tráfego mDNS.</translation>
@@ -228,6 +231,7 @@
 <translation id="7549178288319965365">Sobre o Chromium OS</translation>
 <translation id="7561906087460245826">Limpar também os dados do Chromium (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Se uma configuração não for exibida nesta página, verifique as <ph name="LINK_BEGIN" />configurações do Chromium OS<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">Você ativou o Navegação segura com maior proteção na sua conta. Agora, ative-o no Chromium.</translation>
 <translation id="761356813943268536">O Chromium está usando sua câmera e seu microfone.</translation>
 <translation id="7617377681829253106">O Chromium ficou ainda melhor</translation>
 <translation id="7686590090926151193">O Chromium não é seu navegador padrão</translation>
@@ -287,5 +291,6 @@
 <translation id="9214764063801632699">Sistema Chromium OS</translation>
 <translation id="93478295209880648">É possível que o Chromium não funcione corretamente, porque ele não é mais compatível com o Windows XP ou Windows Vista</translation>
 <translation id="965162752251293939">Quem está usando o Chromium?</translation>
+<translation id="967427899662692980">Use o nível mais alto de segurança do Chromium</translation>
 <translation id="985602178874221306">Autores do Chromium</translation>
 </translationbundle>

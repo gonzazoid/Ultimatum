@@ -112,6 +112,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="1308113895091915999">Aanbieding beschikbaar</translation>
 <translation id="1312803275555673949">Door welk bewijs wordt dit bevestigd?</translation>
 <translation id="131405271941274527"><ph name="URL" /> wil informatie sturen en ontvangen als je je telefoon tegen een NFC-apparaat houdt</translation>
+<translation id="1314311879718644478">Augmented reality-content bekijken</translation>
 <translation id="1314509827145471431">Rechts inbinden</translation>
 <translation id="1318023360584041678">Opgeslagen in tabbladgroep</translation>
 <translation id="1319245136674974084">Niet meer vragen voor deze app</translation>
@@ -176,6 +177,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="1472675084647422956">Meer bekijken</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Zoek je de browserversie? Ga naar</translation>
 <translation id="1476595624592550506">Je wachtwoord wijzigen</translation>
 <translation id="1483493594462132177">Verzenden</translation>
 <translation id="1484290072879560759">Verzendadres kiezen</translation>
@@ -214,6 +216,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="1583429793053364125">Er is iets misgegaan met het weergeven van deze webpagina.</translation>
 <translation id="1586541204584340881">Welke extensies je hebt geïnstalleerd</translation>
 <translation id="1588438908519853928">Normaal</translation>
+<translation id="1589050138437146318">ARCore installeren?</translation>
 <translation id="1592005682883173041">Lokale gegevenstoegang</translation>
 <translation id="1594030484168838125">Kiezen</translation>
 <translation id="160851722280695521">Speel de Dino Run-game in Chrome</translation>
@@ -1096,7 +1099,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="4460315069258617173">Toegestaan totdat je tabbladen voor deze site sluit</translation>
 <translation id="4464826014807964867">Websites met gegevens van je organisatie</translation>
 <translation id="447665707681730621"><ph name="BUBBLE_MESSAGE" />. <ph name="LEARN_MORE_TEXT" />.</translation>
-<translation id="4476953670630786061">Dit formulier is niet beveiligd. Automatisch invullen staat uit.</translation>
+<translation id="4476953670630786061">Dit formulier is niet beveiligd. Automatisch invullen is uitgezet.</translation>
 <translation id="4477350412780666475">Volgend nummer</translation>
 <translation id="4481251927743463293">Wat incognito doet</translation>
 <translation id="4482953324121162758">Deze site wordt niet vertaald.</translation>
@@ -1253,6 +1256,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="4968522289500246572">Deze app is ontworpen voor mobiel en het formaat wordt misschien niet goed aangepast. De app kan problemen ondervinden of opnieuw opstarten.</translation>
 <translation id="4969341057194253438">Opname verwijderen</translation>
 <translation id="4973922308112707173">Twee perforaties boven</translation>
+<translation id="4976702386844183910">Laatst bezocht: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Microfoon gebruiken?</translation>
 <translation id="4984339528288761049">Prc5 (envelop)</translation>
 <translation id="4989163558385430922">Alles bekijken</translation>
@@ -1338,6 +1342,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="5215116848420601511">Betaalmethoden en adressen die Google Pay gebruiken</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Lade 13</translation>
+<translation id="5216942107514965959">Laatst bezocht: vandaag</translation>
 <translation id="5222812217790122047">E-mailadres vereist</translation>
 <translation id="5230733896359313003">Verzendadres</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1381,6 +1386,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="5333022057423422993">Chrome heeft het wachtwoord dat je net hebt gebruikt, gevonden bij een gegevenslek. We raden je aan je opgeslagen wachtwoorden te checken om je accounts te beveiligen.</translation>
 <translation id="5334013548165032829">Gedetailleerde systeemlogboeken</translation>
 <translation id="5334145288572353250">Adres opslaan?</translation>
+<translation id="5335920952954443287">Kloppend hart</translation>
 <translation id="5340250774223869109">App is geblokkeerd</translation>
 <translation id="534295439873310000">NFC-apparaten</translation>
 <translation id="5344579389779391559">Deze pagina brengt je mogelijk kosten in rekening</translation>
@@ -1523,6 +1529,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="5869522115854928033">Opgeslagen wachtwoorden</translation>
 <translation id="5873013647450402046">Je bank wil bevestigen dat jij het bent.</translation>
 <translation id="5887400589839399685">Pas opgeslagen</translation>
+<translation id="5887687176710214216">Laatst bezocht: gisteren</translation>
 <translation id="5895138241574237353">Opnieuw starten</translation>
 <translation id="5895187275912066135">Verleend op</translation>
 <translation id="5901630391730855834">Geel</translation>
@@ -1715,6 +1722,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="6529602333819889595">&amp;Opnieuw verwijderen</translation>
 <translation id="6545864417968258051">Bluetooth-scannen</translation>
 <translation id="6547208576736763147">Twee perforaties links</translation>
+<translation id="6554732001434021288">Laatst bezocht: <ph name="NUM_DAYS" /> dagen geleden</translation>
 <translation id="6556866813142980365">Opnieuw</translation>
 <translation id="6569060085658103619">Je bekijkt een extensiepagina</translation>
 <translation id="6573200754375280815">Twee perforaties rechts</translation>
@@ -1877,6 +1885,7 @@ Anders wordt dit geblokkeerd door je privacyinstellingen. Hierdoor werkt de cont
 <translation id="7118618213916969306">Zoeken naar klembord-URL, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Andere tabbladen of programma's sluiten</translation>
 <translation id="7129409597930077180">Kan niet verzenden naar dit adres. Selecteer een ander adres.</translation>
+<translation id="7132939140423847331">Je beheerder heeft voorkomen dat deze gegevens worden gekopieerd.</translation>
 <translation id="7135130955892390533">Status bekijken</translation>
 <translation id="7138472120740807366">Bezorgingsmethode</translation>
 <translation id="7139724024395191329">Emiraat</translation>
@@ -2049,6 +2058,7 @@ Aanvullende informatie:
 <translation id="7654909834015434372">Als je annotaties bewerkt, keert dit document terug naar de oorspronkelijke paginastand</translation>
 <translation id="765676359832457558">Geavanceerde instellingen verbergen...</translation>
 <translation id="7658239707568436148">Annuleren</translation>
+<translation id="7659878911471462949">Vreugdetranen</translation>
 <translation id="7662298039739062396">Instelling beheerd door een extensie</translation>
 <translation id="7663736086183791259">Certificaat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Niet toegestaan in incognitomodus</translation>
@@ -2149,7 +2159,6 @@ Aanvullende informatie:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Kan vragen of deze site virtualreality-apparaten en -gegevens mag gebruiken</translation>
 <translation id="7984945080620862648">Je kunt <ph name="SITE" /> op dit moment niet bezoeken, omdat de website gecodeerde verificatiegegevens heeft verzonden die niet door Chrome kunnen worden verwerkt. Netwerkfouten en aanvallen zijn doorgaans tijdelijk, dus deze pagina werkt later waarschijnlijk correct.</translation>
-<translation id="79859296434321399">Installeer ARCore om augmented reality-content te bekijken</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Inbinden</translation>
 <translation id="7992044431894087211">Scherm delen met <ph name="APPLICATION_TITLE" /> is hervat</translation>
@@ -2253,6 +2262,7 @@ Aanvullende informatie:
 <translation id="830498451218851433">Enkele vouw</translation>
 <translation id="8307358339886459768">Kleine foto</translation>
 <translation id="8307888238279532626">Geïnstalleerde apps en hoe vaak ze zijn gebruikt</translation>
+<translation id="8317207217658302555">ARCore updaten?</translation>
 <translation id="831997045666694187">Avond</translation>
 <translation id="8321476692217554900">meldingen</translation>
 <translation id="8328484624016508118">Nadat je alle incognitotabbladen hebt gesloten, wist Chrome deze gegevens:
@@ -2323,7 +2333,6 @@ Aanvullende informatie:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Recht resetten}other{Rechten resetten}}</translation>
 <translation id="8555010941760982128">Gebruik deze code bij het betalen</translation>
 <translation id="8557066899867184262">De CVC-code staat op de achterkant van je pas.</translation>
-<translation id="8558485628462305855">Update ARCore om augmented reality-content te bekijken</translation>
 <translation id="8559762987265718583">Er kan geen privéverbinding met <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> tot stand worden gebracht, omdat de datum en tijd van je apparaat (<ph name="DATE_AND_TIME" />) onjuist zijn.</translation>
 <translation id="8564182942834072828">Afzonderlijke documenten/ongesorteerde exemplaren</translation>
 <translation id="8564985650692024650">Chromium raadt je aan het wachtwoord voor <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> opnieuw in te stellen als je het voor andere sites hebt hergebruikt.</translation>
@@ -2435,6 +2444,7 @@ Aanvullende informatie:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, druk op Tab en daarna op Enter om je browsegeschiedenis in Chrome te bekijken</translation>
 <translation id="8987927404178983737">Maand</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Zoek je de systeemversie? Ga naar</translation>
 <translation id="899688752321268742"><ph name="URL" /> wil weten wanneer je dit apparaat actief gebruikt</translation>
 <translation id="8996941253935762404">De volgende site bevat schadelijke programma's</translation>
 <translation id="8997023839087525404">De server heeft een certificaat gepresenteerd dat niet openbaar bekend is gemaakt via het beleid voor Certificaattransparantie. Dit is voor bepaalde certificaten een vereiste om er zeker van te zijn dat ze betrouwbaar zijn en bescherming bieden tegen aanvallers.</translation>

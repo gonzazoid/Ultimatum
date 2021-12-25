@@ -5,6 +5,7 @@
 import {assert, assertInstanceof} from './assert.js';
 import * as dom from './dom.js';
 import {reportError} from './error.js';
+import {Filenamer} from './models/file_namer.js';
 import * as filesystem from './models/file_system.js';
 import {
   DirectoryAccessEntry,  // eslint-disable-line no-unused-vars
@@ -14,18 +15,13 @@ import {
 import {ResultSaver} from './models/result_saver.js';
 import {VideoSaver} from './models/video_saver.js';
 import {ChromeHelper} from './mojo/chrome_helper.js';
-import {scale} from './thumbnailer.js';
+import {extractImageFromBlob} from './thumbnailer.js';
 import {
   ErrorLevel,
   ErrorType,
+  MimeType,
   VideoType,
 } from './type.js';
-
-/**
- * Width of thumbnail used by cover photo of gallery button.
- * @type {number}
- */
-const THUMBNAIL_WIDTH = 240;
 
 /**
  * Cover photo of gallery button.
@@ -33,10 +29,12 @@ const THUMBNAIL_WIDTH = 240;
 class CoverPhoto {
   /**
    * @param {!FileAccessEntry} file File entry of cover photo.
-   * @param {?string} thumbnailUrl Url to its thumbnail. Might be null if the
-   *     thumbnail is failed to load.
+   * @param {?string} url Url to its cover photo. Might be null if the cover is
+   *     failed to load.
+   * @param {boolean} draggable If the file type support share by dragg/drop
+   *     cover photo.
    */
-  constructor(file, thumbnailUrl) {
+  constructor(file, url, draggable) {
     /**
      * @type {!FileAccessEntry}
      * @const
@@ -47,7 +45,12 @@ class CoverPhoto {
      * @type {?string}
      * @const
      */
-    this.thumbnailUrl = thumbnailUrl;
+    this.url = url;
+
+    /**
+     * @const {boolean}
+     */
+    this.draggable = draggable;
   }
 
   /**
@@ -62,8 +65,8 @@ class CoverPhoto {
    * Releases resources used by this cover photo.
    */
   release() {
-    if (this.thumbnailUrl !== null) {
-      URL.revokeObjectURL(this.thumbnailUrl);
+    if (this.url !== null) {
+      URL.revokeObjectURL(this.url);
     }
   }
 
@@ -84,13 +87,14 @@ class CoverPhoto {
     }
 
     try {
-      const thumbnail = await scale(blob, THUMBNAIL_WIDTH);
-      return new CoverPhoto(file, URL.createObjectURL(thumbnail));
+      const cover = await extractImageFromBlob(blob);
+      const draggable = blob.type !== MimeType.MP4;
+      return new CoverPhoto(file, URL.createObjectURL(cover), draggable);
     } catch (e) {
       reportError(
           ErrorType.BROKEN_THUMBNAIL, ErrorLevel.ERROR,
           assertInstanceof(e, Error));
-      return new CoverPhoto(file, null);
+      return new CoverPhoto(file, null, false);
     }
   }
 }
@@ -116,6 +120,12 @@ export class GalleryButton {
      * @private
      */
     this.button_ = dom.get('#gallery-enter', HTMLButtonElement);
+
+    /**
+     * @type {!HTMLImageElement}
+     * @private
+     */
+    this.coverPhoto_ = dom.getFrom(this.button_, 'img', HTMLImageElement);
 
     /**
      * Directory holding saved pictures showing in gallery.
@@ -158,10 +168,8 @@ export class GalleryButton {
     this.cover_ = cover;
 
     this.button_.hidden = cover === null;
-    this.button_.style.backgroundImage =
-        cover !== null && cover.thumbnailUrl !== null ?
-        `url("${cover.thumbnailUrl}")` :
-        'none';
+    this.coverPhoto_.classList.toggle('draggable', cover?.draggable ?? false);
+    this.coverPhoto_.src = cover?.url ?? '';
 
     if (cover !== null) {
       ChromeHelper.getInstance().monitorFileDeletion(file.name, () => {
@@ -207,8 +215,13 @@ export class GalleryButton {
   /**
    * @override
    */
-  async savePhoto(blob, name) {
+  async savePhoto(blob, name, metadata) {
     const file = await filesystem.saveBlob(blob, name);
+    if (metadata !== null) {
+      const metadataBlob =
+          new Blob([JSON.stringify(metadata, null, 2)], {type: MimeType.JSON});
+      await filesystem.saveBlob(metadataBlob, Filenamer.getMetadataName(name));
+    }
 
     ChromeHelper.getInstance().sendNewCaptureBroadcast(
         {isVideo: false, name: file.name});

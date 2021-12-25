@@ -64,6 +64,18 @@ TEST(JSONReaderTest, EmbeddedComments) {
   root = JSONReader::Read("true // comment");
   ASSERT_TRUE(root);
   EXPECT_TRUE(root->is_bool());
+  // Comments in different contexts.
+  root = JSONReader::Read("{   \"cheese\": 3\n\n   // Here's a comment\n}");
+  ASSERT_TRUE(root);
+  EXPECT_TRUE(root->is_dict());
+  root = JSONReader::Read("{   \"cheese\": 3// Here's a comment\n}");
+  ASSERT_TRUE(root);
+  EXPECT_TRUE(root->is_dict());
+  // Multiple comment markers.
+  root = JSONReader::Read(
+      "{   \"cheese\": 3// Here's a comment // and another\n}");
+  ASSERT_TRUE(root);
+  EXPECT_TRUE(root->is_dict());
   root = JSONReader::Read("/* comment */\"sample string\"");
   ASSERT_TRUE(root);
   EXPECT_TRUE(root->is_string());
@@ -225,6 +237,7 @@ TEST(JSONReaderTest, InvalidNumbers) {
   EXPECT_FALSE(JSONReader::Read("4.3.1"));
   EXPECT_FALSE(JSONReader::Read("4e3.1"));
   EXPECT_FALSE(JSONReader::Read("4.a"));
+  EXPECT_FALSE(JSONReader::Read("42a"));
 }
 
 TEST(JSONReaderTest, SimpleString) {
@@ -302,17 +315,26 @@ TEST(JSONReaderTest, EmptyArray) {
   EXPECT_TRUE(list->GetList().empty());
 }
 
-TEST(JSONReaderTest, NestedArrays) {
-  absl::optional<Value> list =
-      JSONReader::Read("[[true], [], [false, [], [null]], null]");
+TEST(JSONReaderTest, CompleteArray) {
+  absl::optional<Value> list = JSONReader::Read("[\"a\", 3, 4.56, null]");
   ASSERT_TRUE(list);
   ASSERT_TRUE(list->is_list());
   EXPECT_EQ(4U, list->GetList().size());
+}
+
+TEST(JSONReaderTest, NestedArrays) {
+  absl::optional<Value> list = JSONReader::Read(
+      "[[true], [], {\"smell\": \"nice\",\"taste\": \"yummy\" }, [false, [], "
+      "[null]], null]");
+  ASSERT_TRUE(list);
+  ASSERT_TRUE(list->is_list());
+  EXPECT_EQ(5U, list->GetList().size());
 
   // Lots of trailing commas.
-  absl::optional<Value> root2 =
-      JSONReader::Read("[[true], [], [false, [], [null, ]  , ], null,]",
-                       JSON_ALLOW_TRAILING_COMMAS);
+  absl::optional<Value> root2 = JSONReader::Read(
+      "[[true], [], {\"smell\": \"nice\",\"taste\": \"yummy\" }, [false, [], "
+      "[null, ]  , ], null,]",
+      JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(root2);
   EXPECT_EQ(*list, *root2);
 }
@@ -361,7 +383,8 @@ TEST(JSONReaderTest, EmptyDictionary) {
 
 TEST(JSONReaderTest, CompleteDictionary) {
   absl::optional<Value> dict_val = JSONReader::Read(
-      "{\"number\":9.87654321, \"null\":null , \"\\x53\" : \"str\" }");
+      "{\"number\":9.87654321, \"null\":null , \"\\x53\" : \"str\", \"bool\": "
+      "false, \"more\": {} }");
   ASSERT_TRUE(dict_val);
   ASSERT_TRUE(dict_val->is_dict());
   auto double_val = dict_val->FindDoubleKey("number");
@@ -374,10 +397,14 @@ TEST(JSONReaderTest, CompleteDictionary) {
   const std::string* str_val = dict_val->FindStringKey("S");
   ASSERT_TRUE(str_val);
   EXPECT_EQ("str", *str_val);
+  auto bool_val = dict_val->FindBoolKey("bool");
+  ASSERT_TRUE(bool_val);
+  ASSERT_FALSE(*bool_val);
 
   absl::optional<Value> root2 = JSONReader::Read(
-      "{\"number\":9.87654321, \"null\":null , \"\\x53\" : \"str\", }",
-      JSON_ALLOW_TRAILING_COMMAS);
+      "{\"number\":9.87654321, \"null\":null , \"\\x53\" : \"str\", \"bool\": "
+      "false, \"more\": {},}",
+      JSON_PARSE_CHROMIUM_EXTENSIONS | JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(root2);
   ASSERT_TRUE(root2->is_dict());
   EXPECT_EQ(*dict_val, *root2);
@@ -388,8 +415,10 @@ TEST(JSONReaderTest, CompleteDictionary) {
       "  \"number\":9.87654321,\n"
       "  \"null\":null,\n"
       "  \"\\x53\":\"str\",\n"
+      "  \"bool\": false,\n"
+      "  \"more\": {},\n"
       "}\n",
-      JSON_ALLOW_TRAILING_COMMAS);
+      JSON_PARSE_CHROMIUM_EXTENSIONS | JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(root2);
   ASSERT_TRUE(root2->is_dict());
   EXPECT_EQ(*dict_val, *root2);
@@ -399,8 +428,10 @@ TEST(JSONReaderTest, CompleteDictionary) {
       "  \"number\":9.87654321,\r\n"
       "  \"null\":null,\r\n"
       "  \"\\x53\":\"str\",\r\n"
+      "  \"bool\": false,\r\n"
+      "  \"more\": {},\r\n"
       "}\r\n",
-      JSON_ALLOW_TRAILING_COMMAS);
+      JSON_PARSE_CHROMIUM_EXTENSIONS | JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(root2);
   ASSERT_TRUE(root2->is_dict());
   EXPECT_EQ(*dict_val, *root2);
@@ -408,14 +439,14 @@ TEST(JSONReaderTest, CompleteDictionary) {
 
 TEST(JSONReaderTest, NestedDictionaries) {
   absl::optional<Value> dict_val = JSONReader::Read(
-      "{\"inner\":{\"array\":[true]},\"false\":false,\"d\":{}}");
+      "{\"inner\":{\"array\":[true, 3, 4.56, null]},\"false\":false,\"d\":{}}");
   ASSERT_TRUE(dict_val);
   ASSERT_TRUE(dict_val->is_dict());
   const Value* inner_dict = dict_val->FindDictKey("inner");
   ASSERT_TRUE(inner_dict);
   const Value* inner_array = inner_dict->FindListKey("array");
   ASSERT_TRUE(inner_array);
-  EXPECT_EQ(1U, inner_array->GetList().size());
+  EXPECT_EQ(4U, inner_array->GetList().size());
   auto bool_value = dict_val->FindBoolKey("false");
   ASSERT_TRUE(bool_value);
   EXPECT_FALSE(*bool_value);
@@ -423,7 +454,8 @@ TEST(JSONReaderTest, NestedDictionaries) {
   EXPECT_TRUE(inner_dict);
 
   absl::optional<Value> root2 = JSONReader::Read(
-      "{\"inner\": {\"array\":[true] , },\"false\":false,\"d\":{},}",
+      "{\"inner\": {\"array\":[true, 3, 4.56, null] , "
+      "},\"false\":false,\"d\":{},}",
       JSON_ALLOW_TRAILING_COMMAS);
   ASSERT_TRUE(root2);
   EXPECT_EQ(*dict_val, *root2);
@@ -478,6 +510,7 @@ TEST(JSONReaderTest, InvalidDictionaries) {
   EXPECT_FALSE(JSONReader::Read("{foo:true}"));
   EXPECT_FALSE(JSONReader::Read("{1234: false}"));
   EXPECT_FALSE(JSONReader::Read("{:false}"));
+  EXPECT_FALSE(JSONReader::Read("{ , }"));
 
   // Trailing comma.
   EXPECT_FALSE(JSONReader::Read("{\"a\":true,}"));
@@ -1014,10 +1047,53 @@ TEST(JSONReaderTest, LineColumnCounting) {
     SCOPED_TRACE(StringPrintf("case %u: \"%s\"", i, test_case.input));
 
     JSONReader::ValueWithError root = JSONReader::ReadAndReturnValueWithError(
-        test_case.input, JSON_PARSE_RFC);
+        test_case.input, JSON_PARSE_RFC | JSON_ALLOW_CONTROL_CHARS);
     EXPECT_FALSE(root.value);
     EXPECT_EQ(test_case.error_line, root.error_line);
     EXPECT_EQ(test_case.error_column, root.error_column);
+  }
+}
+
+TEST(JSONReaderTest, ChromiumExtensions) {
+  // All of these cases should parse with JSON_PARSE_CHROMIUM_EXTENSIONS but
+  // fail with JSON_PARSE_RFC.
+  const struct {
+    // The JSON input.
+    const char* input;
+    // What JSON_* option permits this extension.
+    int option;
+  } kCases[] = {
+      {"{ /* comment */ \"foo\": 3 }", JSON_ALLOW_COMMENTS},
+      {"{ // comment\n \"foo\": 3 }", JSON_ALLOW_COMMENTS},
+      {"[\"\\xAB\"]", JSON_ALLOW_X_ESCAPES},
+      {"[\"\b\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\f\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\n\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\r\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\t\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\v\"]", JSON_ALLOW_CONTROL_CHARS},
+      {"[\"\\v\"]", JSON_ALLOW_VERT_TAB},
+  };
+
+  for (size_t i = 0; i < base::size(kCases); ++i) {
+    SCOPED_TRACE(testing::Message() << "case " << i);
+    const auto& test_case = kCases[i];
+
+    JSONReader::ValueWithError result = JSONReader::ReadAndReturnValueWithError(
+        test_case.input, JSON_PARSE_RFC);
+    EXPECT_FALSE(result.value);
+
+    result = JSONReader::ReadAndReturnValueWithError(
+        test_case.input, JSON_PARSE_RFC | test_case.option);
+    EXPECT_TRUE(result.value);
+
+    result = JSONReader::ReadAndReturnValueWithError(
+        test_case.input, JSON_PARSE_CHROMIUM_EXTENSIONS);
+    EXPECT_TRUE(result.value);
+
+    result = JSONReader::ReadAndReturnValueWithError(
+        test_case.input, JSON_PARSE_CHROMIUM_EXTENSIONS & ~test_case.option);
+    EXPECT_FALSE(result.value);
   }
 }
 

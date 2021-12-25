@@ -11,6 +11,7 @@
 #include "ash/public/cpp/notification_utils.h"
 #include "ash/public/cpp/system_tray_client.h"
 #include "ash/resources/vector_icons/vector_icons.h"
+#include "ash/services/nearby/public/cpp/nearby_client_uuids.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/model/system_tray_model.h"
@@ -21,9 +22,9 @@
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/services/nearby/public/cpp/nearby_client_uuids.h"
 #include "device/bluetooth/bluetooth_adapter_factory.h"
 #include "device/bluetooth/bluetooth_device.h"
+#include "device/bluetooth/chromeos/bluetooth_utils.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notification.h"
@@ -372,7 +373,7 @@ void BluetoothNotificationController::NotifyPairedDevice(
   // TODO(crbug.com/1155669): Generalize this logic to prevent leaking Nearby
   // implementation details.
   for (const auto& uuid : device->GetUUIDs()) {
-    if (chromeos::nearby::IsNearbyClientUuid(uuid)) {
+    if (nearby::IsNearbyClientUuid(uuid)) {
       return;
     }
   }
@@ -397,6 +398,8 @@ void BluetoothNotificationController::NotifyPairedDevice(
       kNotificationBluetoothIcon,
       message_center::SystemNotificationWarningLevel::NORMAL);
   message_center_->AddNotification(std::move(notification));
+  device::RecordUiSurfaceDisplayed(
+      device::BluetoothUiSurface::kPairedNotification);
 }
 
 }  // namespace ash

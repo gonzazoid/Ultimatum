@@ -225,15 +225,15 @@ class KioskAppData::WebstoreDataParser
     }
 
     std::string required_platform_version;
-    if (manifest.FindPath(
-            extensions::manifest_keys::kKioskRequiredPlatformVersion) &&
-        (!manifest.GetString(
-             extensions::manifest_keys::kKioskRequiredPlatformVersion,
-             &required_platform_version) ||
-         !extensions::KioskModeInfo::IsValidPlatformVersion(
-             required_platform_version))) {
-      ReportFailure();
-      return;
+    if (const base::Value* temp = manifest.FindPath(
+            extensions::manifest_keys::kKioskRequiredPlatformVersion)) {
+      if (!temp->is_string() ||
+          !extensions::KioskModeInfo::IsValidPlatformVersion(
+              temp->GetString())) {
+        ReportFailure();
+        return;
+      }
+      required_platform_version = temp->GetString();
     }
 
     if (client_)
@@ -374,8 +374,7 @@ network::mojom::URLLoaderFactory* KioskAppData::GetURLLoaderFactory() {
 
 bool KioskAppData::LoadFromCache() {
   PrefService* local_state = g_browser_process->local_state();
-  const base::DictionaryValue* dict =
-      local_state->GetDictionary(dictionary_name());
+  const base::Value* dict = local_state->GetDictionary(dictionary_name());
 
   if (!LoadFromDictionary(*dict))
     return false;
@@ -384,8 +383,13 @@ bool KioskAppData::LoadFromCache() {
   const std::string required_platform_version_key =
       app_key + '.' + kKeyRequiredPlatformVersion;
 
-  return dict->GetString(required_platform_version_key,
-                         &required_platform_version_);
+  const std::string* maybe_required_platform_version =
+      dict->FindStringPath(required_platform_version_key);
+  if (!maybe_required_platform_version)
+    return false;
+
+  required_platform_version_ = *maybe_required_platform_version;
+  return true;
 }
 
 void KioskAppData::SetCache(const std::string& name,

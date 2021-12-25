@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Bu sayta və Chrome'a daxil olun. Sinxronlaşdırmanı daha sonra aktiv edə bilərsiniz.</translation>
 <translation id="424864128008805179">Chrome'dan çıxılsın?</translation>
 <translation id="4249068189593983585">Chrome məsləhəti. Daha çox tab seçimləri üçün ekranın aşağı və yuxarı hissəsində alətlər panelində yerləşən "Tabları Göstərin" düyməsinə basıb saxlayın.</translation>
-<translation id="4267862249323750454">Parollar <ph name="BEGIN_LINK" />Google Parol Menecerində<ph name="END_LINK" /> saxlanılır ki, onları istənilən cihazda istifadə edə biləsiniz.</translation>
 <translation id="4523886039239821078">Bəzi addonlar Chrome'da xətaya səbəb olur. Lütfən, sistemdən silin:</translation>
 <translation id="4633328489441962921">Chrome güncəlləmələri yoxlaya bilmir</translation>
 <translation id="4698415050768537821">Chrome bütün parolları yoxlaya bilmədi. Sabah yenidən cəhd edin və ya <ph name="BEGIN_LINK" />Google Hesabınızda parolları yoxlayın.<ph name="END_LINK" /></translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Google Chrome ilə Təhlükəsiz Qalın</translation>
 <translation id="8772179140489533211">Chrome'a giriş tələblərini göstərir.</translation>
+<translation id="8788269841521769222">Bu parolu yadda saxlamağa ehtiyac yoxdur. O, <ph name="EMAIL" /> üçün Google Parol Menecerində saxlanacaq</translation>
 <translation id="9112744793181547300">Chrome defolt olaraq ayarlansın?</translation>
 </translationbundle>

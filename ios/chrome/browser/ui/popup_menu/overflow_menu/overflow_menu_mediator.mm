@@ -155,6 +155,7 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
 
 @property(nonatomic, strong) OverflowMenuAction* addBookmarkAction;
 @property(nonatomic, strong) OverflowMenuAction* editBookmarkAction;
+@property(nonatomic, strong) OverflowMenuAction* followAction;
 @property(nonatomic, strong) OverflowMenuAction* readLaterAction;
 @property(nonatomic, strong) OverflowMenuAction* translateAction;
 @property(nonatomic, strong) OverflowMenuAction* requestDesktopAction;
@@ -314,14 +315,19 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
       IDS_IOS_TOOLS_MENU_HISTORY, @"overflow_menu_destination_history", ^{
         [weakSelf openHistory];
       });
-  self.passwordsDestination = CreateOverflowMenuDestination(
-      IDS_IOS_TOOLS_MENU_PASSWORDS,
-      (IsPasswordManagerBrandingUpdateEnabled()
-           ? @"overflow_menu_destination_passwords_rebrand"
-           : @"overflow_menu_destination_passwords"),
-      ^{
+
+  int passwordTitleID = IsPasswordManagerBrandingUpdateEnabled()
+                            ? IDS_IOS_TOOLS_MENU_PASSWORD_MANAGER
+                            : IDS_IOS_TOOLS_MENU_PASSWORDS;
+  NSString* passwordIconImageName =
+      IsPasswordManagerBrandingUpdateEnabled()
+          ? @"overflow_menu_destination_passwords_rebrand"
+          : @"overflow_menu_destination_passwords";
+  self.passwordsDestination =
+      CreateOverflowMenuDestination(passwordTitleID, passwordIconImageName, ^{
         [weakSelf openPasswords];
       });
+
   self.readingListDestination = CreateOverflowMenuDestination(
       IDS_IOS_TOOLS_MENU_READING_LIST,
       @"overflow_menu_destination_reading_list", ^{
@@ -372,6 +378,15 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
       [[OverflowMenuActionGroup alloc] initWithGroupName:@"app_actions"
                                                  actions:@[]
                                                   footer:nil];
+
+  if (self.followActionState != FollowActionStateHidden) {
+    // TODO(crbug.com/1264872): Show follow/unfollow according to website follow
+    // status.
+    self.followAction = CreateOverflowMenuAction(
+        IDS_IOS_TOOLS_MENU_FOLLOW, @"overflow_menu_action_follow", ^{
+          [weakSelf updateFollowStatus:YES];
+        });
+  }
 
   self.addBookmarkAction = CreateOverflowMenuAction(
       IDS_IOS_TOOLS_MENU_ADD_TO_BOOKMARKS, @"overflow_menu_action_bookmark", ^{
@@ -514,6 +529,12 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
     self.findInPageAction, self.textZoomAction
   ];
 
+  // Add the follow action to the page action group if it is exists.
+  if (self.followAction) {
+    self.pageActionsGroup.actions = [@[ self.followAction ]
+        arrayByAddingObjectsFromArray:self.pageActionsGroup.actions];
+  }
+
   // Set footer (on last section), if any.
   if (_browserPolicyConnector &&
       _browserPolicyConnector->HasMachineLevelPolicies()) {
@@ -533,7 +554,10 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
   // which is paused while overlays are displayed over the web content area.
   self.readLaterAction.enabled =
       !self.webContentAreaShowingOverlay && [self isCurrentURLWebURL];
-
+  if (self.followAction) {
+    self.followAction.enabled =
+        self.followActionState == FollowActionStateEnabled ? YES : NO;
+  }
   BOOL bookmarkEnabled =
       [self isCurrentURLWebURL] && [self isEditBookmarksEnabled];
   self.addBookmarkAction.enabled = bookmarkEnabled;
@@ -830,6 +854,12 @@ OverflowMenuFooter* CreateOverflowMenuManagedFooter(int nameID,
   [self.dispatcher
       openNewWindowWithActivity:ActivityToLoadURL(WindowActivityToolsOrigin,
                                                   GURL(kChromeUINewTabURL))];
+}
+
+// Dismisses the menu and and updates the follow status of the website.
+- (void)updateFollowStatus:(BOOL)newStatus {
+  [self.dispatcher dismissPopupMenuAnimated:YES];
+  // TODO(crbug.com/1264872): implement.
 }
 
 // Dismisses the menu and adds the current page as a bookmark or opens the

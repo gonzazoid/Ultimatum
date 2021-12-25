@@ -26,6 +26,7 @@
 #include "base/task/thread_pool.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "chrome/browser/support_tool/data_collector.h"
+#include "components/feedback/pii_types.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "third_party/zlib/google/zip.h"
 
@@ -114,8 +115,10 @@ void SupportToolHandler::OnAllDataCollected() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   for (auto& data_collector : data_collectors_) {
     const PIIMap& collected = data_collector->GetDetectedPII();
-    // Use std::multipmap.merge() function after migration to C++17.
-    detected_pii_.insert(collected.begin(), collected.end());
+    for (auto& pii_data : collected) {
+      detected_pii_[pii_data.first].insert(pii_data.second.begin(),
+                                           pii_data.second.end());
+    }
   }
 
   std::move(on_data_collection_done_callback_)
@@ -123,7 +126,7 @@ void SupportToolHandler::OnAllDataCollected() {
 }
 
 void SupportToolHandler::ExportCollectedData(
-    std::set<PIIType> pii_types_to_keep,
+    std::set<feedback::PIIType> pii_types_to_keep,
     base::FilePath target_path,
     SupportToolDataExportedCallback on_data_exported_callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -140,9 +143,10 @@ void SupportToolHandler::ExportCollectedData(
                      target_path));
 }
 
-void SupportToolHandler::ExportIntoTempDir(std::set<PIIType> pii_types_to_keep,
-                                           base::FilePath target_path,
-                                           base::FilePath tmp_path) {
+void SupportToolHandler::ExportIntoTempDir(
+    std::set<feedback::PIIType> pii_types_to_keep,
+    base::FilePath target_path,
+    base::FilePath tmp_path) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   if (tmp_path.empty()) {

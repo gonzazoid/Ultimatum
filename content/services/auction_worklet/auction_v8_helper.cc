@@ -35,7 +35,6 @@
 #include "v8/include/v8-context.h"
 #include "v8/include/v8-exception.h"
 #include "v8/include/v8-function.h"
-#include "v8/include/v8-initialization.h"
 #include "v8/include/v8-inspector.h"
 #include "v8/include/v8-json.h"
 #include "v8/include/v8-message.h"
@@ -43,6 +42,7 @@
 #include "v8/include/v8-primitive.h"
 #include "v8/include/v8-script.h"
 #include "v8/include/v8-template.h"
+#include "v8/include/v8-wasm.h"
 
 namespace auction_worklet {
 
@@ -56,22 +56,6 @@ void InitV8() {
 #if defined(V8_USE_EXTERNAL_STARTUP_DATA)
   gin::V8Initializer::LoadV8Snapshot();
 #endif
-
-  // Each script is run once using its own isolate, so tune down V8 to use as
-  // little memory as possible.
-  static const char kOptimizeForSize[] = "--optimize_for_size";
-  v8::V8::SetFlagsFromString(kOptimizeForSize, strlen(kOptimizeForSize));
-
-  // Running v8 in jitless mode allows dynamic code to be disabled in the
-  // process, and since each isolate is used only once, this may be best for
-  // performance as well.
-  static const char kJitless[] = "--jitless";
-  v8::V8::SetFlagsFromString(kJitless, strlen(kJitless));
-
-  // WebAssembly isn't encountered during resolution, so reduce the
-  // potential attack surface.
-  static const char kNoExposeWasm[] = "--no-expose-wasm";
-  v8::V8::SetFlagsFromString(kNoExposeWasm, strlen(kNoExposeWasm));
 
   gin::IsolateHolder::Initialize(gin::IsolateHolder::kNonStrictMode,
                                  gin::ArrayBufferAllocator::SharedInstance());
@@ -456,6 +440,41 @@ v8::MaybeLocal<v8::UnboundScript> AuctionV8Helper::Compile(
                                        try_catch.Message());
   }
   return result;
+}
+
+v8::MaybeLocal<v8::WasmModuleObject> AuctionV8Helper::CompileWasm(
+    const std::string& payload,
+    const GURL& src_url,
+    const DebugId* debug_id,
+    absl::optional<std::string>& error_out) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  v8::Isolate* v8_isolate = isolate();
+
+  DebugContextScope maybe_debug(inspector(), v8_isolate->GetCurrentContext(),
+                                debug_id, src_url.spec());
+
+  v8::TryCatch try_catch(isolate());
+  v8::MaybeLocal<v8::WasmModuleObject> result = v8::WasmModuleObject::Compile(
+      isolate(),
+      v8::MemorySpan<const uint8_t>(
+          reinterpret_cast<const uint8_t*>(payload.data()), payload.size()));
+  if (try_catch.HasCaught()) {
+    // WasmModuleObject::Compile doesn't know the URL, so FormatExceptionMessage
+    // would produce unhelpful message w/o that important bit of context.
+    error_out =
+        base::StrCat({src_url.spec(), " ",
+                      try_catch.Message().IsEmpty()
+                          ? "Unknown exception"
+                          : FormatValue(isolate(), try_catch.Message()->Get()),
+                      "."});
+  }
+  return result;
+}
+
+v8::MaybeLocal<v8::WasmModuleObject> AuctionV8Helper::CloneWasmModule(
+    v8::Local<v8::WasmModuleObject> in) {
+  return v8::WasmModuleObject::FromCompiledModule(isolate(),
+                                                  in->GetCompiledModule());
 }
 
 v8::MaybeLocal<v8::Value> AuctionV8Helper::RunScript(

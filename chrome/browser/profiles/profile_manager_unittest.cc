@@ -29,14 +29,14 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/prefs/browser_prefs.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_init_params.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_avatar_icon_util.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profiles_state.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/signin/identity_manager_factory.h"
 #include "chrome/browser/signin/identity_test_environment_profile_adaptor.h"
 #include "chrome/common/chrome_constants.h"
@@ -353,6 +353,14 @@ MATCHER(NotFail, "Profile creation failure status is not reported.") {
          arg == Profile::CREATE_STATUS_INITIALIZED;
 }
 
+MATCHER(Created, "Profile creation status is created.") {
+  return arg == Profile::CREATE_STATUS_CREATED;
+}
+
+MATCHER(Initialized, "Profile creation status is initialized.") {
+  return arg == Profile::CREATE_STATUS_INITIALIZED;
+}
+
 MATCHER(SameNotNull, "The same non-NULL value for all calls.") {
   if (!g_created_profile)
     g_created_profile = arg;
@@ -578,15 +586,17 @@ TEST_F(ProfileManagerTest, CreateMultiProfileAsync) {
 
   const std::string profile_name = "New Profile";
 
+  base::RunLoop run_loop;
   MockObserver mock_observer;
   Profile* profile = nullptr;
-  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(2))
-      .WillRepeatedly(testing::SaveArg<0>(&profile));
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .WillOnce(testing::SaveArg<0>(&profile));
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce([&run_loop] { run_loop.Quit(); });
 
   CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer);
-
-  content::RunAllTasksUntilIdle();
+  run_loop.Run();
 
   // Check that the profile name is set correctly both in the profile prefs and
   // in storage.
@@ -603,42 +613,41 @@ TEST_F(ProfileManagerTest, CreateMultiProfilesAsync) {
   const std::string profile_name1 = "New Profile 1";
   const std::string profile_name2 = "New Profile 2";
 
+  base::RunLoop run_loop;
   MockObserver mock_observer;
-  EXPECT_CALL(mock_observer, OnProfileCreated(
-      testing::NotNull(), NotFail())).Times(testing::AtLeast(3));
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .Times(2);
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce(testing::Return())
+      .WillOnce([&run_loop] { run_loop.Quit(); });
 
   ProfileManager* profile_manager = g_browser_process->profile_manager();
 
   CreateMultiProfileAsync(profile_manager, profile_name1, &mock_observer);
   CreateMultiProfileAsync(profile_manager, profile_name2, &mock_observer);
-
-  content::RunAllTasksUntilIdle();
+  run_loop.Run();
 }
 
 TEST_F(ProfileManagerTest, CreateMultiProfileAsyncMultipleRequests) {
-  Profile* profile1 = nullptr;
-  MockObserver mock_observer1;
-  EXPECT_CALL(mock_observer1, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(1))
-      .WillRepeatedly(testing::SaveArg<0>(&profile1));
-  Profile* profile2 = nullptr;
-  MockObserver mock_observer2;
-  EXPECT_CALL(mock_observer2, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(1))
-      .WillRepeatedly(testing::SaveArg<0>(&profile2));
-  Profile* profile3 = nullptr;
-  MockObserver mock_observer3;
-  EXPECT_CALL(mock_observer3, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(1))
-      .WillRepeatedly(testing::SaveArg<0>(&profile3));
+  base::RunLoop run_loop;
+  MockObserver mock_observer;
+  Profile *profile1 = nullptr, *profile2 = nullptr, *profile3 = nullptr;
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .Times(3);
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce(testing::SaveArg<0>(&profile1))
+      .WillOnce(testing::SaveArg<0>(&profile2))
+      .WillOnce(testing::DoAll(testing::SaveArg<0>(&profile3),
+                               [&run_loop] { run_loop.Quit(); }));
 
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   const std::string profile_name = "New Profile";
-  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer1);
-  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer2);
-  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer3);
-
-  content::RunAllTasksUntilIdle();
+  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer);
+  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer);
+  CreateMultiProfileAsync(profile_manager, profile_name, &mock_observer);
+  run_loop.Run();
 
   // A new profile should have been created for each call.
   EXPECT_NE(profile1, profile2);
@@ -662,13 +671,17 @@ TEST_F(ProfileManagerTest,
   profile_manager->GetProfileAttributesStorage().AddProfile(
       std::move(params_1));
 
-  MockObserver mock_observer2;
+  base::RunLoop run_loop;
+  MockObserver mock_observer;
   Profile* profile2 = nullptr;
-  EXPECT_CALL(mock_observer2, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(2))
-      .WillRepeatedly(testing::SaveArg<0>(&profile2));
-  CreateMultiProfileAsync(profile_manager, "Profile B", &mock_observer2);
-  content::RunAllTasksUntilIdle();
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .WillOnce(testing::SaveArg<0>(&profile2));
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce([&run_loop] { run_loop.Quit(); });
+
+  CreateMultiProfileAsync(profile_manager, "Profile B", &mock_observer);
+  run_loop.Run();
 
   ASSERT_NE(profile2, nullptr);
   EXPECT_EQ(profile2->GetPath().BaseName().value(),
@@ -684,13 +697,16 @@ TEST_F(ProfileManagerTest,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   ASSERT_TRUE(profile_manager);
 
-  MockObserver mock_observer1;
+  base::RunLoop run_loop;
+  MockObserver mock_observer;
   Profile* profile1 = nullptr;
-  EXPECT_CALL(mock_observer1, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(2))
-      .WillRepeatedly(testing::SaveArg<0>(&profile1));
-  CreateMultiProfileAsync(profile_manager, "Profile A", &mock_observer1);
-  content::RunAllTasksUntilIdle();
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .WillOnce(testing::SaveArg<0>(&profile1));
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce([&run_loop] { run_loop.Quit(); });
+  CreateMultiProfileAsync(profile_manager, "Profile A", &mock_observer);
+  run_loop.Run();
 
   ASSERT_NE(profile1, nullptr);
   EXPECT_EQ(profile1->GetPath().BaseName().value(),
@@ -718,13 +734,16 @@ TEST_F(ProfileManagerTest,
   ProfileManager* profile_manager = g_browser_process->profile_manager();
   ASSERT_TRUE(profile_manager);
 
-  MockObserver mock_observer2;
+  base::RunLoop run_loop;
+  MockObserver mock_observer;
   Profile* profile2 = nullptr;
-  EXPECT_CALL(mock_observer2, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(2))
-      .WillRepeatedly(testing::SaveArg<0>(&profile2));
-  CreateMultiProfileAsync(profile_manager, "Profile B", &mock_observer2);
-  content::RunAllTasksUntilIdle();
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .WillOnce(testing::SaveArg<0>(&profile2));
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce([&run_loop] { run_loop.Quit(); });
+  CreateMultiProfileAsync(profile_manager, "Profile B", &mock_observer);
+  run_loop.Run();
 
   ASSERT_NE(profile2, nullptr);
   // The profile uses the same base name as in the pre test.
@@ -738,11 +757,14 @@ TEST_F(ProfileManagerTest,
 }
 
 TEST_F(ProfileManagerTest, CreateHiddenProfileAsync) {
+  base::RunLoop run_loop;
   Profile* profile = nullptr;
   MockObserver mock_observer;
-  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), NotFail()))
-      .Times(testing::AtLeast(2))
-      .WillRepeatedly(testing::SaveArg<0>(&profile));
+  EXPECT_CALL(mock_observer, OnProfileCreated(testing::NotNull(), Created()))
+      .WillOnce(testing::SaveArg<0>(&profile));
+  EXPECT_CALL(mock_observer,
+              OnProfileCreated(testing::NotNull(), Initialized()))
+      .WillOnce([&run_loop] { run_loop.Quit(); });
 
   ProfileManager* profile_manager = g_browser_process->profile_manager();
 
@@ -751,7 +773,7 @@ TEST_F(ProfileManagerTest, CreateHiddenProfileAsync) {
       base::BindRepeating(&MockObserver::OnProfileCreated,
                           base::Unretained(&mock_observer)));
 
-  content::RunAllTasksUntilIdle();
+  run_loop.Run();
   ASSERT_NE(profile, nullptr);
 
   ProfileAttributesEntry* entry =
@@ -1531,7 +1553,7 @@ TEST_F(ProfileManagerTest, CleanUpEphemeralProfiles) {
 
   profile_manager->CleanUpEphemeralProfiles();
   content::RunAllTasksUntilIdle();
-  const base::ListValue* final_last_active_profile_list =
+  const base::Value* final_last_active_profile_list =
       local_state->GetList(prefs::kProfilesLastActive);
 
   // The ephemeral profile should be deleted, and the last used profile set to
@@ -1602,7 +1624,7 @@ TEST_F(ProfileManagerGuestTest, CleanUpOnlyEphemeralProfiles) {
 
   profile_manager->CleanUpEphemeralProfiles();
   content::RunAllTasksUntilIdle();
-  const base::ListValue* final_last_active_profile_list =
+  const base::Value* final_last_active_profile_list =
       local_state->GetList(prefs::kProfilesLastActive);
 
   // The guest and the non-ephemeral regular profile aren't impacted.

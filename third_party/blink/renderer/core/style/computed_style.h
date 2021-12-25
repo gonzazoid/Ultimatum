@@ -141,8 +141,8 @@ class Resize;
 class StopColor;
 class Stroke;
 class TextDecorationColor;
+class TextEmphasisColor;
 class WebkitTapHighlightColor;
-class WebkitTextEmphasisColor;
 class WebkitTextFillColor;
 class WebkitTextStrokeColor;
 
@@ -255,8 +255,8 @@ class ComputedStyle : public ComputedStyleBase,
   friend class css_longhand::StopColor;
   friend class css_longhand::Stroke;
   friend class css_longhand::TextDecorationColor;
+  friend class css_longhand::TextEmphasisColor;
   friend class css_longhand::WebkitTapHighlightColor;
-  friend class css_longhand::WebkitTextEmphasisColor;
   friend class css_longhand::WebkitTextFillColor;
   friend class css_longhand::WebkitTextStrokeColor;
   // Access to private Appearance() and HasAppearance().
@@ -1945,11 +1945,9 @@ class ComputedStyle : public ComputedStyleBase,
     const EFloat value = FloatingInternal();
     switch (value) {
       case EFloat::kInlineStart:
-      case EFloat::kInlineEnd: {
-        return IsLtr(cb_direction) == (value == EFloat::kInlineStart)
-                   ? EFloat::kLeft
-                   : EFloat::kRight;
-      }
+        return IsLtr(cb_direction) ? EFloat::kLeft : EFloat::kRight;
+      case EFloat::kInlineEnd:
+        return IsLtr(cb_direction) ? EFloat::kRight : EFloat::kLeft;
       default:
         return value;
     }
@@ -2025,11 +2023,9 @@ class ComputedStyle : public ComputedStyleBase,
     const EClear value = ClearInternal();
     switch (value) {
       case EClear::kInlineStart:
-      case EClear::kInlineEnd: {
-        return IsLtr(cb_direction) == (value == EClear::kInlineStart)
-                   ? EClear::kLeft
-                   : EClear::kRight;
-      }
+        return IsLtr(cb_direction) ? EClear::kLeft : EClear::kRight;
+      case EClear::kInlineEnd:
+        return IsLtr(cb_direction) ? EClear::kRight : EClear::kLeft;
       default:
         return value;
     }
@@ -2207,12 +2203,11 @@ class ComputedStyle : public ComputedStyleBase,
     EResize value = ResizeInternal();
     switch (value) {
       case EResize::kBlock:
-      case EResize::kInline: {
-        return ::blink::IsHorizontalWritingMode(cb_style.GetWritingMode()) ==
-                       (value == EResize::kBlock)
-                   ? EResize::kVertical
-                   : EResize::kHorizontal;
-      }
+        return cb_style.IsHorizontalWritingMode() ? EResize::kVertical
+                                                  : EResize::kHorizontal;
+      case EResize::kInline:
+        return cb_style.IsHorizontalWritingMode() ? EResize::kHorizontal
+                                                  : EResize::kVertical;
       default:
         return value;
     }
@@ -3146,13 +3141,13 @@ inline bool ComputedStyle::HasAnyPseudoElementStyles() const {
 
 inline bool ComputedStyle::HasPseudoElementStyle(PseudoId pseudo) const {
   DCHECK(pseudo >= kFirstPublicPseudoId);
-  DCHECK(pseudo < kFirstInternalPseudoId);
+  DCHECK(pseudo <= kLastTrackedPublicPseudoId);
   return (1 << (pseudo - kFirstPublicPseudoId)) & PseudoBitsInternal();
 }
 
 inline void ComputedStyle::SetHasPseudoElementStyle(PseudoId pseudo) {
   DCHECK(pseudo >= kFirstPublicPseudoId);
-  DCHECK(pseudo < kFirstInternalPseudoId);
+  DCHECK(pseudo <= kLastTrackedPublicPseudoId);
   // TODO: Fix up this code. It is hard to understand.
   SetPseudoBitsInternal(PseudoBitsInternal() |
                         1 << (pseudo - kFirstPublicPseudoId));

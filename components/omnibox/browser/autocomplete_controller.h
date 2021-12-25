@@ -119,11 +119,13 @@ class AutocompleteController : public AutocompleteProviderListener,
   // result in changing the result set the observers is notified again. When the
   // controller is done the notification AUTOCOMPLETE_CONTROLLER_RESULT_READY is
   // sent.
-  void Start(const AutocompleteInput& input);
+  // Made virtual for mocking in tests.
+  virtual void Start(const AutocompleteInput& input);
 
   // Simply calls StartPrefetch() on all providers so those providers that
   // override it could perform a prefetch request and populate their caches.
-  void StartPrefetch(const AutocompleteInput& input);
+  // Made virtual for mocking in tests.
+  virtual void StartPrefetch(const AutocompleteInput& input);
 
   // Cancels the current query, ensuring there will be no future notifications
   // fired.  If new matches have come in since the most recent notification was
@@ -167,8 +169,12 @@ class AutocompleteController : public AutocompleteProviderListener,
   // Constructs and sets the final destination URL on the given match.
   void SetMatchDestinationURL(AutocompleteMatch* match) const;
 
-  // Prepend missing tail suggestion prefixes in results, if present.
-  void InlineTailPrefixes();
+  // Populates tail_suggest_common_prefix on the matches as well as prepends
+  // ellipses.
+  void SetTailSuggestContentPrefixes();
+
+  // Populates tail_suggest_common_prefix on the matches.
+  void SetTailSuggestCommonPrefixes();
 
   HistoryURLProvider* history_url_provider() const {
     return history_url_provider_;
@@ -200,6 +206,7 @@ class AutocompleteController : public AutocompleteProviderListener,
  private:
   friend class AutocompleteProviderTest;
   friend class OmniboxSuggestionButtonRowBrowserTest;
+  friend class ZeroSuggestPrefetchTabHelperBrowserTest;
   FRIEND_TEST_ALL_PREFIXES(AutocompleteProviderTest,
                            RedundantKeywordsIgnoredInResult);
   FRIEND_TEST_ALL_PREFIXES(AutocompleteProviderTest, UpdateAssistedQueryStats);
@@ -207,6 +214,8 @@ class AutocompleteController : public AutocompleteProviderListener,
                            SupportedProvider_NonPrefetch);
   FRIEND_TEST_ALL_PREFIXES(AutocompleteProviderPrefetchTest,
                            SupportedProvider_Prefetch);
+  FRIEND_TEST_ALL_PREFIXES(AutocompleteProviderPrefetchTest,
+                           SupportedProvider_OngoingNonPrefetch);
   FRIEND_TEST_ALL_PREFIXES(AutocompleteProviderPrefetchTest,
                            UnsupportedProvider_Prefetch);
   FRIEND_TEST_ALL_PREFIXES(OmniboxPopupContentsViewTest,

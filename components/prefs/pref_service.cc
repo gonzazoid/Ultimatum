@@ -298,8 +298,7 @@ const base::Value* PrefService::Get(const std::string& path) const {
   return GetPreferenceValueChecked(path);
 }
 
-const base::DictionaryValue* PrefService::GetDictionary(
-    const std::string& path) const {
+const base::Value* PrefService::GetDictionary(const std::string& path) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const base::Value* value = GetPreferenceValueChecked(path);
@@ -309,7 +308,7 @@ const base::DictionaryValue* PrefService::GetDictionary(
     NOTREACHED();
     return nullptr;
   }
-  return static_cast<const base::DictionaryValue*>(value);
+  return value;
 }
 
 const base::Value* PrefService::GetUserPrefValue(
@@ -352,7 +351,7 @@ const base::Value* PrefService::GetDefaultPrefValue(
   return value;
 }
 
-const base::ListValue* PrefService::GetList(const std::string& path) const {
+const base::Value* PrefService::GetList(const std::string& path) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
   const base::Value* value = GetPreferenceValueChecked(path);
@@ -362,7 +361,7 @@ const base::ListValue* PrefService::GetList(const std::string& path) const {
     NOTREACHED();
     return nullptr;
   }
-  return static_cast<const base::ListValue*>(value);
+  return value;
 }
 
 void PrefService::AddPrefObserver(const std::string& path, PrefObserver* obs) {
@@ -435,8 +434,8 @@ void PrefService::ChangePrefValueStore(
   pref_value_store_ = pref_value_store_->CloneAndSpecialize(
       managed_prefs, supervised_user_prefs, extension_prefs,
       nullptr /* command_line_prefs */, nullptr /* user_prefs */,
-      recommended_prefs, nullptr /* default_prefs */, pref_notifier_.get(),
-      std::move(delegate));
+      nullptr /* standalone_browser_prefs */, recommended_prefs,
+      nullptr /* default_prefs */, pref_notifier_.get(), std::move(delegate));
 
   // Notify |pref_notifier_| on all changed values.
   for (const auto& kv : pref_changed_map) {

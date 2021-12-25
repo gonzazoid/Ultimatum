@@ -4,8 +4,6 @@
 
 package org.chromium.chrome.browser.autofill_assistant;
 
-import android.content.Intent;
-
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -13,11 +11,7 @@ import org.chromium.base.UserData;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.IntentHandler;
-import org.chromium.chrome.browser.IntentHandler.ExternalAppId;
 import org.chromium.chrome.browser.autofill_assistant.metrics.FeatureModuleInstallation;
-import org.chromium.chrome.browser.profiles.Profile;
-import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabUtils;
@@ -35,6 +29,9 @@ import java.util.Map;
 public class Starter extends EmptyTabObserver implements UserData {
     /** The tab that this starter tracks. */
     private final Tab mTab;
+
+    private final AssistantIsGsaFunction mIsGsaFunction;
+    private final AssistantIsMsbbEnabledFunction mIsMsbbEnabledFunction;
 
     /**
      * The WebContents associated with the Tab which this starter is monitoring, unless detached.
@@ -67,8 +64,11 @@ public class Starter extends EmptyTabObserver implements UserData {
      *
      * This will wait for dependencies to become available and then create the native-side starter.
      */
-    public Starter(Tab tab) {
+    public Starter(Tab tab, AssistantIsGsaFunction isGsaFunction,
+            AssistantIsMsbbEnabledFunction isMsbbEnabledFunction) {
         mTab = tab;
+        mIsGsaFunction = isGsaFunction;
+        mIsMsbbEnabledFunction = isMsbbEnabledFunction;
         detectWebContentsChange(tab);
     }
 
@@ -219,8 +219,7 @@ public class Starter extends EmptyTabObserver implements UserData {
 
     @CalledByNative
     private static void setIsFirstTimeUser(boolean firstTimeUser) {
-        AutofillAssistantPreferencesUtil.setAutofillAssistantFirstTimeTriggerScriptUser(
-                firstTimeUser);
+        AutofillAssistantPreferencesUtil.setFirstTimeTriggerScriptUserPreference(firstTimeUser);
     }
 
     @CalledByNative
@@ -271,14 +270,12 @@ public class Starter extends EmptyTabObserver implements UserData {
 
     @CalledByNative
     private static void setProactiveHelpSettingEnabled(boolean enabled) {
-        AutofillAssistantPreferencesUtil.setProactiveHelpSwitch(enabled);
+        AutofillAssistantPreferencesUtil.setProactiveHelpPreference(enabled);
     }
 
     @CalledByNative
-    static boolean getMakeSearchesAndBrowsingBetterSettingEnabled() {
-        // TODO(arbesser): call this from native directly.
-        return UnifiedConsentServiceBridge.isUrlKeyedAnonymizedDataCollectionEnabled(
-                Profile.getLastUsedRegularProfile());
+    private boolean getMakeSearchesAndBrowsingBetterSettingEnabled() {
+        return mIsMsbbEnabledFunction.getAsBoolean();
     }
 
     private AutofillAssistantModuleEntry getModuleOrThrow() {
@@ -296,12 +293,12 @@ public class Starter extends EmptyTabObserver implements UserData {
      * method to refresh them.
      * */
     @CalledByNative
-    private @Nullable Object[] getOrCreateDependenciesAndOnboardingHelper() {
+    private Object[] getOrCreateDependenciesAndOnboardingHelper() {
         if (mDependencies == null) {
             AutofillAssistantModuleEntry module = getModuleOrThrow();
-            mDependencies =
-                    AutofillAssistantFacade.createDependencies(TabUtils.getActivity(mTab), module);
-            mOnboardingHelper = module.createOnboardingHelper(mDependencies);
+            mDependencies = module.createDependenciesFactory().createDependencies(
+                    TabUtils.getActivity(mTab));
+            mOnboardingHelper = module.createOnboardingHelper(mWebContents, mDependencies);
         }
 
         return new Object[] {mDependencies, mOnboardingHelper};
@@ -309,16 +306,7 @@ public class Starter extends EmptyTabObserver implements UserData {
 
     @CalledByNative
     private boolean getIsTabCreatedByGSA() {
-        // This can fail for certain tabs (e.g., hidden background tabs).
-        if (TabUtils.getActivity(mTab) == null) {
-            return false;
-        }
-        Intent intent = TabUtils.getActivity(mTab).getIntent();
-        if (intent == null) {
-            // This should never happen, this is just a failsafe.
-            return false;
-        }
-        return IntentHandler.determineExternalIntentSource(intent) == ExternalAppId.GSA;
+        return mIsGsaFunction.apply(TabUtils.getActivity(mTab));
     }
 
     @NativeMethods

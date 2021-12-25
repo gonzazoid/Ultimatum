@@ -979,7 +979,7 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
 
   void AbsoluteQuads(Vector<FloatQuad>&,
                      MapCoordinatesFlags mode = 0) const override;
-  FloatRect LocalBoundingBoxRectForAccessibility() const override;
+  gfx::RectF LocalBoundingBoxRectForAccessibility() const override;
 
   void SetBoxLayoutExtraInput(const BoxLayoutExtraInput* input) {
     NOT_DESTROYED();
@@ -2085,6 +2085,11 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   // call SetBackgroundPaintLocation() with the value to be used for painting.
   BackgroundPaintLocation ComputeBackgroundPaintLocationIfComposited() const;
 
+  bool HasFragmentItems() const {
+    NOT_DESTROYED();
+    return ChildrenInline() && PhysicalFragments().HasFragmentItems();
+  }
+
  protected:
   ~LayoutBox() override;
 
@@ -2196,10 +2201,6 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   TextDirection ResolvedDirection() const;
 
  private:
-  bool HasFragmentItems() const {
-    NOT_DESTROYED();
-    return ChildrenInline() && PhysicalFragments().HasFragmentItems();
-  }
   inline bool LayoutOverflowIsSet() const {
     NOT_DESTROYED();
     return overflow_ && overflow_->layout_overflow;

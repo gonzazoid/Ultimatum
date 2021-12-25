@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Prijavite se na ovu web-lokaciju i Chrome. Sinkronizaciju možete uključiti kasnije.</translation>
 <translation id="424864128008805179">Želite li se odjaviti s Chromea?</translation>
 <translation id="4249068189593983585">Savjet za Chrome. Za više opcija za kartice dodirnite i držite gumb Prikaži kartice na alatnoj traci pri dnu ili vrhu zaslona.</translation>
-<translation id="4267862249323750454">Zaporke se spremaju u <ph name="BEGIN_LINK" />Google upravitelj zaporki<ph name="END_LINK" /> kako biste ih mogli koristiti na bilo kojem uređaju.</translation>
 <translation id="4523886039239821078">Neki programski dodaci uzrokuju rušenje preglednika Chrome. Deinstalirajte:</translation>
 <translation id="4633328489441962921">Chrome ne može provjeriti ima li ažuriranja</translation>
 <translation id="4698415050768537821">Chrome nije uspio provjeriti sve zaporke. Pokušajte ponovno sutra ili <ph name="BEGIN_LINK" />provjerite zaporke na svojem Google računu<ph name="END_LINK" />.</translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Ostanite sigurni uz Google Chrome</translation>
 <translation id="8772179140489533211">Prikazuje obavijesti za prijavu u Chrome.</translation>
+<translation id="8788269841521769222">Nećete morati pamtiti tu zaporku. Spremit će se u Google upravitelj zaporki za <ph name="EMAIL" /></translation>
 <translation id="9112744793181547300">Želite li postaviti Chrome kao zadani preglednik?</translation>
 </translationbundle>

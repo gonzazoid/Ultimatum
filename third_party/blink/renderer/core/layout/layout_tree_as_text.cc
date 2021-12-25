@@ -59,7 +59,6 @@
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_text.h"
 #include "third_party/blink/renderer/core/layout/svg/svg_layout_tree_as_text.h"
 #include "third_party/blink/renderer/core/page/print_context.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_paint_order_iterator.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -669,23 +668,14 @@ static void Write(WTF::TextStream& ts,
               layer.GetLayoutObject().StyleRef().GetBlendMode());
   }
 
-  if (behavior & kLayoutAsTextShowCompositedLayers) {
-    if (layer.HasCompositedLayerMapping()) {
-      ts << " (composited, bounds="
-         << layer.GetCompositedLayerMapping()->CompositedBounds()
-         << ", drawsContent="
-         << layer.GetCompositedLayerMapping()
-                ->MainGraphicsLayer()
-                ->DrawsContent()
-         << (layer.ShouldIsolateCompositedDescendants()
-                 ? ", isolatesCompositedBlending"
-                 : "")
-         << ")";
-    }
+  if (behavior & kLayoutAsTextShowPaintProperties) {
+    if (layer.SelfOrDescendantNeedsRepaint())
+      ts << " needsRepaint";
+    if (layer.NeedsCullRectUpdate())
+      ts << " needsCullRectUpdate";
+    if (layer.DescendantNeedsCullRectUpdate())
+      ts << " descendantNeedsCullRectUpdate";
   }
-
-  if ((behavior & kLayoutAsTextShowPaintProperties) && layer.SelfNeedsRepaint())
-    ts << " needsRepaint";
 
   ts << "\n";
 

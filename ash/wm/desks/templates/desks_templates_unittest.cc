@@ -8,6 +8,7 @@
 #include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/desk_template.h"
+#include "ash/public/cpp/desks_templates_delegate.h"
 #include "ash/public/cpp/rounded_image_view.h"
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
@@ -45,17 +46,21 @@
 #include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "components/app_restore/app_launch_info.h"
+#include "components/app_restore/full_restore_utils.h"
 #include "components/app_restore/window_info.h"
 #include "components/app_restore/window_properties.h"
 #include "components/prefs/pref_service.h"
 #include "extensions/common/constants.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/window.h"
+#include "ui/base/cursor/mojom/cursor_type.mojom-shared.h"
 #include "ui/compositor/layer.h"
+#include "ui/compositor/scoped_animation_duration_scale_mode.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/window/dialog_delegate.h"
+#include "ui/wm/core/cursor_manager.h"
 
 namespace ash {
 
@@ -304,11 +309,33 @@ class DesksTemplatesTest : public OverviewTestBase {
       ASSERT_TRUE(overview_grid->IsShowingDesksTemplatesGrid());
   }
 
+  void SetDisableAppIdCheckForDeskTemplates(bool disabled) {
+    DesksController::Get()->set_disable_app_id_check_for_desk_templates(
+        disabled);
+  }
+
   // OverviewTestBase:
   void SetUp() override {
     scoped_feature_list_.InitAndEnableFeature(features::kDesksTemplates);
     OverviewTestBase::SetUp();
+
+    // The FullRestoreSaveHandler isn't setup during tests so every window we
+    // create in tests doesn't have an app id associated with it. Since these
+    // windows don't have app ids, Desk won't consider them supported windows so
+    // we need to disable the app id check during tests.
+    DesksController::Get()->set_disable_app_id_check_for_desk_templates(true);
   }
+
+  void TearDown() override {
+    DesksController::Get()->set_disable_app_id_check_for_desk_templates(true);
+    OverviewTestBase::TearDown();
+  }
+
+ protected:
+  // Tests should normally create a local `ScopedAnimationDurationScaleMode`.
+  // Create this object if a non zero scale mode needs to be used during test
+  // tear down.
+  std::unique_ptr<ui::ScopedAnimationDurationScaleMode> animation_scale_;
 
  private:
   base::test::ScopedFeatureList scoped_feature_list_;
@@ -726,36 +753,29 @@ TEST_F(DesksTemplatesTest, LaunchTemplate) {
   ASSERT_EQ(1ul, GetAllEntries().size());
 
   // Click on the grid item to launch the template.
-  {
-    DeskSwitchAnimationWaiter waiter;
-    ClickOnView(GetItemViewFromTemplatesGrid(/*grid_item_index=*/0));
-    WaitForDesksTemplatesUI();
-    waiter.Wait();
-  }
+  ClickOnView(GetItemViewFromTemplatesGrid(/*grid_item_index=*/0));
+  WaitForDesksTemplatesUI();
 
   // Verify that we have created and activated a new desk.
   EXPECT_EQ(2ul, desks_controller->desks().size());
   EXPECT_EQ(1, desks_controller->GetActiveDeskIndex());
 
-  // Launching a template creates and activates a new desk, which also results
-  // in exiting overview mode, so we check to make sure overview is closed.
-  EXPECT_FALSE(InOverviewSession());
+  // Launching a template creates and activates a new desk without exiting
+  // overview mode, so we check that we're still in overview.
+  EXPECT_TRUE(InOverviewSession());
 
   // This section tests clicking on the "Use template" button to launch the
   // template.
+  ToggleOverview();
   OpenOverviewAndShowTemplatesGrid();
-  {
-    DeskSwitchAnimationWaiter waiter;
-    DesksTemplatesItemView* item_view = GetItemViewFromTemplatesGrid(
-        /*grid_item_index=*/0);
-    ClickOnView(DesksTemplatesItemViewTestApi(item_view).launch_button());
-    WaitForDesksTemplatesUI();
-    waiter.Wait();
-  }
+  DesksTemplatesItemView* item_view = GetItemViewFromTemplatesGrid(
+      /*grid_item_index=*/0);
+  ClickOnView(DesksTemplatesItemViewTestApi(item_view).launch_button());
+  WaitForDesksTemplatesUI();
 
   EXPECT_EQ(3ul, desks_controller->desks().size());
   EXPECT_EQ(2, desks_controller->GetActiveDeskIndex());
-  EXPECT_FALSE(InOverviewSession());
+  EXPECT_TRUE(InOverviewSession());
 }
 
 // Tests that the order of DesksTemplatesItemView is in order.
@@ -1198,21 +1218,55 @@ TEST_F(DesksTemplatesTest, UnsupportedAppsDialog) {
 }
 
 // Tests that the save desk as template button is disabled when all windows on
-// the desk are unsupported.
+// the desk are unsupported or there are no windows with Full Restore app ids.
+// See crbug.com/1277763.
 TEST_F(DesksTemplatesTest, AllUnsupportedAppsDisablesSaveTemplates) {
-  auto* root = Shell::Get()->GetPrimaryRootWindow();
+  SetDisableAppIdCheckForDeskTemplates(false);
 
-  // Use `CreateTestWindow` instead of `CreateAppWindow`, which by default
+  // Use `CreateTestWindow()` instead of `CreateAppWindow()`, which by default
   // creates a supported window.
   auto test_window = CreateTestWindow();
+
+  // Also create an app window which should be supported and not have an app id.
+  auto no_app_id_window = CreateAppWindow();
+  auto* delegate = Shell::Get()->desks_templates_delegate();
+  ASSERT_TRUE(
+      delegate->IsWindowSupportedForDeskTemplate(no_app_id_window.get()));
+  ASSERT_TRUE(full_restore::GetAppId(no_app_id_window.get()).empty());
 
   EXPECT_EQ(0, DesksController::Get()->active_desk()->num_supported_windows());
 
   ToggleOverview();
 
   auto* save_template = static_cast<PillButton*>(
-      GetSaveDeskAsTemplateButtonForRoot(root)->GetContentsView());
+      GetSaveDeskAsTemplateButtonForRoot(Shell::Get()->GetPrimaryRootWindow())
+          ->GetContentsView());
   EXPECT_EQ(views::Button::STATE_DISABLED, save_template->GetState());
+}
+
+TEST_F(DesksTemplatesTest, AddRemoveSupportedWindows) {
+  auto* controller = DesksController::Get();
+
+  // Create a desk other than the default initial desk.
+  NewDesk();
+
+  Desk* desk_1 = controller->desks()[0].get();
+
+  // Create 3 supported windows on desk_1.
+  auto win0 = CreateAppWindow(gfx::Rect(0, 0, 250, 100));
+  auto win1 = CreateAppWindow(gfx::Rect(50, 50, 200, 200));
+  auto win2 = CreateAppWindow(gfx::Rect(50, 50, 200, 200));
+
+  // Expect `num_supported_windows_` to be 3.
+  EXPECT_EQ(3, desk_1->num_supported_windows());
+
+  // Close the supported windows.
+  win0.reset();
+  win1.reset();
+  win2.reset();
+
+  // Expect `num_supported_windows_` to be 0.
+  EXPECT_EQ(0, desk_1->num_supported_windows());
 }
 
 // Tests the mouse and touch hover behavior on the template item view.
@@ -1308,16 +1362,13 @@ TEST_F(DesksTemplatesTest, LaunchTemplateWithMinimizedOverviewWindow) {
   OpenOverviewAndSaveTemplate(Shell::Get()->GetPrimaryRootWindow());
   ASSERT_EQ(1ul, GetAllEntries().size());
 
-  // Click on the grid item to launch the template. We should exit overview and
-  // there should be no crash.
-  DeskSwitchAnimationWaiter waiter;
+  // Click on the grid item to launch the template. We should remain in overview
+  // and there should be no crash.
   ClickOnView(GetItemViewFromTemplatesGrid(/*grid_item_index=*/0));
-  // Launching a template fetches it from the desk model asynchronously. Make
-  // sure the async call is done before waiting.
+  // Launching a template fetches it from the desk model asynchronously.
   WaitForDesksTemplatesUI();
-  waiter.Wait();
 
-  EXPECT_FALSE(InOverviewSession());
+  EXPECT_TRUE(InOverviewSession());
 }
 
 // Tests that there is no crash if we launch a template after deleting the
@@ -1339,16 +1390,12 @@ TEST_F(DesksTemplatesTest, LaunchTemplateAfterClosingActiveDesk) {
   // a template" button was not moved when the active desk was removed.
   RemoveDesk(desks_controller->active_desk());
 
-  // Click on the grid item to launch the template. We should exit overview and
-  // there should be no crash.
-  DeskSwitchAnimationWaiter waiter;
+  // Click on the grid item to launch the template. There should be no crash.
   ClickOnView(GetItemViewFromTemplatesGrid(/*grid_item_index=*/0));
-  // Launching a template fetches it from the desk model asynchronously. Make
-  // sure the async call is done before waiting.
+  // Launching a template fetches it from the desk model asynchronously.
   WaitForDesksTemplatesUI();
-  waiter.Wait();
 
-  EXPECT_FALSE(InOverviewSession());
+  EXPECT_TRUE(InOverviewSession());
 }
 
 // Tests that if we open the desks templates grid a second time during an
@@ -1717,10 +1764,8 @@ TEST_F(DesksTemplatesTest, LaunchTemplateRecordsMetric) {
   ASSERT_EQ(1ul, GetAllEntries().size());
 
   // Click on the grid item to launch the template.
-  DeskSwitchAnimationWaiter waiter;
   ClickOnView(GetItemViewFromTemplatesGrid(/*grid_item_index=*/0));
   WaitForDesksTemplatesUI();
-  waiter.Wait();
 
   // Verify that we have created and activated a new desk.
   EXPECT_EQ(2ul, desks_controller->desks().size());
@@ -1762,6 +1807,132 @@ TEST_F(DesksTemplatesTest, SaveDeskAsTemplateRecordsMetric) {
   constexpr int kExpectedNewTemplates = 1;
   histogram_tester.ExpectTotalCount(kNewTemplateHistogramName,
                                     kExpectedNewTemplates);
+}
+
+// Tests to verify that clicking the spacebar doesn't cause the name view to
+// lose focus (since it's within a button), and that whitespaces are handled
+// correctly.
+TEST_F(DesksTemplatesTest, TemplateNameTestSpaces) {
+  auto test_window = CreateAppWindow();
+
+  const std::string template_name = "desk name";
+  AddEntry(base::GUID::GenerateRandomV4(), template_name, base::Time::Now());
+
+  OpenOverviewAndShowTemplatesGrid();
+  DesksTemplatesNameView* name_view =
+      GetItemViewFromTemplatesGrid(0)->name_view();
+
+  // Pressing spacebar does not cause `name_view` to lose focus.
+  ClickOnView(name_view);
+  SendKey(ui::VKEY_RIGHT);
+  SendKey(ui::VKEY_SPACE);
+  EXPECT_TRUE(name_view->HasFocus());
+  EXPECT_EQ(base::UTF8ToUTF16(template_name) + u" ", name_view->GetText());
+
+  // Extra whitespace should be trimmed.
+  SendKey(ui::VKEY_HOME);
+  SendKey(ui::VKEY_SPACE);
+  SendKey(ui::VKEY_SPACE);
+  EXPECT_EQ(u"  " + base::UTF8ToUTF16(template_name) + u" ",
+            name_view->GetText());
+  SendKey(ui::VKEY_RETURN);
+  EXPECT_EQ(base::UTF8ToUTF16(template_name), name_view->GetText());
+
+  // A string consisting of just spaces is considered an empty string, and the
+  // name change is reverted.
+  EXPECT_FALSE(name_view->HasFocus());
+  ClickOnView(name_view);
+  EXPECT_TRUE(name_view->HasFocus());
+  SendKey(ui::VKEY_A, ui::EF_CONTROL_DOWN);
+  SendKey(ui::VKEY_SPACE);
+  EXPECT_EQ(u" ", name_view->GetText());
+  SendKey(ui::VKEY_RETURN);
+  EXPECT_EQ(base::UTF8ToUTF16(template_name), name_view->GetText());
+}
+
+// Tests that there is no crash after we use the keyboard to change the name of
+// a template. Regression test for https://crbug.com/1279649.
+TEST_F(DesksTemplatesTest, EditTemplateNameWithKeyboardNoCrash) {
+  AddEntry(base::GUID::GenerateRandomV4(), "a", base::Time::Now());
+  AddEntry(base::GUID::GenerateRandomV4(), "b", base::Time::Now());
+
+  OpenOverviewAndShowTemplatesGrid();
+  DesksTemplatesNameView* name_view =
+      GetItemViewFromTemplatesGrid(0)->name_view();
+
+  // Tab until we focus the name view of the first template item.
+  SendKey(ui::VKEY_TAB);
+  SendKey(ui::VKEY_TAB);
+  ASSERT_EQ(name_view, GetHighlightedView());
+
+  // Rename template "a" to template "d".
+  SendKey(ui::VKEY_RETURN);
+  SendKey(ui::VKEY_D);
+  SendKey(ui::VKEY_RETURN);
+  WaitForDesksTemplatesUI();
+
+  // Verify that there is no crash after we tab again.
+  SendKey(ui::VKEY_TAB);
+}
+
+// Tests that there is no crash when leaving the template name view focused with
+// a changed name during shutdown. Regression test for
+// https://crbug.com/1281422.
+TEST_F(DesksTemplatesTest, EditTemplateNameShutdownNoCrash) {
+  // The fade out animation of the desks templates grid must be enabled for this
+  // crash to have happened.
+  animation_scale_ = std::make_unique<ui::ScopedAnimationDurationScaleMode>(
+      ui::ScopedAnimationDurationScaleMode::NON_ZERO_DURATION);
+
+  AddEntry(base::GUID::GenerateRandomV4(), "a", base::Time::Now());
+  AddEntry(base::GUID::GenerateRandomV4(), "b", base::Time::Now());
+
+  OpenOverviewAndShowTemplatesGrid();
+  DesksTemplatesNameView* name_view =
+      GetItemViewFromTemplatesGrid(0)->name_view();
+
+  // Tab until we focus the name view of the first template item.
+  SendKey(ui::VKEY_TAB);
+  SendKey(ui::VKEY_TAB);
+  ASSERT_EQ(name_view, GetHighlightedView());
+
+  // Rename template "a" to template "ddd".
+  SendKey(ui::VKEY_RETURN);
+  SendKey(ui::VKEY_D);
+  SendKey(ui::VKEY_D);
+  SendKey(ui::VKEY_D);
+
+  // Verify that there is no crash while the test tears down.
+}
+
+// Tests that the hovering over the templates name shows the expected cursor.
+TEST_F(DesksTemplatesTest, TemplatesNameHitTest) {
+  auto* cursor_manager = Shell::Get()->cursor_manager();
+
+  for (bool is_rtl : {true, false}) {
+    SCOPED_TRACE(is_rtl ? "rtl" : "ltr");
+    base::i18n::SetRTLForTesting(is_rtl);
+
+    AddEntry(base::GUID::GenerateRandomV4(), "a", base::Time::Now());
+
+    OpenOverviewAndShowTemplatesGrid();
+    DesksTemplatesNameView* name_view =
+        GetItemViewFromTemplatesGrid(0)->name_view();
+    const gfx::Rect name_view_bounds = name_view->GetBoundsInScreen();
+    // Hover to a point just inside main edge. This will cover the case where
+    // the hit test logic is inverted.
+    const gfx::Point hover_point =
+        is_rtl ? name_view_bounds.right_center() + gfx::Vector2d(-2, 0)
+               : name_view_bounds.left_center() + gfx::Vector2d(2, 0);
+
+    // Tests that the hover cursor is an IBeam.
+    GetEventGenerator()->MoveMouseTo(hover_point);
+    EXPECT_EQ(ui::mojom::CursorType::kIBeam,
+              cursor_manager->GetCursor().type());
+
+    // Exit overview for the next run.
+    ToggleOverview();
+  }
 }
 
 }  // namespace ash

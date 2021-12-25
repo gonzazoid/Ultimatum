@@ -3,15 +3,17 @@
 // found in the LICENSE file.
 
 /**
- * @fileoverview Polymer element that displays the Google Photos photos.
+ * @fileoverview Polymer element that displays Google Photos photos.
  */
 
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
+import 'chrome://resources/cr_elements/cr_auto_img/cr_auto_img.js';
 import './styles.js';
 import '/common/styles.js';
 
 import {getNumberOfGridItemsPerRow, isNonEmptyArray, isSelectionEvent, normalizeKeyForRTL} from '/common/utils.js';
 import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
+import {Url} from 'chrome://resources/mojo/url/mojom/url.mojom-webui.js';
 import {afterNextRender, html} from 'chrome://resources/polymer/v3_0/polymer/polymer_bundled.min.js';
 
 import {WithPersonalizationStore} from '../personalization_store.js';
@@ -36,6 +38,7 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
         type: Boolean,
         value: true,
         reflectToAttribute: true,
+        observer: 'onHiddenChanged_',
       },
 
       /**
@@ -50,7 +53,7 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
 
       /**
        * The list of photos.
-       * @type {?Array<undefined>}
+       * @type {?Array<Url>}
        * @private
        */
       photos_: {
@@ -60,7 +63,7 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
       /**
        * The list of |photos_| split into the appropriate number of
        * |photosPerRow_| so as to be rendered in a grid.
-       * @type {?Array<Array<undefined>>}
+       * @type {?Array<Array<Url>>}
        * @private
        */
       photosByRow_: {
@@ -91,26 +94,21 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
     };
   }
 
-  static get observers() {
-    return [
-      'onHiddenChanged_(hidden)',
-    ];
-  }
-
   /** @override */
   connectedCallback() {
     super.connectedCallback();
 
     this.addEventListener('iron-resize', this.onResized_.bind(this));
 
-    this.watch('photos_', state => state.googlePhotos.photos);
-    this.watch('photosLoading_', state => state.loading.googlePhotos.photos);
+    this.watch('photos_', state => state.wallpaper.googlePhotos.photos);
+    this.watch(
+        'photosLoading_', state => state.wallpaper.loading.googlePhotos.photos);
 
     this.updateFromStore();
   }
 
   /**
-   * Invoked on changes to this element's hidden state.
+   * Invoked on changes to this element's |hidden| state.
    * @private
    */
   onHiddenChanged_() {
@@ -190,8 +188,8 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
   }
 
   /**
-   * Invoked to compute `photosByRow_`.
-   * @return {?Array<Array<undefined>>}
+   * Invoked to compute |photosByRow_|.
+   * @return {?Array<Array<Url>>}
    * @private
    */
   computePhotosByRow_() {
@@ -201,13 +199,11 @@ export class GooglePhotosPhotos extends WithPersonalizationStore {
     if (!isNonEmptyArray(this.photos_)) {
       return null;
     }
-    let index = 0;
     return Array.from(
         {length: Math.ceil(this.photos_.length / this.photosPerRow_)},
         (_, i) => {
           i *= this.photosPerRow_;
-          const row = this.photos_.slice(i, i + this.photosPerRow_)
-                          .map(photo => index++);
+          const row = this.photos_.slice(i, i + this.photosPerRow_);
           while (row.length < this.photosPerRow_) {
             row.push(undefined);
           }

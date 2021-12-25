@@ -6,8 +6,10 @@
 
 #include <bitset>
 
+#include "base/strings/utf_string_conversions.h"
 #include "device/bluetooth/bluetooth_common.h"
 #include "device/bluetooth/bluetooth_device.h"
+#include "device/bluetooth/string_util_icu.h"
 
 namespace chromeos {
 namespace bluetooth_config {
@@ -89,6 +91,10 @@ mojom::BatteryPropertiesPtr ComputeBatteryInfoForBatteryType(
 
 mojom::DeviceBatteryInfoPtr ComputeBatteryInfo(
     const device::BluetoothDevice* device) {
+  // Only provide battery information for devices that are connected.
+  if (!device->IsConnected())
+    return nullptr;
+
   mojom::BatteryPropertiesPtr default_battery =
       ComputeBatteryInfoForBatteryType(
           device, device::BluetoothDevice::BatteryType::kDefault);
@@ -135,6 +141,14 @@ mojom::DeviceConnectionState ComputeConnectionState(
   return mojom::DeviceConnectionState::kNotConnected;
 }
 
+std::u16string ComputeDeviceName(const device::BluetoothDevice* device) {
+  absl::optional<std::string> name = device->GetName();
+  if (name && device::HasGraphicCharacter(name.value()))
+    return device->GetNameForDisplay();
+
+  return base::UTF8ToUTF16(device->GetAddress());
+}
+
 }  // namespace
 
 mojom::BluetoothDevicePropertiesPtr GenerateBluetoothDeviceMojoProperties(
@@ -142,7 +156,7 @@ mojom::BluetoothDevicePropertiesPtr GenerateBluetoothDeviceMojoProperties(
   auto properties = mojom::BluetoothDeviceProperties::New();
   properties->id = device->GetIdentifier();
   properties->address = device->GetAddress();
-  properties->public_name = device->GetNameForDisplay();
+  properties->public_name = ComputeDeviceName(device);
   properties->device_type = ComputeDeviceType(device);
   properties->audio_capability = ComputeAudioOutputCapability(device);
   properties->battery_info = ComputeBatteryInfo(device);

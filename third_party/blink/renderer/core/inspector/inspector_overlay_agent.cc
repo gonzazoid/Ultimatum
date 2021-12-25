@@ -34,12 +34,14 @@
 
 #include "base/auto_reset.h"
 #include "build/build_config.h"
+#include "cc/layers/content_layer_client.h"
 #include "cc/layers/picture_layer.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/resources/grit/inspector_overlay_resources_map.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_inspector_overlay_host.h"
 #include "third_party/blink/renderer/core/display_lock/display_lock_utilities.h"
@@ -49,6 +51,7 @@
 #include "third_party/blink/renderer/core/events/web_input_event_conversion.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
 #include "third_party/blink/renderer/core/frame/frame_overlay.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -82,6 +85,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
+#include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
 #include "third_party/inspector_protocol/crdtp/json.h"
 #include "ui/accessibility/ax_mode.h"
 #include "v8/include/v8.h"
@@ -106,6 +110,18 @@ bool ParseQuad(std::unique_ptr<protocol::Array<double>> quad_array,
   quad->set_p3(gfx::PointF((*quad_array)[4], (*quad_array)[5]));
   quad->set_p4(gfx::PointF((*quad_array)[6], (*quad_array)[7]));
   return true;
+}
+
+v8::MaybeLocal<v8::Value> GetV8Property(v8::Local<v8::Context> context,
+                                        v8::Local<v8::Value> object,
+                                        const String& name) {
+  v8::Isolate* isolate = context->GetIsolate();
+  v8::Local<v8::String> name_str = V8String(isolate, name);
+  v8::Local<v8::Object> object_obj;
+  if (!object->ToObject(context).ToLocal(&object_obj)) {
+    return v8::MaybeLocal<v8::Value>();
+  }
+  return object_obj->Get(context, name_str);
 }
 
 }  // namespace
@@ -419,6 +435,7 @@ void InspectorOverlayAgent::Restore() {
   setShowScrollBottleneckRects(show_scroll_bottleneck_rects_.Get());
   setShowHitTestBorders(show_hit_test_borders_.Get());
   setShowViewportSizeOnResize(show_size_on_resize_.Get());
+  setShowWebVitals(show_web_vitals_.Get());
   PickTheRightTool();
 }
 
@@ -609,7 +626,7 @@ Response InspectorOverlayAgent::highlightRect(
     Maybe<protocol::DOM::RGBA> color,
     Maybe<protocol::DOM::RGBA> outline_color) {
   std::unique_ptr<FloatQuad> quad =
-      std::make_unique<FloatQuad>(FloatRect(x, y, width, height));
+      std::make_unique<FloatQuad>(gfx::RectF(x, y, width, height));
   return SetInspectTool(MakeGarbageCollected<QuadHighlightTool>(
       this, GetFrontend(), std::move(quad),
       InspectorDOMAgent::ParseColor(color.fromMaybe(nullptr)),
@@ -661,7 +678,7 @@ Response InspectorOverlayAgent::setShowHinge(
 
   DCHECK(frame_impl_->GetFrameView() && GetFrame());
 
-  FloatQuad quad(FloatRect(x, y, width, height));
+  FloatQuad quad(gfx::RectF(x, y, width, height));
   hinge_ =
       MakeGarbageCollected<Hinge>(quad, content_color, outline_color, this);
 
@@ -1314,17 +1331,44 @@ void InspectorOverlayAgent::Reset(
 void InspectorOverlayAgent::EvaluateInOverlay(const String& method,
                                               const String& argument) {
   ScriptForbiddenScope::AllowUserAgentScript allow_script;
-  std::unique_ptr<protocol::ListValue> command = protocol::ListValue::create();
-  command->pushValue(protocol::StringValue::create(method));
-  command->pushValue(protocol::StringValue::create(argument));
-  std::vector<uint8_t> json;
-  ConvertCBORToJSON(SpanFrom(command->Serialize()), &json);
-  ClassicScript::CreateUnspecifiedScript(
-      "dispatch(" +
-          String(reinterpret_cast<const char*>(json.data()), json.size()) + ")",
-      ScriptSourceLocationType::kInspector)
-      ->RunScript(To<LocalFrame>(OverlayMainFrame())->DomWindow(),
-                  ExecuteScriptPolicy::kExecuteScriptWhenScriptsDisabled);
+  v8::HandleScope handle_scope(ToIsolate(OverlayMainFrame()));
+
+  LocalFrame* local_frame = To<LocalFrame>(OverlayMainFrame());
+  ScriptState* script_state = ToScriptStateForMainWorld(local_frame);
+  DCHECK(script_state);
+
+  v8::Local<v8::Context> context = script_state->GetContext();
+  v8::Context::Scope context_scope(context);
+
+  WTF::Vector<v8::Local<v8::Value>> args;
+  int args_length = 2;
+  v8::Local<v8::Array> params(
+      v8::Array::New(context->GetIsolate(), args_length));
+  v8::Local<v8::Value> local_method(V8String(context->GetIsolate(), method));
+  v8::Local<v8::Value> local_argument(
+      V8String(context->GetIsolate(), argument));
+  bool property_created;
+  if (!params->CreateDataProperty(context, 0, local_method)
+           .To(&property_created) &&
+      !property_created) {
+    NOTREACHED() << "CreateDataProperty should always succeed here.";
+  }
+  if (!params->CreateDataProperty(context, 1, local_argument)
+           .To(&property_created) &&
+      !property_created) {
+    NOTREACHED() << "CreateDataProperty should always succeed here.";
+  }
+  args.push_back(params);
+
+  v8::Local<v8::Value> v8_method;
+  if (!GetV8Property(context, context->Global(), "dispatch")
+           .ToLocal(&v8_method)) {
+    return;
+  }
+
+  local_frame->DomWindow()->GetScriptController().EvaluateMethodInMainWorld(
+      v8::Local<v8::Function>::Cast(v8_method), context->Global(),
+      static_cast<int>(args.size()), args.data());
 }
 
 void InspectorOverlayAgent::EvaluateInOverlay(

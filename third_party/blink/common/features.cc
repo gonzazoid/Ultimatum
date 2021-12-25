@@ -123,7 +123,7 @@ const base::Feature kJSONModules{"JSONModules",
                                  base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kForceSynchronousHTMLParsing{
-    "ForceSynchronousHTMLParsing", base::FEATURE_DISABLED_BY_DEFAULT};
+    "ForceSynchronousHTMLParsing", base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Enable EditingNG by default. This feature is for a kill switch.
 const base::Feature kEditingNG{"EditingNG", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -190,7 +190,7 @@ const base::Feature kPortalsCrossOrigin{"PortalsCrossOrigin",
 // allows the element to be enabled by the runtime enabled feature, for origin
 // trials.
 const base::Feature kFencedFrames{"FencedFrames",
-                                  base::FEATURE_ENABLED_BY_DEFAULT};
+                                  base::FEATURE_DISABLED_BY_DEFAULT};
 const base::FeatureParam<FencedFramesImplementationType>::Option
     fenced_frame_implementation_types[] = {
         {FencedFramesImplementationType::kShadowDOM, "shadow_dom"},
@@ -509,13 +509,13 @@ const base::FeatureParam<ForceDarkImageBehavior> kForceDarkImageBehaviorParam{
     &forcedark_image_behavior_options};
 
 // Do not invert text lighter than this.
-// Range: 0 (do not invert any text) to 256 (invert all text)
+// Range: 0 (do not invert any text) to 255 (invert all text)
 // Can also set to -1 to let Blink's internal settings control the value
-const base::FeatureParam<int> kForceDarkTextLightnessThresholdParam{
-    &kForceWebContentsDarkMode, "text_lightness_threshold", -1};
+const base::FeatureParam<int> kForceDarkForegroundLightnessThresholdParam{
+    &kForceWebContentsDarkMode, "foreground_lightness_threshold", -1};
 
 // Do not invert backgrounds darker than this.
-// Range: 0 (invert all backgrounds) to 256 (invert no backgrounds)
+// Range: 0 (invert all backgrounds) to 255 (invert no backgrounds)
 // Can also set to -1 to let Blink's internal settings control the value
 const base::FeatureParam<int> kForceDarkBackgroundLightnessThresholdParam{
     &kForceWebContentsDarkMode, "background_lightness_threshold", -1};
@@ -858,9 +858,10 @@ const base::Feature kLoadingTasksUnfreezable{"LoadingTasksUnfreezable",
 // Only use per-process buffer limit and not per-request limt. When this flag is
 // on network requests can continue buffering data as long as it is under per
 // process limit.
+// TODO(crbug.com/1243600): Remove this flag eventually.
 const base::Feature kNetworkRequestUsesOnlyPerProcessBufferLimit{
     "NetworkRequestUsesOnlyPerProcessBufferLimit",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+    base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Kill switch for the new behavior whereby anchors with target=_blank get
 // noopener behavior by default. TODO(crbug.com/898942): Remove in Chrome 95.
@@ -1042,9 +1043,6 @@ const base::Feature kDesktopPWAsSubApps{"DesktopPWAsSubApps",
 const base::Feature kCORSErrorsIssueOnly{"CORSErrorsIssueOnly",
                                          base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kSyncLoadDataUrlFonts{"SyncLoadDataUrlFonts",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
-
 const base::Feature kPersistentQuotaIsTemporaryQuota{
     "PersistentQuotaIsTemporaryQuota", base::FEATURE_DISABLED_BY_DEFAULT};
 
@@ -1072,6 +1070,13 @@ const base::FeatureParam<double> kCostReductionOfMultiplexedRequests{
 
 const base::Feature kForceMajorVersion100InUserAgent{
     "ForceMajorVersion100InUserAgent", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kForceMinorVersion100InUserAgent{
+    "ForceMinorVersion100InUserAgent", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kForceMajorVersionInMinorPositionInUserAgent{
+    "ForceMajorVersionInMinorPositionInUserAgent",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enable `sec-ch-device-memory` client hint.
 const base::Feature kClientHintsDeviceMemory{"ClientHintsDeviceMemory",
@@ -1111,7 +1116,7 @@ const base::Feature kClientHintsViewportWidth_DEPRECATED{
 
 // https://drafts.csswg.org/css-cascade-5/#layering
 const base::Feature kCSSCascadeLayers{"CSSCascadeLayers",
-                                      base::FEATURE_DISABLED_BY_DEFAULT};
+                                      base::FEATURE_ENABLED_BY_DEFAULT};
 
 // If enabled, the setTimeout(..., 0) will not clamp to 1ms.
 // Tracking bug: https://crbug.com/402694.

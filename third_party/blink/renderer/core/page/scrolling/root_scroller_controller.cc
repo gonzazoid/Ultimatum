@@ -19,13 +19,12 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/scrolling/top_document_root_scroller_controller.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/scroll/scrollable_area.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/use_counter.h"
+#include "ui/gfx/geometry/size_conversions.h"
 
 namespace blink {
 
@@ -64,8 +63,8 @@ bool FillsViewport(const Element& element) {
   gfx::Size icb_size = top_document.GetLayoutView()->GetLayoutSize();
 
   float zoom = top_document.GetFrame()->PageZoomFactor();
-  gfx::Size controls_hidden_size = ToCeiledSize(
-      top_document.View()->ViewportSizeForViewportUnits().ScaledBy(zoom));
+  gfx::Size controls_hidden_size = gfx::ToCeiledSize(gfx::ScaleSize(
+      top_document.View()->ViewportSizeForViewportUnits(), zoom));
 
   if (bounding_box.size() != icb_size &&
       bounding_box.size() != controls_hidden_size)

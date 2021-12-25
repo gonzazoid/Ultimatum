@@ -7,7 +7,6 @@
 #include <memory>
 #include <vector>
 
-#include "base/no_destructor.h"
 #include "chrome/browser/ui/user_education/tutorial/tutorial.h"
 #include "chrome/browser/ui/user_education/tutorial/tutorial_description.h"
 
@@ -21,9 +20,8 @@ std::unique_ptr<Tutorial> TutorialRegistry::CreateTutorial(
     ui::ElementContext context) {
   DCHECK(tutorial_registry_.size() > 0);
   auto pair = tutorial_registry_.find(id);
-  if (pair == tutorial_registry_.end()) {
+  if (pair == tutorial_registry_.end())
     return nullptr;
-  }
   return Tutorial::Builder::BuildFromDescription(
       pair->second, tutorial_service, bubble_factory_registry, context);
 }

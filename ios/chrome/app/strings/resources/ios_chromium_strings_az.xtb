@@ -31,7 +31,6 @@
 <translation id="2478931088402984578"><ph name="BEGIN_BOLD" />Chromium<ph name="END_BOLD" /> seçin</translation>
 <translation id="2567507405773541360">Sadə, etibarlı və həmişəkindən daha sürətli bir Chromium ilə daha çox iş görün</translation>
 <translation id="2590893390871230428">Chromium Datasını Sinxronizasiya Edin</translation>
-<translation id="259094968798709429">Parollar <ph name="BEGIN_LINK" />Parol Menecerində<ph name="END_LINK" /> saxlanılır ki, onları istənilən cihazda istifadə edə biləsiniz.</translation>
 <translation id="2650312721222849884">Chromium istifadə etdiyiniz hər yerdən tabları görmək üçün sinxronizasiyanı aktiv edin</translation>
 <translation id="2684230048001240293">Tablar, parollar və ödəniş məlumatlarınızı bütün cihazlarınızda sinxronlaşdırmaq üçün defolt olaraq Chromium'u ayarlayın</translation>
 <translation id="2730884209570016437">Digər tətbiq tərəfindən istifadə olunduğu üçün Chromium kameranı istifadə edə bilməz</translation>
@@ -109,6 +108,7 @@
 <translation id="8776843108004031667">Bu hesab və bütün saxlanmamış data Chromium'dan silinəcək.</translation>
 <translation id="894437814105052438">Hesabdan çıxdığınız zaman Chromium heç bir yeni datanı Google Hesabınızla sinxronizasiya edilməyəcək. Daha əvvəl sinxronizasiya edilmiş data hesabda qalır.</translation>
 <translation id="9022552996538154597">Chromium'a daxil olun</translation>
+<translation id="9059693977935746710">Bu parolu yadda saxlamağa ehtiyac yoxdur. O, <ph name="EMAIL" /> üçün Parol Menecerində saxlanacaq</translation>
 <translation id="9089354809943900324">Chromium'un vaxtı keçib</translation>
 <translation id="9110075932708282655">Defolt olaraq Chromium istifadə edin</translation>
 <translation id="921174536258924340">Chromium bütün parolları yoxlaya bilmədi. Sabah yenidən cəhd edin və ya <ph name="BEGIN_LINK" />Google Hesabınızda parolları yoxlayın.<ph name="END_LINK" /></translation>

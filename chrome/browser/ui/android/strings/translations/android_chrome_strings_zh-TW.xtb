@@ -83,6 +83,7 @@
 <translation id="1414981605391750300">正在連線至 Google。可能需要一分鐘…</translation>
 <translation id="1416550906796893042">應用程式版本</translation>
 <translation id="1430915738399379752">列印</translation>
+<translation id="1436784010935106834">已移除</translation>
 <translation id="1448440926884431741">在書籤中整理所追蹤的產品</translation>
 <translation id="1450753235335490080">無法分享<ph name="CONTENT_TYPE" /></translation>
 <translation id="1466383950273130737">選擇 Chrome 的顯示語言</translation>
@@ -104,6 +105,7 @@
 <translation id="1571304935088121812">複製使用者名稱</translation>
 <translation id="1592864538817356322">標準防護：</translation>
 <translation id="1628019612362412531">{NUM_SELECTED,plural, =1{移除 1 個選取的項目}other{移除 # 個選取的項目}}</translation>
+<translation id="1633659023549081553">透過 Chrome 首頁探索新內容</translation>
 <translation id="1641113438599504367">安全瀏覽</translation>
 <translation id="164269334534774161">您目前瀏覽的是這個網頁的離線複本 (建立時間：<ph name="CREATION_TIME" />)</translation>
 <translation id="1644574205037202324">歷史記錄</translation>
@@ -202,7 +204,6 @@
 <translation id="2172905120685242547">要關閉視窗嗎？</translation>
 <translation id="2175927920773552910">QR 圖碼</translation>
 <translation id="218608176142494674">共用</translation>
-<translation id="2195339740518523951">獲得 Chrome 最強大的安全防護</translation>
 <translation id="2200113223741723867">管理使用資料分享項目</translation>
 <translation id="2218567645332692482">將瀏覽路徑升級至 HTTPS，並在載入不支援該協定的網站前發出警告</translation>
 <translation id="2227444325776770048">以「<ph name="USER_FULL_NAME" />」的身分繼續</translation>
@@ -220,6 +221,7 @@
 <translation id="2321958826496381788">拖曳滑桿，將文字調整到適當的字體大小。當你輕觸兩下文字段落時，瀏覽器至少應呈現這樣的字體大小。</translation>
 <translation id="2323763861024343754">網站儲存資料量</translation>
 <translation id="2328985652426384049">無法登入</translation>
+<translation id="2342601525305963189">Chrome 提示：</translation>
 <translation id="234265804618409743">無法開啟攝影機，發生錯誤。</translation>
 <translation id="2345671828921229300">如要進行搜尋，請按住要查詢的字詞</translation>
 <translation id="2349710944427398404">Chrome 使用的資料總量，包括帳戶、書籤和儲存的設定</translation>
@@ -263,6 +265,7 @@
 <translation id="2534582914273493287">系統會將你造訪的網址傳送給 Google</translation>
 <translation id="2536728043171574184">目前瀏覽的是這個網頁的離線複本</translation>
 <translation id="2546283357679194313">Cookie 和網站資料</translation>
+<translation id="2558692642259318568">如果不要將瀏覽活動儲存到裝置上，請使用無痕模式</translation>
 <translation id="2561519700418191927">影片預覽</translation>
 <translation id="2567385386134582609">圖片</translation>
 <translation id="2567545343356994513">針對不安全的網站、下載內容和擴充功能提供更快速的主動式防護機制</translation>
@@ -274,6 +277,7 @@
 <translation id="2612676031748830579">卡號</translation>
 <translation id="2625189173221582860">已複製密碼</translation>
 <translation id="2631006050119455616">已節省</translation>
+<translation id="2634905176438867146">瞭解如何將 Chrome 設為預設瀏覽器</translation>
 <translation id="2645657967708199252"><ph name="CONNECTION_TYPE" /> 連線可能會減慢下載速度</translation>
 <translation id="2647434099613338025">新增語言</translation>
 <translation id="2649068648233607930">你的瀏覽器是由 <ph name="DOMAIN" /> 管理</translation>
@@ -358,6 +362,7 @@
 <translation id="3037177537145227281">追蹤價格</translation>
 <translation id="3037517125981011456">顯示登入 Chrome 的提示</translation>
 <translation id="3046945242843292318">之後可更快前往這個網站</translation>
+<translation id="3055259925215945098">已移動書籤</translation>
 <translation id="305593374596241526">定位功能已關閉，請在 <ph name="BEGIN_LINK" />Android 設定<ph name="END_LINK" />中開啟這項功能。</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> 個書籤}other{<ph name="BOOKMARKS_COUNT_MANY" /> 個書籤}}</translation>
 <translation id="3062802207422175757">在 Chrome 上閱讀你有興趣的文章</translation>
@@ -386,6 +391,7 @@
 <translation id="3234978181857588512">儲存到裝置</translation>
 <translation id="3236059992281584593">還剩 1 分鐘</translation>
 <translation id="3237087289225714896">標準預先載入模式：</translation>
+<translation id="3237433641417325993">向下捲動以查看推薦文章</translation>
 <translation id="3244271242291266297">月</translation>
 <translation id="3245429137663807393">如果你一併提供 Chrome 使用報告，這些報告中會包含你造訪的網址</translation>
 <translation id="3250563604907490871">圖片說明功能將在你連線至 Wi-Fi 後恢復運作</translation>
@@ -537,7 +543,6 @@
 <translation id="4170011742729630528">服務無法使用，請稍後再試。</translation>
 <translation id="4179980317383591987">已使用 <ph name="AMOUNT" /></translation>
 <translation id="4181841719683918333">語言</translation>
-<translation id="4183868528246477015">使用 Google 智慧鏡頭的搜尋功能 <ph name="BEGIN_NEW" />新功能<ph name="END_NEW" /></translation>
 <translation id="4195643157523330669">在新分頁中開啟</translation>
 <translation id="4196597275619698563">建立卡片</translation>
 <translation id="4198423547019359126">沒有可用的下載位置</translation>
@@ -571,7 +576,6 @@
 <translation id="4411535500181276704">精簡模式</translation>
 <translation id="4415276339145661267">管理你的 Google 帳戶</translation>
 <translation id="4425140285732600465">正在追蹤價格。如果產品在任何網站上降價，你會收到通知。</translation>
-<translation id="4427306783828095590">強化防護功能可進一步封鎖網路詐騙和惡意軟體</translation>
 <translation id="4450672886426705087">Google 的搜尋結果</translation>
 <translation id="4452411734226507615">關閉 [<ph name="TAB_TITLE" />] 分頁</translation>
 <translation id="4452548195519783679">已將書籤加入「<ph name="FOLDER_NAME" />」</translation>
@@ -651,6 +655,7 @@
 <translation id="4835385943915508971">Chrome 無法存取要求的資源。</translation>
 <translation id="4837753911714442426">開啟列印網頁的選項</translation>
 <translation id="4842092870884894799">目前顯示的是密碼產生彈出式視窗</translation>
+<translation id="4842515939542199281">如要透過語音進行搜尋，請輕觸「麥克風」圖示</translation>
 <translation id="4850886885716139402">檢視</translation>
 <translation id="4860895144060829044">撥號</translation>
 <translation id="4864369630010738180">登入中...</translation>
@@ -697,6 +702,7 @@
 <translation id="5091249083535528968">延伸使用資料</translation>
 <translation id="509429900233858213">發生錯誤。</translation>
 <translation id="510275257476243843">還剩 1 小時</translation>
+<translation id="5115811374190515607">移至<ph name="PRODUCT_NAME" /></translation>
 <translation id="5118713593561876160">興趣喜好</translation>
 <translation id="5123685120097942451">無痕式分頁</translation>
 <translation id="5126510351761255129">請驗證卡片</translation>
@@ -801,6 +807,7 @@
 <translation id="5749068826913805084">Chrome 必須取得儲存空間的存取權才能下載檔案。</translation>
 <translation id="5749237766298580851">關閉 <ph name="SEPARATOR" /> 不建議</translation>
 <translation id="5752232708629533680">僅分享 GIF</translation>
+<translation id="5753139477036638699">你可以使用語音在 Chrome 中搜尋</translation>
 <translation id="5754350196967618083">無法重新整理「探索」</translation>
 <translation id="5763382633136178763">無痕式分頁</translation>
 <translation id="5763514718066511291">輕觸即可複製這個應用程式的網址</translation>
@@ -1012,6 +1019,7 @@ Privacy Sandbox 的試用功能仍在積極開發階段，目前開放地區有�
 <translation id="6813446258015311409">登入 Chrome，帳戶挑選器已開啟。</translation>
 <translation id="6814033694018386318">提供給 Google 的資訊</translation>
 <translation id="6817747507826986771">快速分享這個專頁。按住這裡即可編輯這個捷徑。</translation>
+<translation id="6819199143469632133">如要在所有裝置上取得你的 Google 設定，請登入帳戶</translation>
 <translation id="6820686453637990663">信用卡驗證碼</translation>
 <translation id="6824899148643461612">「<ph name="TAB_TITLE" />」，分頁，已選取</translation>
 <translation id="6828070228333235514">停止追蹤價格</translation>
@@ -1050,6 +1058,7 @@ Privacy Sandbox 的試用功能仍在積極開發階段，目前開放地區有�
 <translation id="7027549951530753705">已還原 <ph name="ITEM_TITLE" /></translation>
 <translation id="7029390216614421513">將這個方框對準 QR 圖碼或條碼</translation>
 <translation id="7029809446516969842">密碼</translation>
+<translation id="7037830628447527439">使用 Google 帳戶登入 Chrome</translation>
 <translation id="7038956721828960940">chrome_image_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="7054588988317389591">要取得圖片說明嗎？</translation>
 <translation id="7055152154916055070">已禁止重新導向：</translation>
@@ -1071,6 +1080,7 @@ Privacy Sandbox 的試用功能仍在積極開發階段，目前開放地區有�
 <translation id="7177466738963138057">日後可前往設定頁面進行變更</translation>
 <translation id="7177873915659574692">無法建立 QR 圖碼。網址包含的字元數超過 <ph name="CHARACTER_LIMIT" /> 個。</translation>
 <translation id="7180611975245234373">重新整理</translation>
+<translation id="718226107353899806">最多可以新增 <ph name="MAX_NUM_REACTIONS" /> 項回應</translation>
 <translation id="7187993566681480880">在已登入帳戶的狀態下，能確保你持續享有安全無虞的 Chrome 使用體驗，也有助於提升其他 Google 應用程式的安全機制。</translation>
 <translation id="718926126787620637">書籤資料夾清單已開啟，顯示於整個畫面</translation>
 <translation id="7191430249889272776">已在背景開啟分頁。</translation>
@@ -1234,7 +1244,6 @@ Privacy Sandbox 的試用功能仍在積極開發階段，目前開放地區有�
 <translation id="8035133914807600019">新資料夾…</translation>
 <translation id="8037750541064988519">還剩 <ph name="DAYS" /> 天</translation>
 <translation id="8037801708772278989">剛才已檢查</translation>
-<translation id="8040831032425909005">快速操作與搜尋小工具的圖示</translation>
 <translation id="804335162455518893">找不到 SD 卡</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> 個無痕分頁}other{<ph name="TAB_COUNT_NORMAL" /> 個無痕分頁}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB 可用空間</translation>
@@ -1404,6 +1413,7 @@ Privacy Sandbox 的試用功能仍在積極開發階段，目前開放地區有�
 <translation id="8945143127965743188"><ph name="LANG" /> - 無法下載這個語言套件，請稍後再試。</translation>
 <translation id="8951232171465285730">Chrome 為你節省了 <ph name="MEGABYTES" /> MB</translation>
 <translation id="8955719471735800169">返回頁首</translation>
+<translation id="8964479563882643397">如要開啟新的無痕分頁，請按一下「選單」圖示</translation>
 <translation id="8965591936373831584">正在等待下載</translation>
 <translation id="8967427617812342790">加到閱讀清單</translation>
 <translation id="8968085728801125376">{TAB_COUNT,plural, =1{即將關閉 <ph name="INCOGNITO_TAB_COUNT" /> 個無痕分頁和另外 <ph name="TAB_COUNT_ONE" /> 個分頁}other{即將關閉 <ph name="INCOGNITO_TAB_COUNT" /> 個無痕分頁和另外 <ph name="TAB_COUNT_MANY" /> 個分頁}}</translation>

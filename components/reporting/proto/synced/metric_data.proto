@@ -87,6 +87,38 @@ message NetworkTelemetry {
   optional string gateway = 6;
   // Network connection type.
   optional NetworkType type = 7;
+  // Telemetry related to a specific type of network interface.
+  repeated NetworkInterfaceTelemetry network_interface_telemetry = 8;
+}
+
+// Telemetry that is specific to a certain type of network interface.
+message NetworkInterfaceTelemetry {
+  // Name of the wireless interface
+  optional string interface_name = 1;
+  // The interface represented in the message.
+  oneof interface {
+    // Telemetry for wireless interfaces.
+    WirelessInterfaceTelemetry wireless_interface = 2;
+  }
+}
+
+message WirelessInterfaceTelemetry {
+  // If power management for wifi is enabled.
+  optional bool power_management_enabled = 1;
+  // Access point address.
+  optional string access_point_address = 2;
+  // Transmission bit rate measured in Mbps.
+  optional int64 tx_bit_rate_mbps = 3;
+  // Receiving bit rate measured in Mbps.
+  optional int64 rx_bit_rate_mbps = 4;
+  // Transmission power measured in dBm.
+  optional int32 tx_power_dbm = 5;
+  // Is wifi encryption key on or not.
+  optional bool encryption_on = 6;
+  // Wifi link quality.
+  optional int64 link_quality = 7;
+  // Wifi signal level in dBm.
+  optional int32 signal_level_dbm = 8;
 }
 
 // Configured networks telemetry data.
@@ -116,7 +148,7 @@ enum ThunderboltSecurityLevel {
   THUNDERBOLT_SECURITY_USB_ONLY_LEVEL = 5;
   // PCIE tunneling is disabled.
   THUNDERBOLT_SECURITY_NO_PCIE_LEVEL = 6;
-};
+}
 
 message ThunderboltInfo {
   optional ThunderboltSecurityLevel security_level = 1;
@@ -156,9 +188,9 @@ message TotalMemoryEncryptionInfo {
   // The state of memory encryption on the device.
   optional MemoryEncryptionState encryption_state = 1;
   // The maximum number of keys that can be used for encryption.
-  optional uint32 max_keys = 2;
+  optional int64 max_keys = 2;
   // The length of the encryption keys.
-  optional uint32 key_length = 3;
+  optional int64 key_length = 3;
   // The encryption algorithm being used on the device.
   optional MemoryEncryptionAlgorithm encryption_algorithm = 4;
 }
@@ -166,6 +198,50 @@ message TotalMemoryEncryptionInfo {
 message MemoryInfo {
   // TME info for the device.
   optional TotalMemoryEncryptionInfo tme_info = 1;
+}
+
+enum NetworkDeviceType {
+  NETWORK_DEVICE_TYPE_UNSPECIFIED = 0;
+  CELLULAR_DEVICE = 1;
+  ETHERNET_DEVICE = 2;
+  WIFI_DEVICE = 5;
+}
+
+// Info details about network interface.
+message NetworkInterface {
+  // Network device type.
+  optional NetworkDeviceType type = 1;
+
+  // MAC address (if applicable) of the corresponding network device. This is
+  // formatted as an ASCII string with 12 hex digits. Example: A0B1C2D3E4F5.
+  optional string mac_address = 2;
+
+  // MEID (if applicable) of the corresponding network device. Formatted as
+  // ASCII string composed of 14 hex digits. Example: A10000009296F2.
+  optional string meid = 3;
+
+  // IMEI (if applicable) of the corresponding network device. 15-16 decimal
+  // digits encoded as ASCII string. Example: 355402040158759.
+  optional string imei = 4;
+
+  // The device path associated with this network interface.
+  optional string device_path = 5;
+
+  // The integrated circuit card ID associated with the device's sim card.
+  optional string iccid = 6;
+
+  // The mobile directory number associated with the device's sim card.
+  optional string mdn = 7;
+
+  // List of EID (EUICC Identifier) of all cellular EUICCs
+  // (Embedded Universal Integrated Circuit Cards) on the device.
+  // 32 decimal digits encoded as ASCII string.
+  repeated string eids = 8;
+}
+
+// Networks info data.
+message NetworksInfo {
+  repeated NetworkInterface network_interfaces = 1;
 }
 
 // Information about keylocker. This is supported on Intel CPUs.
@@ -190,6 +266,8 @@ message InfoData {
   optional BusDeviceInfo bus_device_info = 2;
   // Memory info for the device.
   optional MemoryInfo memory_info = 3;
+  // Network interfaces info.
+  optional NetworksInfo networks_info = 4;
 }
 
 // Audio telemetry data recorded intermittently
@@ -225,12 +303,29 @@ enum MetricEventType {
   NETWORK_CONNECTION_STATE_CHANGE = 2;
   NETWORK_SIGNAL_STRENGTH_CHANGE = 3;
   AUDIO_SEVERE_UNDERRUN = 4;
+  USB_ADDED = 5;
+  USB_REMOVED = 6;
+}
+
+message UsbEventData {
+  // Vendor name
+  optional string vendor = 1;
+  // Device name, model name, or product name
+  optional string name = 2;
+  // Vendor ID
+  optional int64 vid = 3;
+  // Product ID
+  optional int64 pid = 4;
+  // List of names of USB categories the device falls under
+  // https://www.usb.org/defined-class-codes
+  repeated string categories = 5;
 }
 
 // Indicates one of the following conditions occurred on the device, data
 // associated with the event will be reported as TelemetryData.
 message EventData {
   optional MetricEventType type = 1;
+  optional UsbEventData usb_event_data = 2;
 }
 
 // Main message to be reported, can contain `InfoData`, `TelemetryData`, or

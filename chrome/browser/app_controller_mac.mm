@@ -50,9 +50,9 @@
 #include "chrome/browser/mac/mac_startup_profiler.h"
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_manager_observer.h"
 #include "chrome/browser/profiles/profile_observer.h"
@@ -1832,24 +1832,38 @@ static base::mac::ScopedObjCClassSwizzler* g_swizzle_imk_input_session;
                           _menuState.get(), _lastProfile));
 }
 
+- (BOOL)windowHasBrowserTabs:(NSWindow*)window {
+  if (!window) {
+    return NO;
+  }
+  Browser* browser = chrome::FindBrowserWithWindow(window);
+  return browser && browser->is_type_normal();
+}
+
 - (void)updateMenuItemKeyEquivalents {
   BOOL enableCloseTabShortcut = NO;
+
   id target = [NSApp targetForAction:@selector(performClose:)];
 
-  // |target| is an instance of NSPopover or NSWindow.
-  // If a popover (likely the dictionary lookup popover), we want Cmd-W to
-  // close the popover so map it to "Close Window".
-  // Otherwise, map Cmd-W to "Close Tab" if it's a browser window.
-  if ([target isKindOfClass:[NSWindow class]]) {
-    NSWindow* window = target;
-    NSWindow* mainWindow = [NSApp mainWindow];
-    if (!window || ([window parentWindow] == mainWindow)) {
-      // If the target window is a child of the main window (e.g. a bubble), the
-      // main window should be the one that handles the close menu item action.
-      window = mainWindow;
+  // If `target` is a popover (likely the dictionary lookup popover) the
+  // main window should handle the close menu item action.
+  NSWindow* targetWindow = nil;
+  if ([target isKindOfClass:[NSPopover class]]) {
+    targetWindow =
+        [[[base::mac::ObjCCast<NSPopover>(target) contentViewController] view]
+            window];
+  } else {
+    targetWindow = base::mac::ObjCCast<NSWindow>(target);
+  }
+
+  if (targetWindow != nil) {
+    // If `targetWindow` is a child (a popover or bubble) the parent should
+    // handle the command.
+    if ([targetWindow parentWindow] != nil) {
+      targetWindow = [targetWindow parentWindow];
     }
-    Browser* browser = chrome::FindBrowserWithWindow(window);
-    enableCloseTabShortcut = browser && browser->is_type_normal();
+
+    enableCloseTabShortcut = [self windowHasBrowserTabs:targetWindow];
   }
 
   [self adjustCloseWindowMenuItemKeyEquivalent:enableCloseTabShortcut];
@@ -1969,6 +1983,14 @@ static base::mac::ScopedObjCClassSwizzler* g_swizzle_imk_input_session;
     // Cancel the session: for the case when it was already started.
     AuthSessionRequest::CancelAuthSession(request);
   });
+}
+
+- (void)setCloseWindowMenuItemForTesting:(NSMenuItem*)menuItem {
+  _closeWindowMenuItem = menuItem;
+}
+
+- (void)setCloseTabMenuItemForTesting:(NSMenuItem*)menuItem {
+  _closeTabMenuItem = menuItem;
 }
 
 @end  // @implementation AppController

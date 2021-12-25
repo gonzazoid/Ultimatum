@@ -56,6 +56,7 @@
 <translation id="2348335408836342058">Chrome trenger tilgang til kameraet ditt og mikrofonen din for dette nettstedet</translation>
 <translation id="234869673307233423">Chrome kan ikke sjekke passordene dine. Prøv igjen senere.</translation>
 <translation id="235650106824528204">Alle Chrome-data som genereres mens denne profilen brukes (f.eks. oppretting av bokmerker, logg, passord og andre innstillinger), kan fjernes av administratoren for jobbprofilen. <ph name="LEARN_MORE" /></translation>
+<translation id="2359808026110333948">Fortsett</translation>
 <translation id="2429317896000329049">Google Chrome kunne ikke synkronisere dataene dine fordi synkronisering ikke er tilgjengelig for domenet ditt.</translation>
 <translation id="2467438592969358367">Google Chrome forsøker å eksportere passordene dine. Skriv inn Windows-passordet ditt for å tillate dette.</translation>
 <translation id="2485422356828889247">Avinstaller</translation>
@@ -140,6 +141,7 @@
 <translation id="4343195214584226067"><ph name="EXTENSION_NAME" /> er lagt til i Chrome</translation>
 <translation id="4384570495110188418">Chrome kan ikke sjekke passordene dine, siden du ikke er logget på</translation>
 <translation id="4407807842708586359">Google Chromes operativsystem</translation>
+<translation id="4427306783828095590">Økt beskyttelse gjør mer for å blokkere nettfisking og skadelig programvare</translation>
 <translation id="4450664632294415862">Chrome – nettverkspålogging – <ph name="PAGE_TITLE" /></translation>
 <translation id="4458462641685292929">En annen handling er i gang på Google Chrome. Prøv på nytt senere.</translation>
 <translation id="4480040274068703980">Chrome OS kunne ikke synkronisere dataene dine på grunn av en feil under pålogging.</translation>
@@ -168,7 +170,6 @@
 <translation id="5193136243808726294">Google Chrome OS kan ikke åpne denne siden</translation>
 <translation id="521447420733633466">Hvis du deler en enhet med andre, kan venner og familie surfe hver for seg og konfigurere Chrome akkurat slik de vil</translation>
 <translation id="5251420635869119124">Gjester kan bruke Chrome uten å etterlate seg spor.</translation>
-<translation id="5251679006894510177">Nesten ferdig oppdatert! Start Chrome på nytt for å fullføre oppdateringen. Inkognitovinduer blir ikke gjenåpnet.</translation>
 <translation id="5334487786912937552">Chrome må ha lagringstilgang for å kunne laste ned filer</translation>
 <translation id="5386244825306882791">Den styrer også hvilken side som vises når du starter Chrome eller søker fra multifunksjonsfeltet.</translation>
 <translation id="5394833366792865639">Del en Chrome-fane</translation>
@@ -239,6 +240,7 @@
 <translation id="7398801000654795464">Du ble logget på Chrome som <ph name="USER_EMAIL_ADDRESS" />. Du må logge deg på igjen med samme konto.</translation>
 <translation id="7408085963519505752">Vilkår for Chrome OS</translation>
 <translation id="7419046106786626209">Chrome OS kunne ikke synkronisere dataene dine fordi synkronisering ikke er tilgjengelig for domenet ditt.</translation>
+<translation id="7481213027396403996">Få den sterkeste sikkerheten i Chrome</translation>
 <translation id="7486227612705979895">Chrome får tilgang til Disk-lagringen din for å kunne gi deg forslag i adressefeltet</translation>
 <translation id="7535429826459677826">Google Chrome Dev</translation>
 <translation id="7573289029918943991">For å se om enheten er oppdatert, gå til <ph name="LINK_BEGIN" />Innstillinger for Chrome OS<ph name="LINK_END" /></translation>
@@ -297,6 +299,8 @@
 <translation id="8862326446509486874">Du har ikke de nødvendige rettighetene for å installere på systemnivå. Prøv å kjøre installasjonsprogrammet som administrator.</translation>
 <translation id="8914504000324227558">Start Chrome på nytt</translation>
 <translation id="8922193594870374009">For å sende numre fra <ph name="ORIGIN" /> til Android-telefonen din, logg på Chrome på begge enhetene.</translation>
+<translation id="8927704157641862988">Tilpass personvernvalgene som anses for å være de viktigste i Chrome. Denne veiledningen omfatter ikke alle innstillinger og alternativer.</translation>
+<translation id="8983720963221508955">Du har slått på Safe Browsing med økt beskyttelse i kontoen din. Nå kan du begynne å bruke funksjonen i Chrome.</translation>
 <translation id="8986207147630327271">Du er i ferd med å legge til en jobbprofil i denne nettleseren og gi administratoren din kontroll over kun jobbprofilen.</translation>
 <translation id="8999208279178790196">{0,plural, =0{En Chrome-oppdatering er tilgjengelig}=1{En Chrome-oppdatering er tilgjengelig}other{En Chrome-oppdatering har vært tilgjengelig i # dager}}</translation>
 <translation id="9026991721384951619">Chrome OS kunne ikke synkronisere dataene fordi påloggingsopplysningene dine er foreldede.</translation>

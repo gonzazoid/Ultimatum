@@ -9,13 +9,11 @@ import android.content.Context;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
 import org.chromium.base.annotations.NativeMethods;
-import org.chromium.chrome.browser.autofill_assistant.AssistantCoordinator;
 import org.chromium.chrome.browser.autofill_assistant.AssistantDependencies;
-import org.chromium.chrome.browser.autofill_assistant.AutofillAssistantUiController;
 import org.chromium.chrome.browser.autofill_assistant.carousel.AssistantChip;
 import org.chromium.chrome.browser.autofill_assistant.header.AssistantHeaderModel;
-import org.chromium.chrome.browser.feedback.HelpAndFeedbackLauncherImpl;
 import org.chromium.chrome.browser.tab.TabUtils;
+import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.KeyboardVisibilityDelegate;
 
 import java.util.List;
@@ -26,6 +24,7 @@ import java.util.List;
  */
 @JNINamespace("autofill_assistant")
 public class AssistantTriggerScriptBridge {
+    private final WebContents mWebContents;
     private final AssistantDependencies mDependencies;
 
     private final AssistantTriggerScript mTriggerScript;
@@ -33,7 +32,9 @@ public class AssistantTriggerScriptBridge {
     private KeyboardVisibilityDelegate.KeyboardVisibilityListener mKeyboardVisibilityListener;
 
     @CalledByNative
-    public AssistantTriggerScriptBridge(AssistantDependencies dependencies) {
+    public AssistantTriggerScriptBridge(
+            WebContents webContents, AssistantDependencies dependencies) {
+        mWebContents = webContents;
         mDependencies = dependencies;
 
         AssistantTriggerScript.Delegate delegate =
@@ -55,18 +56,15 @@ public class AssistantTriggerScriptBridge {
 
                     @Override
                     public void onFeedbackButtonClicked() {
-                        HelpAndFeedbackLauncherImpl.getInstance().showFeedback(
-                                TabUtils.getActivity(
-                                        TabUtils.fromWebContents(mDependencies.getWebContents())),
-                                AutofillAssistantUiController.getProfile(),
-                                mDependencies.getWebContents().getVisibleUrl().getSpec(),
-                                AssistantCoordinator.FEEDBACK_CATEGORY_TAG);
+                        dependencies.getFeedbackUtil().showFeedback(dependencies.getActivity(),
+                                webContents, /* screenshotMode */ 0, /* debugContext */ null);
                     }
                 };
 
-        mTriggerScript = new AssistantTriggerScript(dependencies.getContext(), delegate,
-                dependencies.getWebContents(), dependencies.getBottomSheetController(),
-                dependencies.getBottomInsetProvider(), dependencies.getAccessibilityUtil());
+        mTriggerScript = new AssistantTriggerScript(dependencies.getActivity(), delegate,
+                webContents, dependencies.getBottomSheetController(),
+                dependencies.getBottomInsetProvider(), dependencies.getAccessibilityUtil(),
+                dependencies.getProfileImageUtilOrNull(dependencies.getActivity()));
 
         mKeyboardVisibilityListener = this::safeNativeOnKeyboardVisibilityChanged;
     }
@@ -83,7 +81,7 @@ public class AssistantTriggerScriptBridge {
 
     @CalledByNative
     private Context getContext() {
-        return mDependencies.getContext();
+        return mDependencies.getActivity();
     }
 
     /**
@@ -98,8 +96,8 @@ public class AssistantTriggerScriptBridge {
             boolean resizeVisualViewport, boolean scrollToHide) {
         // Trigger scripts currently do not support switching activities (such as CCT->tab).
         // TODO(b/171776026): Re-inject dependencies on activity change to support CCT->tab.
-        if (TabUtils.getActivity(TabUtils.fromWebContents(mDependencies.getWebContents()))
-                != mDependencies.getContext()) {
+        if (TabUtils.getActivity(TabUtils.fromWebContents(mWebContents))
+                != mDependencies.getActivity()) {
             return false;
         }
 

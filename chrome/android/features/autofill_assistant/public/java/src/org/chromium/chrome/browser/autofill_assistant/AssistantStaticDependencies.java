@@ -4,12 +4,43 @@
 
 package org.chromium.chrome.browser.autofill_assistant;
 
+import android.content.Context;
+
+import androidx.annotation.Nullable;
+
+import org.chromium.base.annotations.CalledByNative;
+import org.chromium.base.annotations.JNINamespace;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.util.AccessibilityUtil;
 
 /**
  * Generic static dependencies interface. The concrete implementation will depend on the browser
  * framework, i.e., WebLayer vs. Chrome.
  */
+@JNINamespace("autofill_assistant")
 public interface AssistantStaticDependencies {
+    @CalledByNative
+    long getNativePointer();
+
     AccessibilityUtil getAccessibilityUtil();
+
+    /**
+     * Returns a utility for obscuring all tabs. NOTE: Each call returns a new instance that can
+     * only unobscure what it obscured!
+     */
+    @Nullable
+    AssistantTabObscuringUtil getTabObscuringUtilOrNull(WindowAndroid windowAndroid);
+
+    @CalledByNative
+    AssistantInfoPageUtil getInfoPageUtil();
+
+    AssistantFeedbackUtil getFeedbackUtil();
+
+    AssistantTabUtil getTabUtil();
+
+    @Nullable
+    String getSignedInAccountEmailOrNull();
+
+    @Nullable
+    AssistantProfileImageUtil getProfileImageUtilOrNull(Context context);
 }

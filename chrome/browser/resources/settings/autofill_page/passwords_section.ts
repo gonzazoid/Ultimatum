@@ -17,7 +17,7 @@ import 'chrome://resources/cr_elements/shared_style_css.m.js';
 import 'chrome://resources/polymer/v3_0/iron-flex-layout/iron-flex-layout-classes.js';
 import 'chrome://resources/polymer/v3_0/iron-list/iron-list.js';
 import '../controls/extension_controlled_indicator.js';
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 import '../controls/password_prompt_dialog.js';
 // </if>
 import '../controls/settings_toggle_button.js';
@@ -31,7 +31,7 @@ import './passwords_shared_css.js';
 import './avatar_icon.js';
 
 import {CrActionMenuElement} from 'chrome://resources/cr_elements/cr_action_menu/cr_action_menu.js';
-import {assert} from 'chrome://resources/js/assert.m.js';
+import {assert, assertNotReached} from 'chrome://resources/js/assert.m.js';
 import {focusWithoutInk} from 'chrome://resources/js/cr/ui/focus_without_ink.m.js';
 import {I18nMixin} from 'chrome://resources/js/i18n_mixin.js';
 import {getDeepActiveElement} from 'chrome://resources/js/util.m.js';
@@ -43,12 +43,12 @@ import {GlobalScrollTargetMixin} from '../global_scroll_target_mixin.js';
 import {HatsBrowserProxyImpl, TrustSafetyInteraction} from '../hats_browser_proxy.js';
 import {loadTimeData} from '../i18n_setup.js';
 import {OpenWindowProxyImpl} from '../open_window_proxy.js';
-import {StoredAccount, SyncBrowserProxyImpl, SyncPrefs, SyncStatus} from '../people_page/sync_browser_proxy.js';
+import {StoredAccount, SyncBrowserProxyImpl, SyncPrefs, SyncStatus, TrustedVaultBannerState} from '../people_page/sync_browser_proxy.js';
 import {PrefsMixin} from '../prefs/prefs_mixin.js';
 import {routes} from '../route.js';
 import {Route, Router} from '../router.js';
 
-// <if expr="chromeos or lacros">
+// <if expr="chromeos_ash or chromeos_lacros">
 import {BlockingRequestManager} from './blocking_request_manager.js';
 // </if>
 import {MergeExceptionsStoreCopiesMixin} from './merge_exceptions_store_copies_mixin.js';
@@ -206,13 +206,10 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
             'isOptedInForAccountStorage_, numberOfDevicePasswords_)',
       },
 
-      /**
-       * Whether the entry point leading to enroll in trusted vault encryption
-       * should be shown.
-       */
-      shouldOfferTrustedVaultOptIn_: {
-        type: Boolean,
-        value: false,
+      /** The visibility state of the trusted vault banner. */
+      trustedVaultBannerState_: {
+        type: Object,
+        value: TrustedVaultBannerState.NOT_SHOWN,
       },
 
       hasLeakedCredentials_: {
@@ -249,7 +246,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
       syncPrefs_: Object,
       syncStatus_: Object,
 
-      // <if expr="chromeos or lacros">
+      // <if expr="chromeos_ash or chromeos_lacros">
       showPasswordPromptDialog_: Boolean,
       tokenRequestManager_: Object,
       // </if>
@@ -284,7 +281,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
   private shouldShowBanner_: boolean;
   private isAccountStoreUser_: boolean;
   private shouldShowDevicePasswordsLink_: boolean;
-  private shouldOfferTrustedVaultOptIn_: boolean;
+  private trustedVaultBannerState_: TrustedVaultBannerState;
   private hasLeakedCredentials_: boolean;
   private hidePasswordsLink_: boolean;
   private showImportPasswords_: boolean;
@@ -294,7 +291,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
   private syncPrefs_: SyncPrefs;
   private syncStatus_: SyncStatus;
 
-  // <if expr="chromeos or lacros">
+  // <if expr="chromeos_ash or chromeos_lacros">
   private showPasswordPromptDialog_: boolean;
   private tokenRequestManager_: BlockingRequestManager;
   // </if>
@@ -352,7 +349,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
     this.setIsOptedInForAccountStorageListener_ =
         setIsOptedInForAccountStorageListener;
 
-    // <if expr="chromeos or lacros">
+    // <if expr="chromeos_ash or chromeos_lacros">
     // If the user's account supports the password check, an auth token will be
     // required in order for them to view or export passwords. Otherwise there
     // is no additional security so |tokenRequestManager_| will immediately
@@ -386,17 +383,18 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
     syncBrowserProxy.sendSyncPrefsChanged();
 
     // For non-ChromeOS, non-Lacros, also check whether accounts are available.
-    // <if expr="not (chromeos or lacros)">
+    // <if expr="not (chromeos_ash or chromeos_lacros)">
     const storedAccountsChanged = (accounts: Array<StoredAccount>) =>
         this.storedAccounts_ = accounts;
     syncBrowserProxy.getStoredAccounts().then(storedAccountsChanged);
     this.addWebUIListener('stored-accounts-updated', storedAccountsChanged);
     // </if>
 
-    syncBrowserProxy.sendOfferTrustedVaultOptInChanged();
+    syncBrowserProxy.sendTrustedVaultBannerStateChanged();
     this.addWebUIListener(
-        'offer-trusted-vault-opt-in-changed', (offerOptIn: boolean) => {
-          this.shouldOfferTrustedVaultOptIn_ = offerOptIn;
+        'trusted-vault-banner-state-changed',
+        (state: TrustedVaultBannerState) => {
+          this.trustedVaultBannerState_ = state;
         });
 
     afterNextRender(this, function() {
@@ -493,12 +491,21 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
         PasswordCheckReferrer.PASSWORD_SETTINGS);
   }
 
-  /**
-   * Shows the page to opt in to trusted vault encryption.
-   */
-  private onTrustedVaultOptInClick_() {
-    OpenWindowProxyImpl.getInstance().openURL(
-        loadTimeData.getString('trustedVaultOptInUrl'));
+  private onTrustedVaultBannerClick_() {
+    switch (this.trustedVaultBannerState_) {
+      case TrustedVaultBannerState.OPTED_IN:
+        // TODO(crbug.com/1202088): Use correct help center URL here.
+        OpenWindowProxyImpl.getInstance().openURL(
+            loadTimeData.getString('passwordManagerLearnMoreURL'));
+        break;
+      case TrustedVaultBannerState.OFFER_OPT_IN:
+        OpenWindowProxyImpl.getInstance().openURL(
+            loadTimeData.getString('trustedVaultOptInUrl'));
+        break;
+      case TrustedVaultBannerState.NOT_SHOWN:
+      default:
+        assertNotReached();
+    }
   }
 
   /**
@@ -508,7 +515,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
     Router.getInstance().navigateTo(routes.DEVICE_PASSWORDS);
   }
 
-  // <if expr="chromeos or lacros">
+  // <if expr="chromeos_ash or chromeos_lacros">
   /**
    * When this event fired, it means that the password-prompt-dialog succeeded
    * in creating a fresh token in the quickUnlockPrivate API. Because new tokens
@@ -617,7 +624,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
 
   private onAddPasswordTap_() {
     chrome.metricsPrivate.recordEnumerationValue(
-        'AddCredentialFromSettingsUserInteractions',
+        'PasswordManager.AddCredentialFromSettings.UserAction',
         AddCredentialFromSettingsUserInteractions.Add_Dialog_Opened,
         AddCredentialFromSettingsUserInteractions.COUNT);
     this.showAddPasswordDialog_ = true;
@@ -627,7 +634,7 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
 
   private onAddPasswordDialogClosed_() {
     chrome.metricsPrivate.recordEnumerationValue(
-        'AddCredentialFromSettingsUserInteractions',
+        'PasswordManager.AddCredentialFromSettings.UserAction',
         AddCredentialFromSettingsUserInteractions.Add_Dialog_Closed,
         AddCredentialFromSettingsUserInteractions.COUNT);
     this.showAddPasswordDialog_ = false;
@@ -698,6 +705,24 @@ export class PasswordsSectionElement extends PasswordsSectionElementBase {
         }
       }));
     }, 0);
+  }
+
+  private getTrustedVaultBannerSubLabel_(): string {
+    switch (this.trustedVaultBannerState_) {
+      case TrustedVaultBannerState.OPTED_IN:
+        return this.i18n('trustedVaultBannerSubLabelOptedIn');
+      case TrustedVaultBannerState.OFFER_OPT_IN:
+        return this.i18n('trustedVaultBannerSubLabelOfferOptIn');
+      case TrustedVaultBannerState.NOT_SHOWN:
+        return '';
+      default:
+        assertNotReached();
+        return '';
+    }
+  }
+
+  private shouldHideTrustedVaultBanner_(): boolean {
+    return this.trustedVaultBannerState_ === TrustedVaultBannerState.NOT_SHOWN;
   }
 }
 

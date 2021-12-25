@@ -5,6 +5,9 @@
 #import "ios/chrome/browser/ui/settings/table_cell_catalog_view_controller.h"
 
 #include "base/mac/foundation_util.h"
+#import "ios/chrome/browser/net/crurl.h"
+#import "ios/chrome/browser/signin/constants.h"
+#import "ios/chrome/browser/signin/signin_util.h"
 #import "ios/chrome/browser/ui/authentication/cells/signin_promo_view_configurator.h"
 #import "ios/chrome/browser/ui/authentication/cells/table_view_account_item.h"
 #import "ios/chrome/browser/ui/authentication/cells/table_view_signin_promo_item.h"
@@ -35,6 +38,7 @@
 #include "ios/chrome/browser/ui/ui_feature_flags.h"
 #import "ios/chrome/browser/ui/util/uikit_ui_util.h"
 #import "ios/chrome/common/ui/colors/semantic_color_names.h"
+#import "ios/chrome/common/ui/util/image_util.h"
 #import "ios/public/provider/chrome/browser/signin/signin_resources_api.h"
 #include "url/gurl.h"
 
@@ -479,6 +483,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
       [[TableViewLinkHeaderFooterItem alloc] initWithType:ItemTypeLinkFooter];
   linkFooter.text =
       @"This is a footer text view with a BEGIN_LINKlinkEND_LINK in the middle";
+  linkFooter.urls =
+      @[ [[CrURL alloc] initWithGURL:GURL("http://www.example.com")] ];
   [model setFooter:linkFooter
       forSectionWithIdentifier:SectionIdentifierSettings];
 
@@ -495,14 +501,29 @@ typedef NS_ENUM(NSInteger, ItemType) {
       toSectionWithIdentifier:SectionIdentifierAutofill];
 
   // SectionIdentifierAccount.
+  UIImage* signinPromoAvatar = ios::provider::GetSigninDefaultAvatar();
+  CGSize avatarSize =
+      GetSizeForIdentityAvatarSize(IdentityAvatarSize::SmallSize);
+  signinPromoAvatar =
+      ResizeImage(signinPromoAvatar, avatarSize, ProjectionMode::kFill);
   TableViewSigninPromoItem* signinPromo =
       [[TableViewSigninPromoItem alloc] initWithType:ItemTypeAccount];
   signinPromo.configurator = [[SigninPromoViewConfigurator alloc]
       initWithSigninPromoViewMode:SigninPromoViewModeSigninWithAccount
                         userEmail:@"jonhdoe@example.com"
                     userGivenName:@"John Doe"
-                        userImage:nil
+                        userImage:signinPromoAvatar
                    hasCloseButton:NO];
+  signinPromo.text = @"Signin promo text example";
+  [model addItem:signinPromo toSectionWithIdentifier:SectionIdentifierAccount];
+
+  signinPromo = [[TableViewSigninPromoItem alloc] initWithType:ItemTypeAccount];
+  signinPromo.configurator = [[SigninPromoViewConfigurator alloc]
+      initWithSigninPromoViewMode:SigninPromoViewModeNoAccounts
+                        userEmail:nil
+                    userGivenName:nil
+                        userImage:nil
+                   hasCloseButton:YES];
   signinPromo.text = @"Signin promo text example";
   [model addItem:signinPromo toSectionWithIdentifier:SectionIdentifierAccount];
 

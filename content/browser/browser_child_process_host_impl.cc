@@ -20,7 +20,6 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/persistent_histogram_allocator.h"
 #include "base/metrics/persistent_memory_allocator.h"
-#include "base/no_destructor.h"
 #include "base/strings/string_util.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/threading/thread_task_runner_handle.h"
@@ -87,19 +86,6 @@ void NotifyProcessLaunchedAndConnected(const ChildProcessData& data) {
   for (auto& observer : g_browser_child_process_observers.Get())
     observer.BrowserChildProcessLaunchedAndConnected(data);
 }
-
-void NotifyProcessHostDisconnected(const ChildProcessData& data) {
-  for (auto& observer : g_browser_child_process_observers.Get())
-    observer.BrowserChildProcessHostDisconnected(data);
-}
-
-#if !defined(OS_ANDROID)
-void NotifyProcessCrashed(const ChildProcessData& data,
-                          const ChildProcessTerminationInfo& info) {
-  for (auto& observer : g_browser_child_process_observers.Get())
-    observer.BrowserChildProcessCrashed(data, info);
-}
-#endif
 
 void NotifyProcessKilled(const ChildProcessData& data,
                          const ChildProcessTerminationInfo& info) {
@@ -200,13 +186,15 @@ BrowserChildProcessHostImpl::BrowserChildProcessHostImpl(
 }
 
 BrowserChildProcessHostImpl::~BrowserChildProcessHostImpl() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   g_child_process_list.Get().remove(this);
 
-  if (notify_child_connection_status_) {
-    GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&NotifyProcessHostDisconnected, data_.Duplicate()));
-  }
+  if (!notify_child_connection_status_)
+    return;
+
+  ChildProcessData data = data_.Duplicate();
+  for (auto& observer : g_browser_child_process_observers.Get())
+    observer.BrowserChildProcessHostDisconnected(data);
 }
 
 // static
@@ -399,17 +387,15 @@ void BrowserChildProcessHostImpl::OnChannelConnected(int32_t peer_pid) {
 }
 
 void BrowserChildProcessHostImpl::OnProcessConnected() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
 #if defined(OS_WIN)
   // From this point onward, the exit of the child process is detected by an
   // error on the IPC channel or ChildProcessHost pipe.
   early_exit_watcher_.StopWatching();
 #endif
 
-  if (IsProcessLaunched()) {
-    GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&NotifyProcessLaunchedAndConnected, data_.Duplicate()));
-  }
+  if (IsProcessLaunched())
+    NotifyProcessLaunchedAndConnected(data_.Duplicate());
 }
 
 void BrowserChildProcessHostImpl::OnChannelError() {
@@ -466,17 +452,15 @@ void BrowserChildProcessHostImpl::OnChildDisconnected() {
     if (!info.clean_exit) {
       delegate_->OnProcessCrashed(info.exit_code);
     }
-    GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&NotifyProcessKilled, data_.Duplicate(), info));
+    NotifyProcessKilled(data_.Duplicate(), info);
 #else  // OS_ANDROID
     switch (info.status) {
       case base::TERMINATION_STATUS_PROCESS_CRASHED:
       case base::TERMINATION_STATUS_ABNORMAL_TERMINATION: {
         delegate_->OnProcessCrashed(info.exit_code);
-        GetUIThreadTaskRunner({})->PostTask(
-            FROM_HERE,
-            base::BindOnce(&NotifyProcessCrashed, data_.Duplicate(), info));
+        ChildProcessData data = data_.Duplicate();
+        for (auto& observer : g_browser_child_process_observers.Get())
+          observer.BrowserChildProcessCrashed(data, info);
         UMA_HISTOGRAM_ENUMERATION("ChildProcess.Crashed2",
                                   static_cast<ProcessType>(data_.process_type),
                                   PROCESS_TYPE_MAX);
@@ -487,9 +471,7 @@ void BrowserChildProcessHostImpl::OnChildDisconnected() {
 #endif
       case base::TERMINATION_STATUS_PROCESS_WAS_KILLED: {
         delegate_->OnProcessCrashed(info.exit_code);
-        GetUIThreadTaskRunner({})->PostTask(
-            FROM_HERE,
-            base::BindOnce(&NotifyProcessKilled, data_.Duplicate(), info));
+        NotifyProcessKilled(data_.Duplicate(), info);
         // Report that this child process was killed.
         UMA_HISTOGRAM_ENUMERATION("ChildProcess.Killed2",
                                   static_cast<ProcessType>(data_.process_type),
@@ -502,8 +484,29 @@ void BrowserChildProcessHostImpl::OnChildDisconnected() {
                                   PROCESS_TYPE_MAX);
         break;
       }
-      default:
+      case base::TERMINATION_STATUS_LAUNCH_FAILED: {
+        // This is handled in OnProcessLaunchFailed.
+        NOTREACHED();
         break;
+      }
+      case base::TERMINATION_STATUS_NORMAL_TERMINATION: {
+        // TODO(wfh): This should not be hit but is sometimes. Investigate.
+        break;
+      }
+      case base::TERMINATION_STATUS_OOM: {
+        // TODO(wfh): Decide to what to do with OOMs here.
+        break;
+      }
+#if defined(OS_WIN)
+      case base::TERMINATION_STATUS_INTEGRITY_FAILURE: {
+        // TODO(wfh): Decide to what to do with CIG failures here.
+        break;
+      }
+#endif  // OS_WIN
+      case base::TERMINATION_STATUS_MAX_ENUM: {
+        NOTREACHED();
+        break;
+      }
     }
 #endif  // OS_ANDROID
     UMA_HISTOGRAM_ENUMERATION("ChildProcess.Disconnected2",
@@ -598,7 +601,15 @@ void BrowserChildProcessHostImpl::ShareMetricsAllocatorToProcess() {
 }
 
 void BrowserChildProcessHostImpl::OnProcessLaunchFailed(int error_code) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
   delegate_->OnProcessLaunchFailed(error_code);
+  ChildProcessTerminationInfo info =
+      child_process_->GetChildTerminationInfo(/*known_dead=*/true);
+  DCHECK_EQ(info.status, base::TERMINATION_STATUS_LAUNCH_FAILED);
+
+  ChildProcessData data = data_.Duplicate();
+  for (auto& observer : g_browser_child_process_observers.Get())
+    observer.BrowserChildProcessLaunchFailed(data, info);
   notify_child_connection_status_ = false;
   delete delegate_;  // Will delete us
 }
@@ -634,11 +645,8 @@ void BrowserChildProcessHostImpl::OnProcessLaunched() {
   data_.SetProcess(process.Duplicate());
   delegate_->OnProcessLaunched();
 
-  if (notify_child_connection_status_) {
-    GetUIThreadTaskRunner({})->PostTask(
-        FROM_HERE,
-        base::BindOnce(&NotifyProcessLaunchedAndConnected, data_.Duplicate()));
-  }
+  if (notify_child_connection_status_)
+    NotifyProcessLaunchedAndConnected(data_.Duplicate());
 
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   // In ChromeOS, there are still child processes of NaCl modules, and they

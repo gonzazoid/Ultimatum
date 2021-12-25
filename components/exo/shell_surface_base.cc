@@ -794,6 +794,7 @@ void ShellSurfaceBase::AddOverlay(OverlayParams&& overlay_params) {
     params.activatable = views::Widget::InitParams::Activatable::kYes;
 
   params.delegate = new views::WidgetDelegate();
+  params.delegate->SetOwnedByWidget(true);
   params.delegate->SetContentsView(std::move(overlay_params.contents_view));
   params.name = "Overlay";
 
@@ -1534,6 +1535,14 @@ ShellSurfaceBase::CreateNonClientFrameViewInternal(views::Widget* widget) {
   if (has_frame_colors_)
     frame_view->SetFrameColors(active_frame_color_, inactive_frame_color_);
   return frame_view;
+}
+
+bool ShellSurfaceBase::ShouldExitFullscreenFromRestoreOrMaximized() {
+  if (widget_ && widget_->GetNativeWindow()) {
+    return widget_->GetNativeWindow()->GetProperty(
+        kRestoreOrMaximizeExitsFullscreen);
+  }
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

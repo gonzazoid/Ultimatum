@@ -1869,8 +1869,11 @@ int HTMLInputElement::scrollWidth() {
   // Adjust scrollWidth to include input element horizontal paddings and
   // decoration width.
   LayoutUnit adjustment = box->ClientWidth() - editor_box->ClientWidth();
+  int snapped_scroll_width =
+      SnapSizeToPixel(editor_box->ScrollWidth() + adjustment,
+                      box->Location().X() + box->ClientLeft());
   return AdjustForAbsoluteZoom::AdjustLayoutUnit(
-             editor_box->ScrollWidth() + adjustment, box->StyleRef())
+             LayoutUnit(snapped_scroll_width), box->StyleRef())
       .Round();
 }
 
@@ -2190,8 +2193,8 @@ void HTMLInputElement::MaybeReportPiiMetrics() {
   }
 }
 
-// Show a browser picker for this input element (crbug.com/939561).
-// https://github.com/whatwg/html/issues/6909
+// Show a browser picker for this input element.
+// https://html.spec.whatwg.org/multipage/input.html#dom-input-showpicker
 void HTMLInputElement::showPicker(ExceptionState& exception_state) {
   LocalFrame* frame = GetDocument().GetFrame();
   // In cross-origin iframes it should throw a "SecurityError" DOMException

@@ -470,7 +470,7 @@ std::vector<DeactivatedSource> AttributionStorageSql::StoreSource(
                              /*priority=*/0,
                              /*external_report_id=*/
                              delegate_->NewReportID(),
-                             /*conversion_id=*/absl::nullopt);
+                             /*report_id=*/absl::nullopt);
 
     if (!StoreReport(report, source_id))
       return {};
@@ -496,12 +496,12 @@ AttributionStorageSql::MaybeReplaceLowerPriorityReport(
     int num_conversions,
     int64_t conversion_priority,
     absl::optional<AttributionReport>& replaced_report) {
-  DCHECK(report.impression.impression_id().has_value());
+  DCHECK(report.source().impression_id().has_value());
   DCHECK_GE(num_conversions, 0);
 
   // If there's already capacity for the new report, there's nothing to do.
   if (num_conversions <
-      delegate_->GetMaxAttributionsPerSource(report.impression.source_type())) {
+      delegate_->GetMaxAttributionsPerSource(report.source().source_type())) {
     return MaybeReplaceLowerPriorityReportResult::kAddNewReport;
   }
 
@@ -518,9 +518,8 @@ AttributionStorageSql::MaybeReplaceLowerPriorityReport(
       "LIMIT 1";
   sql::Statement min_priority_statement(
       db_->GetCachedStatement(SQL_FROM_HERE, kMinPrioritySql));
-  min_priority_statement.BindInt64(0,
-                                   *report.impression.impression_id().value());
-  min_priority_statement.BindTime(1, report.report_time);
+  min_priority_statement.BindInt64(0, *report.source().impression_id().value());
+  min_priority_statement.BindTime(1, report.report_time());
 
   const bool has_matching_report = min_priority_statement.Step();
   if (!min_priority_statement.Succeeded())
@@ -533,8 +532,7 @@ AttributionStorageSql::MaybeReplaceLowerPriorityReport(
         "UPDATE impressions SET active = 0 WHERE impression_id = ?";
     sql::Statement deactivate_statement(
         db_->GetCachedStatement(SQL_FROM_HERE, kDeactivateSql));
-    deactivate_statement.BindInt64(0,
-                                   *report.impression.impression_id().value());
+    deactivate_statement.BindInt64(0, *report.source().impression_id().value());
     return deactivate_statement.Run()
                ? MaybeReplaceLowerPriorityReportResult::
                      kDropNewReportSourceDeactivated
@@ -666,7 +664,7 @@ CreateReportResult AttributionStorageSql::MaybeCreateAndStoreReport(
                            /*conversion_time=*/current_time,
                            /*report_time=*/report_time, trigger.priority(),
                            /*external_report_id=*/delegate_->NewReportID(),
-                           /*conversion_id=*/absl::nullopt);
+                           /*report_id=*/absl::nullopt);
 
   switch (
       rate_limit_table_.AttributionAllowed(db_.get(), report, current_time)) {
@@ -714,12 +712,12 @@ CreateReportResult AttributionStorageSql::MaybeCreateAndStoreReport(
   // Reports with `AttributionLogic::kNever` should be included in all
   // attribution operations and matching, but only `kTruthfully` should generate
   // reports that get sent.
-  const bool create_report = report.impression.attribution_logic() ==
+  const bool create_report = report.source().attribution_logic() ==
                              StorableSource::AttributionLogic::kTruthfully;
 
   if (create_report) {
-    DCHECK(report.impression.impression_id().has_value());
-    if (!StoreReport(report, *report.impression.impression_id())) {
+    DCHECK(report.source().impression_id().has_value());
+    if (!StoreReport(report, *report.source().impression_id())) {
       return CreateReportResult(CreateReportStatus::kInternalError);
     }
   }
@@ -733,7 +731,7 @@ CreateReportResult AttributionStorageSql::MaybeCreateAndStoreReport(
     sql::Statement insert_dedup_key_statement(
         db_->GetCachedStatement(SQL_FROM_HERE, kInsertDedupKeySql));
     insert_dedup_key_statement.BindInt64(
-        0, *report.impression.impression_id().value());
+        0, *report.source().impression_id().value());
     insert_dedup_key_statement.BindInt64(1, *trigger.dedup_key());
     if (!insert_dedup_key_statement.Run()) {
       return CreateReportResult(CreateReportStatus::kInternalError);
@@ -752,7 +750,7 @@ CreateReportResult AttributionStorageSql::MaybeCreateAndStoreReport(
 
     // Update the attributed source.
     impression_update_statement.BindInt64(
-        0, *report.impression.impression_id().value());
+        0, *report.source().impression_id().value());
     if (!impression_update_statement.Run()) {
       return CreateReportResult(CreateReportStatus::kInternalError);
     }
@@ -788,7 +786,8 @@ CreateReportResult AttributionStorageSql::MaybeCreateAndStoreReport(
               MaybeReplaceLowerPriorityReportResult::kReplaceOldReport
           ? CreateReportStatus::kSuccessDroppedLowerPriority
           : CreateReportStatus::kSuccess,
-      std::move(replaced_report));
+      std::move(replaced_report),
+      /*dropped_report_source_deactivation_reason=*/absl::nullopt, report_time);
 }
 
 bool AttributionStorageSql::StoreReport(const AttributionReport& report,
@@ -800,12 +799,12 @@ bool AttributionStorageSql::StoreReport(const AttributionReport& report,
   sql::Statement store_report_statement(
       db_->GetCachedStatement(SQL_FROM_HERE, kStoreReportSql));
   store_report_statement.BindInt64(0, *source_id);
-  store_report_statement.BindInt64(1, SerializeUint64(report.trigger_data));
-  store_report_statement.BindTime(2, report.conversion_time);
-  store_report_statement.BindTime(3, report.report_time);
-  store_report_statement.BindInt64(4, report.priority);
+  store_report_statement.BindInt64(1, SerializeUint64(report.trigger_data()));
+  store_report_statement.BindTime(2, report.conversion_time());
+  store_report_statement.BindTime(3, report.report_time());
+  store_report_statement.BindInt64(4, report.priority());
   store_report_statement.BindString(
-      5, report.external_report_id.AsLowercaseString());
+      5, report.external_report_id().AsLowercaseString());
   return store_report_statement.Run();
 }
 
@@ -860,7 +859,7 @@ absl::optional<AttributionReport> ReadReportFromStatement(
   AttributionReport report(std::move(source), trigger_data, conversion_time,
                            report_time, conversion_priority,
                            std::move(external_report_id), conversion_id);
-  report.failed_send_attempts = failed_send_attempts;
+  report.set_failed_send_attempts(failed_send_attempts);
   return report;
 }
 
@@ -874,7 +873,7 @@ std::vector<AttributionReport> AttributionStorageSql::GetAttributionsToReport(
     return {};
 
   // Get at most |limit| entries in the conversions table with a |report_time|
-  // less than |max_report_time| and their matching information from the
+  // no greater than |max_report_time| and their matching information from the
   // impression table. Negatives are treated as no limit
   // (https://sqlite.org/lang_select.html#limitoffset).
   static constexpr char kGetReportsSql[] =
@@ -902,6 +901,27 @@ std::vector<AttributionReport> AttributionStorageSql::GetAttributionsToReport(
   if (!statement.Succeeded())
     return {};
   return reports;
+}
+
+absl::optional<base::Time> AttributionStorageSql::GetNextReportTime(
+    base::Time time) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  if (!LazyInit(DbCreationPolicy::kIgnoreIfAbsent))
+    return absl::nullopt;
+
+  static constexpr char kNextReportTimeSql[] =
+      "SELECT MIN(report_time) FROM conversions "
+      "WHERE report_time > ?";
+  sql::Statement statement(
+      db_->GetCachedStatement(SQL_FROM_HERE, kNextReportTimeSql));
+  statement.BindTime(0, time);
+
+  if (statement.Step() &&
+      statement.GetColumnType(0) != sql::ColumnType::kNull) {
+    return statement.ColumnTime(0);
+  }
+
+  return absl::nullopt;
 }
 
 absl::optional<AttributionReport> AttributionStorageSql::GetReport(
@@ -1016,6 +1036,42 @@ bool AttributionStorageSql::UpdateReportForSendFailure(
   statement.BindTime(0, new_report_time);
   statement.BindInt64(1, *conversion_id);
   return statement.Run() && db_->GetLastChangeCount() == 1;
+}
+
+absl::optional<base::Time> AttributionStorageSql::AdjustOfflineReportTimes(
+    base::TimeDelta min_delay,
+    base::TimeDelta max_delay) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  DCHECK_GE(min_delay, base::TimeDelta());
+  DCHECK_GE(max_delay, base::TimeDelta());
+  DCHECK_LE(min_delay, max_delay);
+
+  if (!LazyInit(DbCreationPolicy::kIgnoreIfAbsent))
+    return absl::nullopt;
+
+  base::Time now = clock_->Now();
+
+  // Set the report time for all reports that should have been sent before now
+  // to now + a random number of microseconds between `min_delay` and
+  // `max_delay`, both inclusive. We use RANDOM, instead of a method on the
+  // delegate, to avoid having to pull all reports into memory and update them
+  // one by one. We use ABS because RANDOM may return a negative integer. We add
+  // 1 to the difference between `max_delay` and `min_delay` to ensure that the
+  // range of generated values is inclusive. If `max_delay == min_delay`, we
+  // take the remainder modulo 1, which is always 0.
+  static constexpr char kSetReportTimeSql[] =
+      "UPDATE conversions "
+      "SET report_time=?+ABS(RANDOM()%?)"
+      "WHERE report_time<?";
+  sql::Statement statement(
+      db_->GetCachedStatement(SQL_FROM_HERE, kSetReportTimeSql));
+  statement.BindTime(0, now + min_delay);
+  statement.BindInt64(1, 1 + (max_delay - min_delay).InMicroseconds());
+  statement.BindTime(2, now);
+  if (!statement.Run())
+    return absl::nullopt;
+
+  return GetNextReportTime(base::Time::Min());
 }
 
 void AttributionStorageSql::ClearData(
@@ -1424,8 +1480,7 @@ bool AttributionStorageSql::LazyInit(DbCreationPolicy creation_policy) {
     }
   }
 
-  if (InitializeSchema(db_init_status_ == DbStatus::kDeferringCreation) ==
-      false) {
+  if (!InitializeSchema(db_init_status_ == DbStatus::kDeferringCreation)) {
     HandleInitializationFailure(InitStatus::kFailedToInitializeSchema);
     return false;
   }
@@ -1454,19 +1509,16 @@ bool AttributionStorageSql::InitializeSchema(bool db_empty) {
   if (current_version == kCurrentVersionNumber)
     return true;
 
-  if (current_version <= kDeprecatedVersionNumber) {
+  // Recreate the DB if the version is deprecated or too new. In the latter
+  // case, the DB will never work until Chrome is re-upgraded. Assume the user
+  // will continue using this Chrome version and raze the DB to get attribution
+  // reporting working.
+  if (current_version <= kDeprecatedVersionNumber ||
+      meta_table_.GetCompatibleVersionNumber() > kCurrentVersionNumber) {
     // Note that this also razes the meta table, so it will need to be
     // initialized again.
     db_->Raze();
-    return CreateSchema();
-  }
-
-  if (meta_table_.GetCompatibleVersionNumber() > kCurrentVersionNumber) {
-    // In this case the database version is too new to be used. The DB will
-    // never work until Chrome is re-upgraded. Assume the user will continue
-    // using this Chrome version and raze the DB to get attribution reporting
-    // working.
-    db_->Raze();
+    meta_table_.Reset();
     return CreateSchema();
   }
 
@@ -1476,6 +1528,11 @@ bool AttributionStorageSql::InitializeSchema(bool db_empty) {
 
 bool AttributionStorageSql::CreateSchema() {
   base::ThreadTicks start_timestamp = base::ThreadTicks::Now();
+
+  sql::Transaction transaction(db_.get());
+  if (!transaction.Begin())
+    return false;
+
   // TODO(johnidel, csharrison): Many sources will share a target origin and
   // a reporting origin, so it makes sense to make a "shared string" table for
   // these to save disk / memory. However, this complicates the schema a lot, so
@@ -1620,6 +1677,9 @@ bool AttributionStorageSql::CreateSchema() {
                         kCompatibleVersionNumber)) {
     return false;
   }
+
+  if (!transaction.Commit())
+    return false;
 
   base::UmaHistogramMediumTimes("Conversions.Storage.CreationTime",
                                 base::ThreadTicks::Now() - start_timestamp);

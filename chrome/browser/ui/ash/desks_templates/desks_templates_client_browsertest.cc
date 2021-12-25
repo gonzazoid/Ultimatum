@@ -25,14 +25,16 @@
 #include "chrome/browser/apps/app_service/app_service_proxy.h"
 #include "chrome/browser/apps/app_service/app_service_proxy_factory.h"
 #include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
+#include "chrome/browser/ash/app_restore/app_restore_arc_test_helper.h"
+#include "chrome/browser/ash/app_restore/app_restore_test_util.h"
 #include "chrome/browser/ash/login/login_manager_test.h"
 #include "chrome/browser/ash/login/test/login_manager_mixin.h"
 #include "chrome/browser/ash/login/ui/user_adding_screen.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/ui/ash/desks_templates/desks_templates_app_launch_handler.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -49,6 +51,7 @@
 #include "chromeos/ui/base/window_state_type.h"
 #include "components/app_restore/app_launch_info.h"
 #include "components/app_restore/features.h"
+#include "components/app_restore/full_restore_save_handler.h"
 #include "components/app_restore/full_restore_utils.h"
 #include "components/app_restore/restore_data.h"
 #include "components/app_restore/window_properties.h"
@@ -63,6 +66,7 @@
 #include "third_party/abseil-cpp/absl/types/optional.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/focus_client.h"
+#include "ui/compositor/layer.h"
 #include "ui/display/screen.h"
 #include "ui/events/test/event_generator.h"
 #include "ui/views/controls/button/button.h"
@@ -236,12 +240,9 @@ class DesksTemplatesClientTest : public extensions::PlatformAppBrowserTest {
                               ash::features::kDesksTemplates},
         /*disabled_features=*/{});
   }
+  DesksTemplatesClientTest(const DesksTemplatesClientTest&) = delete;
+  DesksTemplatesClientTest& operator=(const DesksTemplatesClientTest&) = delete;
   ~DesksTemplatesClientTest() override = default;
-
-  void SetUpOnMainThread() override {
-    ::full_restore::SetActiveProfilePath(profile()->GetPath());
-    extensions::PlatformAppBrowserTest::SetUpOnMainThread();
-  }
 
   void SetTemplate(std::unique_ptr<ash::DeskTemplate> launch_template) {
     DesksTemplatesClient::Get()->launch_template_for_test_ =
@@ -249,10 +250,8 @@ class DesksTemplatesClientTest : public extensions::PlatformAppBrowserTest {
   }
 
   void LaunchTemplate(const base::GUID& uuid) {
-    ash::DeskSwitchAnimationWaiter waiter;
     DesksTemplatesClient::Get()->LaunchDeskTemplate(uuid.AsLowercaseString(),
                                                     base::DoNothing());
-    waiter.Wait();
   }
 
   void SetAndLaunchTemplate(std::unique_ptr<ash::DeskTemplate> desk_template) {
@@ -296,6 +295,12 @@ class DesksTemplatesClientTest : public extensions::PlatformAppBrowserTest {
     return launch_in_browser
                ? web_app::LaunchBrowserForWebAppInTab(profile(), app_id)
                : web_app::LaunchWebAppBrowserAndWait(profile(), app_id);
+  }
+
+  // extensions::PlatformAppBrowserTest:
+  void SetUpOnMainThread() override {
+    ::full_restore::SetActiveProfilePath(profile()->GetPath());
+    extensions::PlatformAppBrowserTest::SetUpOnMainThread();
   }
 
  private:
@@ -1043,14 +1048,8 @@ IN_PROC_BROWSER_TEST_F(DesksTemplatesClientTest, NativeUILaunchBrowser) {
   ASSERT_TRUE(template_item);
   ClickButton(template_item);
 
-  // Clicking the button is a two part, both async process. We need to wait for
-  // the template to be fetched from the model, and then wait for the desk
-  // animation to be launched.
-  // TODO(dandersson): Remove this when the desk is no longer activated on
-  // template launch.
+  // We need to wait for the template to be fetched from the model.
   ash::WaitForDesksTemplatesUI();
-  ash::DeskSwitchAnimationWaiter waiter;
-  waiter.Wait();
 
   // Wait for the tabs to load.
   content::RunAllTasksUntilIdle();
@@ -1118,14 +1117,8 @@ IN_PROC_BROWSER_TEST_F(DesksTemplatesClientTest,
   ASSERT_TRUE(template_item);
   ClickButton(template_item);
 
-  // Clicking the button is a two part, both async process. We need to wait for
-  // the template to be fetched from the model, and then wait for the desk
-  // animation to be launched.
-  // TODO(dandersson): Remove this when the desk is no longer activated on
-  // template launch.
+  // We need to wait for the template to be fetched from the model.
   ash::WaitForDesksTemplatesUI();
-  ash::DeskSwitchAnimationWaiter waiter;
-  waiter.Wait();
 
   for (auto* browser : *BrowserList::GetInstance()) {
     aura::Window* window = browser->window()->GetNativeWindow();
@@ -1140,11 +1133,197 @@ IN_PROC_BROWSER_TEST_F(DesksTemplatesClientTest,
             settings_window->parent());
 }
 
+// Tests that launching a template that contains a system web app will move the
+// existing instance of the system web app to the current desk.
+IN_PROC_BROWSER_TEST_F(DesksTemplatesClientTest,
+                       NativeUILaunchTemplateWithSWAExisting) {
+  Profile* profile = browser()->profile();
+
+  // Create the settings app, which is a system web app.
+  CreateSettingsSystemWebApp(profile);
+
+  aura::Window* settings_window = FindBrowserWindow(kSettingsWindowId);
+  ASSERT_TRUE(settings_window);
+  EXPECT_EQ(2u, BrowserList::GetInstance()->size());
+
+  // Give the settings app a known position.
+  const gfx::Rect settings_bounds(100, 100, 600, 400);
+  settings_window->SetBounds(settings_bounds);
+  // Focus the browser so that the settings window is stacked at the bottom.
+  browser()->window()->GetNativeWindow()->Focus();
+  ASSERT_THAT(settings_window->parent()->children(),
+              ElementsAre(settings_window, _));
+
+  // Enter overview and save the current desk as a template.
+  ash::ToggleOverview();
+  ash::WaitForOverviewEnterAnimation();
+  views::Button* save_desk_as_template_button =
+      ash::GetSaveDeskAsTemplateButton();
+  ASSERT_TRUE(save_desk_as_template_button);
+  ClickButton(save_desk_as_template_button);
+
+  // Exit overview and move the settings window to a new place and stack it on
+  // top so that we can later verify that it has been placed and stacked
+  // correctly.
+  ash::ToggleOverview();
+  ash::WaitForOverviewExitAnimation();
+  settings_window->SetBounds(gfx::Rect(150, 150, 650, 500));
+  settings_window->Focus();
+
+  // Enter overview, head over to the desks templates grid and launch the
+  // template.
+  ash::ToggleOverview();
+  ash::WaitForOverviewEnterAnimation();
+  views::Button* zero_state_templates_button =
+      ash::GetZeroStateDesksTemplatesButton();
+  ASSERT_TRUE(zero_state_templates_button);
+  ClickButton(zero_state_templates_button);
+
+  ash::WaitForDesksTemplatesUI();
+  views::Button* template_item = ash::GetTemplateItemButton(/*index=*/0);
+  ASSERT_TRUE(template_item);
+  ClickButton(template_item);
+
+  // Wait for the tabs to load.
+  content::RunAllTasksUntilIdle();
+
+  // Exit overview.
+  ash::ToggleOverview();
+  ash::WaitForOverviewExitAnimation();
+
+  ash::DesksController* desks_controller = ash::DesksController::Get();
+  ASSERT_EQ(1, desks_controller->GetActiveDeskIndex());
+
+  // We launch a new browser window, but not a new settings app. Verify that the
+  // window has been moved to the right place and stacked at the bottom.
+  EXPECT_EQ(3u, BrowserList::GetInstance()->size());
+  EXPECT_TRUE(desks_controller->BelongsToActiveDesk(settings_window));
+  EXPECT_EQ(settings_bounds, settings_window->bounds());
+
+  // TODO(crbug.com/1281393): Verify that the element order is correct.
+
+  // Tests that there is no clipping on the settings window.
+  EXPECT_EQ(gfx::Rect(), settings_window->layer()->clip_rect());
+}
+
+class DesksTemplatesClientArcTest : public InProcessBrowserTest {
+ public:
+  DesksTemplatesClientArcTest() {
+    scoped_feature_list_.InitWithFeatures(
+        /*enabled_features=*/{full_restore::features::kFullRestore,
+                              ash::features::kDesksTemplates},
+        /*disabled_features=*/{});
+  }
+  DesksTemplatesClientArcTest(const DesksTemplatesClientArcTest&) = delete;
+  DesksTemplatesClientArcTest& operator=(const DesksTemplatesClientArcTest&) =
+      delete;
+  ~DesksTemplatesClientArcTest() override = default;
+
+  ash::AppRestoreArcTestHelper* arc_helper() { return &arc_helper_; }
+
+  // InProcessBrowserTest:
+  void SetUpCommandLine(base::CommandLine* command_line) override {
+    arc_helper_.SetUpCommandLine(command_line);
+    InProcessBrowserTest::SetUpCommandLine(command_line);
+  }
+
+  void SetUpInProcessBrowserTestFixture() override {
+    arc_helper_.SetUpInProcessBrowserTestFixture();
+    InProcessBrowserTest::SetUpInProcessBrowserTestFixture();
+  }
+
+  void SetUpOnMainThread() override {
+    arc_helper_.SetUpOnMainThread(browser()->profile());
+    InProcessBrowserTest::SetUpOnMainThread();
+  }
+
+ private:
+  ash::AppRestoreArcTestHelper arc_helper_;
+  base::test::ScopedFeatureList scoped_feature_list_;
+};
+
+// Tests that launching a template that contains an ARC app works as expected.
+IN_PROC_BROWSER_TEST_F(DesksTemplatesClientArcTest,
+                       NativeUILaunchTemplateWithArcApp) {
+  auto* desk_model = DesksTemplatesClient::Get()->GetDeskModel();
+  ASSERT_EQ(0, desk_model->GetEntryCount());
+
+  constexpr char kTestAppPackage[] = "test.arc.app.package";
+  arc_helper()->InstallTestApps(kTestAppPackage, /*multi_app=*/false);
+  const std::string app_id = ash::GetTestApp1Id(kTestAppPackage);
+
+  int32_t session_id1 =
+      full_restore::FullRestoreSaveHandler::GetInstance()->GetArcSessionId();
+
+  // Create the window for app1. The task id needs to match the
+  // `window_app_id` arg of `CreateExoWindow`.
+  const int32_t kTaskId1 = 100;
+  views::Widget* widget = ash::CreateExoWindow("org.chromium.arc.100");
+  widget->SetBounds(gfx::Rect(500, 500));
+  full_restore::SaveAppLaunchInfo(browser()->profile()->GetPath(),
+                                  std::make_unique<app_restore::AppLaunchInfo>(
+                                      app_id, ui::EventFlags::EF_NONE,
+                                      session_id1, display::kDefaultDisplayId));
+
+  // Simulate creating the task.
+  arc_helper()->CreateTask(app_id, kTaskId1, session_id1);
+
+  // Enter overview and save the current desk as a template.
+  ash::ToggleOverview();
+  ash::WaitForOverviewEnterAnimation();
+  views::Button* save_desk_as_template_button =
+      ash::GetSaveDeskAsTemplateButton();
+  ASSERT_TRUE(save_desk_as_template_button);
+  ClickButton(save_desk_as_template_button);
+  ash::WaitForDesksTemplatesUI();
+  ASSERT_EQ(1, desk_model->GetEntryCount());
+
+  // Exit overview and close the Arc window. We'll need to verify if it
+  // reopens later.
+  ash::ToggleOverview();
+  ash::WaitForOverviewExitAnimation();
+  widget->CloseNow();
+  arc_helper()->GetAppHost()->OnTaskDestroyed(kTaskId1);
+
+  // Enter overview, head over to the desks templates grid and launch the
+  // template.
+  ash::ToggleOverview();
+  ash::WaitForOverviewEnterAnimation();
+  views::Button* zero_state_templates_button =
+      ash::GetZeroStateDesksTemplatesButton();
+  ASSERT_TRUE(zero_state_templates_button);
+  ClickButton(zero_state_templates_button);
+
+  ash::WaitForDesksTemplatesUI();
+  views::Button* template_item = ash::GetTemplateItemButton(/*index=*/0);
+  ASSERT_TRUE(template_item);
+  ClickButton(template_item);
+
+  ash::WaitForDesksTemplatesUI();
+  ash::ToggleOverview();
+  ash::WaitForOverviewExitAnimation();
+
+  // Create the window to simulate launching the ARC app.
+  const int32_t kTaskId2 = 200;
+  auto* widget1 = ash::CreateExoWindow("org.chromium.arc.200");
+  auto* window1 = widget1->GetNativeWindow();
+  arc_helper()->CreateTask(app_id, kTaskId2, session_id1);
+
+  // Tests that the ARC app is launched on desk 2.
+  EXPECT_EQ(ash::Shell::GetContainer(window1->GetRootWindow(),
+                                     ash::kShellWindowId_DeskContainerB),
+            window1->parent());
+
+  widget1->CloseNow();
+  arc_helper()->GetAppHost()->OnTaskDestroyed(kTaskId2);
+  arc_helper()->StopInstance();
+}
+
 // TODO(crbug.com/1273532): Add more tests:
 // - Deleting templates.
 // - Launching templates with uninstalled apps.
-// - Launching ARC apps.
 // - Launching ARC apps which already have an instance open.
+// - Test for spoken feedback.
 // - Port tests that use `DesksTemplatesClient` directly. These were meant to
 //   test launching while the prototype extension was being built, but now we
 //   can do end to end tests with the native UI.

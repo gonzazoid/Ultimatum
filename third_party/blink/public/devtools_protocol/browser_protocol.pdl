@@ -770,6 +770,22 @@ experimental domain Audits
       # https://www.chromestatus.com/feature/5684870116278272 for more details."
       deprecated optional string message
 
+  type ClientHintIssueReason extends string
+    enum
+      # Items in the accept-ch meta tag allow list must be valid origins.
+      # No special values (e.g. self, none, and *) are permitted.
+      MetaTagAllowListInvalidOrigin
+      # Only accept-ch meta tags in the original HTML sent from the server
+      # are respected. Any injected via javascript (or other means) are ignored.
+      MetaTagModifiedHTML
+
+  # This issue tracks client hints related issues. It's used to deprecate old
+  # features, encourage the use of new ones, and provide general guidance.
+  type ClientHintIssueDetails extends object
+    properties
+      SourceCodeLocation sourceCodeLocation
+      ClientHintIssueReason clientHintIssueReason
+
   # A unique identifier for the type of issue. Each type may use one of the
   # optional fields in InspectorIssueDetails to convey more specific
   # information about the kind of issue.
@@ -790,6 +806,7 @@ experimental domain Audits
       WasmCrossOriginModuleSharingIssue
       GenericIssue
       DeprecationIssue
+      ClientHintIssue
 
   # This struct holds a list of optional fields with additional information
   # specific to the kind of issue. When adding a new issue code, please also
@@ -811,6 +828,7 @@ experimental domain Audits
       optional WasmCrossOriginModuleSharingIssueDetails wasmCrossOriginModuleSharingIssue
       optional GenericIssueDetails genericIssueDetails
       optional DeprecationIssueDetails deprecationIssueDetails
+      optional ClientHintIssueDetails clientHintIssueDetails
 
   # A unique id for a DevTools inspector issue. Allows other entities (e.g.
   # exceptions, CDP message, console messages, etc.) to reference an issue.
@@ -2031,6 +2049,10 @@ domain DOM
       scrollbar-corner
       resizer
       input-list-button
+      transition
+      transition-container
+      transition-old-content
+      transition-new-content
 
   # Shadow root type.
   type ShadowRootType extends string
@@ -8078,6 +8100,15 @@ domain Page
       # Not restored reason
       BackForwardCacheNotRestoredReason reason
 
+  experimental type BackForwardCacheNotRestoredExplanationTree extends object
+    properties
+      # URL of each frame
+      string url
+      # Not restored reasons of each frame
+      array of BackForwardCacheNotRestoredExplanation explanations
+      # Array of children frame
+      array of BackForwardCacheNotRestoredExplanationTree children
+
   # Fired for failed bfcache history navigations if BackForwardCache feature is enabled. Do
   # not assume any ordering with the Page.frameNavigated event. This event is fired only for
   # main-frame history navigation where the document changes (non-same-document navigations),
@@ -8090,6 +8121,8 @@ domain Page
       FrameId frameId
       # Array of reasons why the page could not be cached. This must not be empty.
       array of BackForwardCacheNotRestoredExplanation notRestoredExplanations
+      # Tree structure of reasons why the page could not be cached for each frame.
+      optional BackForwardCacheNotRestoredExplanationTree notRestoredExplanationsTree
 
   event loadEventFired
     parameters
@@ -9762,6 +9795,10 @@ experimental domain WebAuthn
       # https://fidoalliance.org/specs/fido-v2.1-rd-20201208/fido-client-to-authenticator-protocol-v2.1-rd-20201208.html#sctn-credBlob-extension
       # Defaults to false.
       optional boolean hasCredBlob
+      # If set to true, the authenticator will support the minPinLength extension.
+      # https://fidoalliance.org/specs/fido-v2.1-ps-20210615/fido-client-to-authenticator-protocol-v2.1-ps-20210615.html#sctn-minpinlength-extension
+      # Defaults to false.
+      optional boolean hasMinPinLength
       # If set to true, tests of user presence will succeed immediately.
       # Otherwise, they will not be resolved. Defaults to true.
       optional boolean automaticPresenceSimulation

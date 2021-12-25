@@ -7,7 +7,6 @@
 
 #include <memory>
 
-#include "ash/ash_export.h"
 #include "base/time/time.h"
 #include "chromeos/dbus/power/power_manager_client.h"
 
@@ -18,8 +17,7 @@ namespace ash {
 class SessionControllerImpl;
 class FullscreenNotificationBubble;
 
-class ASH_EXPORT FullscreenController
-    : public chromeos::PowerManagerClient::Observer {
+class FullscreenController : public chromeos::PowerManagerClient::Observer {
  public:
   explicit FullscreenController(SessionControllerImpl* session_controller);
   FullscreenController(const FullscreenController&) = delete;
@@ -30,13 +28,6 @@ class ASH_EXPORT FullscreenController
   static void MaybeExitFullscreen();
 
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
-
-  void OnLockStateChanged(bool locked);
-
-  void OnLoginScreenUiWindowClosed();
-
-  // Returns the bubble for testing purposes.
-  FullscreenNotificationBubble* bubble_for_test() { return bubble_.get(); }
 
  private:
   // chromeos::PowerManagerClient::Observer:

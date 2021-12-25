@@ -9,6 +9,8 @@
 #include <memory>
 #include <string>
 
+#include "ash/components/login/auth/key.h"
+#include "ash/components/login/auth/user_context.h"
 #include "ash/constants/ash_switches.h"
 #include "base/command_line.h"
 #include "base/containers/contains.h"
@@ -30,8 +32,6 @@
 #include "chromeos/dbus/session_manager/fake_session_manager_client.h"
 #include "chromeos/dbus/session_manager/session_manager_client.h"
 #include "chromeos/dbus/userdataauth/userdataauth_client.h"
-#include "chromeos/login/auth/key.h"
-#include "chromeos/login/auth/user_context.h"
 #include "components/account_id/account_id.h"
 #include "components/policy/core/common/cloud/cloud_policy_core.h"
 #include "components/policy/core/common/cloud/cloud_policy_store.h"
@@ -190,8 +190,8 @@ void AffiliationTestHelper::LoginUser(const AccountId& account_id) {
   const user_manager::UserType user_type =
       is_active_directory ? user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY
                           : user_manager::UserType::USER_TYPE_REGULAR;
-  chromeos::UserContext user_context(user_type, account_id);
-  user_context.SetKey(chromeos::Key("password"));
+  ash::UserContext user_context(user_type, account_id);
+  user_context.SetKey(ash::Key("password"));
   if (account_id.GetUserEmail() == kEnterpriseUserEmail) {
     user_context.SetRefreshToken(kFakeRefreshToken);
   }

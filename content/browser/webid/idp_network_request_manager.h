@@ -12,10 +12,13 @@
 #include "base/callback.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/identity_request_dialog_controller.h"
+#include "content/public/browser/web_contents.h"
 #include "services/data_decoder/public/cpp/data_decoder.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "url/gurl.h"
 #include "url/origin.h"
+
+class SkBitmap;
 
 namespace net {
 enum class ReferrerPolicy;
@@ -30,7 +33,7 @@ namespace content {
 class RenderFrameHost;
 
 // Manages network requests and maintains relevant state for interaction with
-// the Identity Provider across a WebID transaction. Owned by
+// the Identity Provider across a FedCM transaction. Owned by
 // FederatedAuthRequestImpl and has a lifetime limited to a single identity
 // transaction between an RP and an IDP.
 //
@@ -39,7 +42,7 @@ class RenderFrameHost;
 //  |Browser|                           |IDP|
 //  '-------'                           '---'
 //      |                                 |
-//      |     GET /.well-known/webid      |
+//      |     GET /.well-known/fedcm      |
 //      |-------------------------------->|
 //      |                                 |
 //      |        JSON{idp_url}            |
@@ -61,28 +64,16 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
  public:
   enum class FetchStatus {
     kSuccess,
-    kWebIdNotSupported,
-    kFetchError,
+    kHttpNotFoundError,
+    kNoResponseError,
     kInvalidResponseError,
+    kInvalidRequestError,
   };
 
   enum class SigninResponse {
     kLoadIdp,
     kTokenGranted,
     kSigninError,
-    kInvalidResponseError,
-  };
-
-  enum class AccountsResponse {
-    kSuccess,
-    kNetError,
-    kInvalidResponseError,
-  };
-
-  enum class TokenResponse {
-    kSuccess,
-    kNetError,
-    kInvalidRequestError,
     kInvalidResponseError,
   };
 
@@ -113,9 +104,13 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
     std::string terms_of_service_url;
   };
 
-  static constexpr char kWellKnownFilePath[] = ".well-known/webid";
+  static constexpr char kWellKnownFilePath[] = ".well-known/fedcm";
 
   using AccountList = std::vector<content::IdentityRequestAccount>;
+  using BrandIconDownloader =
+      base::OnceCallback<void(const GURL& /*icon_url*/,
+                              int /*ideal_icon_size*/,
+                              WebContents::ImageDownloadCallback)>;
   using FetchWellKnownCallback =
       base::OnceCallback<void(FetchStatus, Endpoints)>;
   using FetchClientIdMetadataCallback =
@@ -123,9 +118,9 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
   using SigninRequestCallback =
       base::OnceCallback<void(SigninResponse, const std::string&)>;
   using AccountsRequestCallback = base::OnceCallback<
-      void(AccountsResponse, AccountList, IdentityProviderMetadata)>;
+      void(FetchStatus, AccountList, IdentityProviderMetadata)>;
   using TokenRequestCallback =
-      base::OnceCallback<void(TokenResponse, const std::string&)>;
+      base::OnceCallback<void(FetchStatus, const std::string&)>;
   using RevokeCallback = base::OnceCallback<void(RevokeResponse)>;
   using LogoutCallback = base::OnceCallback<void()>;
 
@@ -157,7 +152,10 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
 
   // Fetch accounts list for this user from the IDP.
   virtual void SendAccountsRequest(const GURL& accounts_url,
-                                   AccountsRequestCallback);
+                                   int idp_brand_icon_ideal_size,
+                                   int idp_brand_icon_minimum_size,
+                                   BrandIconDownloader icon_downloader,
+                                   AccountsRequestCallback callback);
 
   // Request a new token for this user account and RP from the IDP.
   virtual void SendTokenRequest(const GURL& token_url,
@@ -183,6 +181,13 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
   void OnSigninRequestParsed(data_decoder::DataDecoder::ValueOrError result);
   void OnAccountsRequestResponse(std::unique_ptr<std::string> response_body);
   void OnAccountsRequestParsed(data_decoder::DataDecoder::ValueOrError result);
+  void OnIdentityProviderBrandIconFetched(AccountList account_list,
+                                          IdentityProviderMetadata idp_metadata,
+                                          int id,
+                                          int http_status_code,
+                                          const GURL& image_url,
+                                          const std::vector<SkBitmap>& bitmaps,
+                                          const std::vector<gfx::Size>& sizes);
   void OnTokenRequestResponse(std::unique_ptr<std::string> response_body);
   void OnTokenRequestParsed(data_decoder::DataDecoder::ValueOrError result);
   void OnRevokeResponse(std::unique_ptr<std::string> response_body);
@@ -210,7 +215,11 @@ class CONTENT_EXPORT IdpNetworkRequestManager {
   RevokeCallback revoke_callback_;
   LogoutCallback logout_callback_;
 
+  int idp_brand_icon_ideal_size_;
+  int idp_brand_icon_minimum_size_;
+
   std::unique_ptr<network::SimpleURLLoader> url_loader_;
+  BrandIconDownloader brand_icon_downloader_;
 
   base::WeakPtrFactory<IdpNetworkRequestManager> weak_ptr_factory_{this};
 };

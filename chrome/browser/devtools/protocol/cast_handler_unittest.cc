@@ -39,7 +39,7 @@ const media_router::MediaSink sink2{CreateCastSink(kSinkId2, kSinkName2)};
 media_router::MediaRoute Route1() {
   return media_router::MediaRoute(
       kRouteId1, media_router::MediaSource("https://example.com/"), kSinkId1,
-      "", true, true);
+      "", true);
 }
 
 class MockStartDesktopMirroringCallback
@@ -201,14 +201,14 @@ TEST_F(CastHandlerTest, StartTabMirroringWithInvalidName) {
 
 TEST_F(CastHandlerTest, StopCasting) {
   sinks_observer_->OnSinksUpdated({sink1, sink2}, {});
-  routes_observer_->OnRoutesUpdated({Route1()}, {});
+  routes_observer_->OnRoutesUpdated({Route1()});
   EXPECT_CALL(*router_, TerminateRoute(kRouteId1));
   EXPECT_TRUE(handler_->StopCasting(kSinkName1).IsSuccess());
 }
 
 TEST_F(CastHandlerTest, StopCastingWithInvalidName) {
   sinks_observer_->OnSinksUpdated({sink1, sink2}, {});
-  routes_observer_->OnRoutesUpdated({Route1()}, {});
+  routes_observer_->OnRoutesUpdated({Route1()});
   // Attempting to stop casting to a sink without a route should fail.
   EXPECT_TRUE(handler_->StopCasting(kSinkName2).IsError());
 }

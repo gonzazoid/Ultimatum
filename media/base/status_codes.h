@@ -30,6 +30,7 @@ enum class StatusCode : StatusCodeType {
   kAborted = 0x0001,
   kInvalidArgument = 0x0002,
   kKeyFrameRequired = 0x0003,
+  kWrappedError = 0x0004,
 
   // Decoder Errors: 0x01
   kDecoderInitializeNeverCompleted = 0x0101,
@@ -52,28 +53,12 @@ enum class StatusCode : StatusCodeType {
   // DecodeStatus => Status conversion.
   kDecodeErrorDoNotUse = 0x010F,
 
-  // Windows Errors: 0x02
-  kWindowsWrappedHresult = 0x0201,
-  kWindowsApiNotAvailible = 0x0202,
-  kWindowsD3D11Error = 0x0203,
-
   // MojoDecoder Errors: 0x04
   kMojoDecoderNoWrappedDecoder = 0x0401,
   kMojoDecoderStoppedBeforeInitDone = 0x0402,
   kMojoDecoderUnsupported = 0x0403,
   kMojoDecoderNoConnection = 0x0404,
   kMojoDecoderDeletedWithoutInitialization = 0x0405,
-
-  // Encoder Error: 0x06
-  kEncoderInitializeNeverCompleted = 0x0601,
-  kEncoderInitializeTwice = 0x0602,
-  kEncoderFailedEncode = 0x0603,
-  kEncoderUnsupportedProfile = 0x0604,
-  kEncoderUnsupportedCodec = 0x0605,
-  kEncoderUnsupportedConfig = 0x0606,
-  kEncoderInitializationError = 0x0607,
-  kEncoderFailedFlush = 0x0608,
-  kEncoderMojoConnectionError = 0x0609,
 
   // Format Errors: 0x08
   kH264ParsingError = 0x0801,

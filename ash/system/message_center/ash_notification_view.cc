@@ -393,6 +393,10 @@ AshNotificationView::AshNotificationView(
       views::kFlexBehaviorKey,
       views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
                                views::MaximumFlexSizeRule::kUnbounded));
+  inline_reply()->SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(views::MinimumFlexSizeRule::kScaleToZero,
+                               views::MaximumFlexSizeRule::kUnbounded));
 
   static_cast<views::FlexLayout*>(header_row()->GetLayoutManager())
       ->SetDefault(views::kMarginsKey, gfx::Insets())
@@ -426,7 +430,7 @@ AshNotificationView::~AshNotificationView() = default;
 void AshNotificationView::SetGroupedChildExpanded(bool expanded) {
   collapsed_summary_view_->SetVisible(!expanded);
   main_view_->SetVisible(expanded);
-  control_buttons_view_->SetVisible(expanded);
+  control_buttons_container_->SetVisible(expanded);
 }
 
 void AshNotificationView::AnimateGroupedChildExpandedCollapse(bool expanded) {
@@ -983,7 +987,8 @@ void AshNotificationView::UpdateAppIconView() {
 
   // Grouped child notification use notification's icon for the app icon view,
   // so we don't need further update here.
-  if (is_grouped_child_view_ && !notification->icon().IsEmpty())
+  if (!notification ||
+      (is_grouped_child_view_ && !notification->icon().IsEmpty()))
     return;
 
   SkColor accent_color = notification->accent_color().value_or(

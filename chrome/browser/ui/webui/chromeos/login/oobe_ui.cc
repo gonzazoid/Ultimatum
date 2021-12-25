@@ -285,21 +285,20 @@ void AddTestAPIResources(content::WebUIDataSource* source) {
 // Default and non-shared resource definition for kOobeDisplay display type.
 // chrome://oobe/oobe
 void AddOobeDisplayTypeDefaultResources(content::WebUIDataSource* source) {
-  if (switches::IsOsInstallAllowed()) {
-    source->SetDefaultResource(IDR_OS_INSTALL_OOBE_HTML);
-    source->AddResourcePath(kCustomElementsHTMLPath,
-                            IDR_CUSTOM_ELEMENTS_OS_INSTALL_OOBE_HTML);
-    source->AddResourcePath(kCustomElementsJSPath,
-                            IDR_CUSTOM_ELEMENTS_OS_INSTALL_OOBE_JS);
+  if (features::IsOobePolymer3Enabled()) {
+    // TODO(crbug.com/1279339): Separate CloudReady screens resources.
+    source->SetDefaultResource(IDR_OOBE_POLY3_HTML);
   } else {
-    if (features::IsOobePolymer3Enabled()) {
-      source->SetDefaultResource(IDR_OOBE_POLY3_HTML);
+    if (switches::IsOsInstallAllowed()) {
+      source->SetDefaultResource(IDR_OS_INSTALL_OOBE_HTML);
+      source->AddResourcePath(kCustomElementsHTMLPath,
+                              IDR_CUSTOM_ELEMENTS_OS_INSTALL_OOBE_HTML);
     } else {
       source->SetDefaultResource(IDR_OOBE_HTML);
       source->AddResourcePath(kCustomElementsHTMLPath,
                               IDR_CUSTOM_ELEMENTS_OOBE_HTML);
-      source->AddResourcePath(kCustomElementsJSPath, IDR_CUSTOM_ELEMENTS_OOBE_JS);
     }
+    source->AddResourcePath(kCustomElementsJSPath, IDR_CUSTOM_ELEMENTS_OOBE_JS);
   }
   source->AddResourcePath(kOobeJSPath, IDR_OOBE_JS);
 }
@@ -307,22 +306,21 @@ void AddOobeDisplayTypeDefaultResources(content::WebUIDataSource* source) {
 // Default and non-shared resource definition for kLoginDisplay display type.
 // chrome://oobe/login
 void AddLoginDisplayTypeDefaultResources(content::WebUIDataSource* source) {
-  if (switches::IsOsInstallAllowed()) {
-    source->SetDefaultResource(IDR_OS_INSTALL_LOGIN_HTML);
-    source->AddResourcePath(kCustomElementsHTMLPath,
-                            IDR_CUSTOM_ELEMENTS_OS_INSTALL_LOGIN_HTML);
-    source->AddResourcePath(kCustomElementsJSPath,
-                            IDR_CUSTOM_ELEMENTS_OS_INSTALL_LOGIN_JS);
+  if (features::IsOobePolymer3Enabled()) {
+    // TODO(crbug.com/1279339): Separate CloudReady screens resources.
+    source->SetDefaultResource(IDR_MD_LOGIN_POLY3_HTML);
   } else {
-    if (features::IsOobePolymer3Enabled()) {
-      source->SetDefaultResource(IDR_MD_LOGIN_POLY3_HTML);
+    if (switches::IsOsInstallAllowed()) {
+      source->SetDefaultResource(IDR_OS_INSTALL_LOGIN_HTML);
+      source->AddResourcePath(kCustomElementsHTMLPath,
+                              IDR_CUSTOM_ELEMENTS_OS_INSTALL_LOGIN_HTML);
     } else {
       source->SetDefaultResource(IDR_MD_LOGIN_HTML);
       source->AddResourcePath(kCustomElementsHTMLPath,
                               IDR_CUSTOM_ELEMENTS_LOGIN_HTML);
-      source->AddResourcePath(kCustomElementsJSPath,
-                              IDR_CUSTOM_ELEMENTS_LOGIN_JS);
     }
+    source->AddResourcePath(kCustomElementsJSPath,
+                            IDR_CUSTOM_ELEMENTS_LOGIN_JS);
   }
 
   source->AddResourcePath(kLoginJSPath, IDR_OOBE_JS);

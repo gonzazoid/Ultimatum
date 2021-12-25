@@ -434,8 +434,9 @@ class DnsHTTPAttempt : public DnsAttempt, public URLRequest::Delegate {
     }
 
     request_->SetExtraRequestHeaders(extra_request_headers);
-    // Disable secure DNS for any DoH server hostname lookups to avoid deadlock.
-    request_->SetSecureDnsPolicy(SecureDnsPolicy::kDisable);
+    // Apply special policy to DNS lookups for for a DoH server hostname to
+    // avoid deadlock and enable the use of preconfigured IP addresses.
+    request_->SetSecureDnsPolicy(SecureDnsPolicy::kBootstrap);
     request_->SetLoadFlags(request_->load_flags() | LOAD_DISABLE_CACHE |
                            LOAD_BYPASS_PROXY);
     request_->set_allow_credentials(false);
@@ -620,10 +621,10 @@ void ConstructDnsHTTPAttempt(DnsSession* session,
   const DnsOverHttpsServerConfig& doh_config =
       session->config().dns_over_https_servers[doh_server_index];
   GURL gurl_without_parameters(
-      GetURLFromTemplateWithoutParameters(doh_config.server_template));
+      GetURLFromTemplateWithoutParameters(doh_config.server_template()));
   attempts->push_back(std::make_unique<DnsHTTPAttempt>(
-      doh_server_index, std::move(query), doh_config.server_template,
-      gurl_without_parameters, doh_config.use_post, url_request_context,
+      doh_server_index, std::move(query), doh_config.server_template(),
+      gurl_without_parameters, doh_config.use_post(), url_request_context,
       isolation_info, request_priority));
 }
 

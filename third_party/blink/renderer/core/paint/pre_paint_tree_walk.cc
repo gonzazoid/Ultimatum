@@ -26,8 +26,6 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/link_highlight.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/cull_rect_updater.h"
 #include "third_party/blink/renderer/core/paint/object_paint_invalidator.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
@@ -45,34 +43,6 @@ bool IsLinkHighlighted(const LayoutObject& object) {
 }
 
 }  // anonymous namespace
-
-static void SetNeedsCompositingLayerPropertyUpdate(const LayoutObject& object) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
-  if (!object.HasLayer())
-    return;
-
-  auto* compositor = object.View()->Compositor();
-  if (!compositor)
-    return;
-
-  PaintLayer* paint_layer = To<LayoutBoxModelObject>(object).Layer();
-
-  // This ensures that CompositingLayerPropertyUpdater::Update will
-  // be called and update LayerState for the LayoutView.
-  auto* mapping = paint_layer->GetCompositedLayerMapping();
-  if (!mapping)
-    mapping = paint_layer->GroupedMapping();
-  if (!mapping)
-    return;
-
-  // These two calls will cause GraphicsLayerUpdater to run on |paint_layer|
-  // from with PLC::UpdateIfNeeded.
-  compositor->SetNeedsCompositingUpdate(
-      kCompositingUpdateAfterCompositingInputChange);
-  mapping->SetNeedsGraphicsLayerUpdate(kGraphicsLayerUpdateLocal);
-}
 
 void PrePaintTreeWalk::WalkTree(LocalFrameView& root_frame_view) {
   if (root_frame_view.ShouldThrottleRendering()) {
@@ -99,8 +69,6 @@ void PrePaintTreeWalk::WalkTree(LocalFrameView& root_frame_view) {
     if (property_changed >
         PaintPropertyChangeType::kChangedOnlyCompositedValues) {
       root_frame_view.SetPaintArtifactCompositorNeedsUpdate();
-      if (auto* layout_view = root_frame_view.GetLayoutView())
-        SetNeedsCompositingLayerPropertyUpdate(*layout_view);
     }
   }
 
@@ -298,15 +266,11 @@ void PrePaintTreeWalk::InvalidatePaintForHitTesting(
   context.paint_invalidator_context.painting_layer->SetNeedsRepaint();
   ObjectPaintInvalidator(object).InvalidateDisplayItemClient(
       object, PaintInvalidationReason::kHitTest);
-  SetNeedsCompositingLayerPropertyUpdate(object);
 }
 
 void PrePaintTreeWalk::UpdateAuxiliaryObjectProperties(
     const LayoutObject& object,
     PrePaintTreeWalk::PrePaintTreeWalkContext& context) {
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
   if (!object.HasLayer())
     return;
 
@@ -391,65 +355,6 @@ void PrePaintTreeWalk::CheckTreeBuilderContextState(
   NOTREACHED() << "Unknown reason.";
 }
 #endif
-
-static LayoutBoxModelObject* ContainerForPaintInvalidation(
-    const PaintLayer* painting_layer) {
-  if (!painting_layer)
-    return nullptr;
-  if (auto* containing_paint_layer =
-          painting_layer
-              ->EnclosingLayerForPaintInvalidationCrossingFrameBoundaries())
-    return &containing_paint_layer->GetLayoutObject();
-  return nullptr;
-}
-
-void PrePaintTreeWalk::UpdatePaintInvalidationContainer(
-    const LayoutObject& object,
-    const PaintLayer* painting_layer,
-    PrePaintTreeWalkContext& context,
-    bool is_ng_painting) {
-  if (RuntimeEnabledFeatures::CompositeAfterPaintEnabled())
-    return;
-
-  if (object.IsPaintInvalidationContainer()) {
-    context.paint_invalidation_container = To<LayoutBoxModelObject>(&object);
-    if (object.IsStackingContext() || object.IsSVGRoot()) {
-      context.paint_invalidation_container_for_stacked_contents =
-          To<LayoutBoxModelObject>(&object);
-    }
-  } else if (IsA<LayoutView>(object)) {
-    // paint_invalidation_container_for_stacked_contents is only for stacked
-    // descendants in its own frame, because it doesn't establish stacking
-    // context for stacked contents in sub-frames.
-    // Contents stacked in the root stacking context in this frame should use
-    // this frame's PaintInvalidationContainer.
-    context.paint_invalidation_container_for_stacked_contents =
-        ContainerForPaintInvalidation(painting_layer);
-  } else if (!is_ng_painting &&
-             (object.IsColumnSpanAll() ||
-              object.IsFloatingWithNonContainingBlockParent())) {
-    // In these cases, the object may belong to an ancestor of the current
-    // paint invalidation container, in paint order.
-    // Post LayoutNG the |LayoutObject::IsFloatingWithNonContainingBlockParent|
-    // check can be removed as floats will be painted by the correct layer.
-    context.paint_invalidation_container =
-        ContainerForPaintInvalidation(painting_layer);
-  } else if (object.IsStacked() &&
-             // This is to exclude some objects (e.g. LayoutText) inheriting
-             // stacked style from parent but aren't actually stacked.
-             object.HasLayer() &&
-             !To<LayoutBoxModelObject>(object)
-                  .Layer()
-                  ->IsReplacedNormalFlowStacking() &&
-             context.paint_invalidation_container !=
-                 context.paint_invalidation_container_for_stacked_contents) {
-    // The current object is stacked, so we should use
-    // m_paintInvalidationContainerForStackedContents as its paint invalidation
-    // container on which the current object is painted.
-    context.paint_invalidation_container =
-        context.paint_invalidation_container_for_stacked_contents;
-  }
-}
 
 NGPrePaintInfo PrePaintTreeWalk::CreatePrePaintInfo(
     const NGLink& child,
@@ -599,10 +504,6 @@ void PrePaintTreeWalk::WalkInternal(const LayoutObject& object,
 
   InvalidatePaintForHitTesting(object, context);
 
-  UpdatePaintInvalidationContainer(object,
-                                   paint_invalidator_context.painting_layer,
-                                   context, !!pre_paint_info);
-
   if (context.tree_builder_context) {
     property_changed =
         std::max(property_changed, property_tree_builder->UpdateForChildren());
@@ -620,28 +521,8 @@ void PrePaintTreeWalk::WalkInternal(const LayoutObject& object,
         object.GetFrameView()->SetPaintArtifactCompositorNeedsUpdate();
       }
 
-      if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-        if ((property_changed >
-             PaintPropertyChangeType::kChangedOnlyCompositedValues) &&
-            context.paint_invalidation_container) {
-          // Mark the previous paint invalidation container as needing
-          // raster invalidation. This handles cases where raster invalidation
-          // needs to happen but no compositing layers were added or removed.
-          const auto* paint_invalidation_container =
-              context.paint_invalidation_container->Layer();
-          if (!paint_invalidation_container->SelfNeedsRepaint()) {
-            auto* mapping =
-                paint_invalidation_container->GetCompositedLayerMapping();
-            if (!mapping)
-              mapping = paint_invalidation_container->GroupedMapping();
-            if (mapping)
-              mapping->SetNeedsCheckRasterInvalidation();
-          }
-
-          SetNeedsCompositingLayerPropertyUpdate(object);
-        }
-      } else if (!context.tree_builder_context
-                      ->supports_composited_raster_invalidation) {
+      if (!context.tree_builder_context
+               ->supports_composited_raster_invalidation) {
         paint_invalidator_context.subtree_flags |=
             PaintInvalidatorContext::kSubtreeFullInvalidation;
       }
@@ -649,14 +530,7 @@ void PrePaintTreeWalk::WalkInternal(const LayoutObject& object,
   }
 
   if (RuntimeEnabledFeatures::CullRectUpdateEnabled()) {
-    if (property_changed != PaintPropertyChangeType::kUnchanged ||
-        // CullRectUpdater proactively update cull rect if the layer or
-        // descendant will repaint, but in pre-CAP the repaint flag stops
-        // propagation at compositing boundaries, while cull rect update
-        // ancestor flag should not stop at compositing boundaries.
-        (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled() &&
-         context.paint_invalidator_context.painting_layer
-             ->SelfOrDescendantNeedsRepaint())) {
+    if (property_changed != PaintPropertyChangeType::kUnchanged) {
       CullRectUpdater::PaintPropertiesChanged(
           object, *context.paint_invalidator_context.painting_layer);
     }
@@ -746,7 +620,8 @@ void PrePaintTreeWalk::WalkFragmentationContextRootChildren(
     const LayoutObject& object,
     const NGPhysicalBoxFragment& fragment,
     PrePaintTreeWalkContext& context) {
-  // The actual children are inside the flow thread child of |object|.
+  // If this is a multicol container, the actual children are inside the flow
+  // thread child of |object|.
   const auto* flow_thread =
       To<LayoutBlockFlow>(&object)->MultiColumnFlowThread();
   const LayoutObject& actual_parent = flow_thread ? *flow_thread : object;
@@ -807,57 +682,62 @@ void PrePaintTreeWalk::WalkFragmentationContextRootChildren(
       inner_fragmentainer_idx = PreviousInnerFragmentainerIndex(fragment);
     context.current_fragmentainer.fragmentainer_idx = *inner_fragmentainer_idx;
 
-    if (UNLIKELY(!context.tree_builder_context)) {
-      WalkChildren(actual_parent, box_fragment, context);
-      continue;
-    }
+    PaintPropertyTreeBuilderFragmentContext::ContainingBlockContext*
+        containing_block_context = nullptr;
+    if (LIKELY(context.tree_builder_context)) {
+      containing_block_context =
+          &context.tree_builder_context->fragments[0].current;
+      containing_block_context->paint_offset += child.offset;
 
-    auto* containing_block_context =
-        &context.tree_builder_context->fragments[0].current;
-    containing_block_context->paint_offset += child.offset;
+      const PhysicalOffset paint_offset =
+          containing_block_context->paint_offset;
+      // Keep track of the paint offset at the fragmentainer. This is needed
+      // when entering OOF descendants. OOFs have the nearest fragmentainer as
+      // their containing block, so when entering them during LayoutObject tree
+      // traversal, we have to compensate for this.
+      containing_block_context->paint_offset_for_oof_in_fragmentainer =
+          paint_offset;
 
-    const PhysicalOffset paint_offset = containing_block_context->paint_offset;
-    // Keep track of the paint offset at the fragmentainer. This is needed
-    // when entering OOF descendants. OOFs have the nearest fragmentainer as
-    // their containing block, so when entering them during LayoutObject tree
-    // traversal, we have to compensate for this.
-    containing_block_context->paint_offset_for_oof_in_fragmentainer =
-        paint_offset;
-
-    // Create corresponding |FragmentData|. Hit-testing needs
-    // |FragmentData.PaintOffset|.
-    if (fragmentainer_fragment_data) {
-      DCHECK(!box_fragment->IsFirstForNode());
+      if (flow_thread) {
+        // Create corresponding |FragmentData|. Hit-testing needs
+        // |FragmentData.PaintOffset|.
+        if (fragmentainer_fragment_data) {
+          DCHECK(!box_fragment->IsFirstForNode());
 #if DCHECK_IS_ON()
-      DCHECK_EQ(fragmentainer_owner_box, box_fragment->OwnerLayoutBox());
+          DCHECK_EQ(fragmentainer_owner_box, box_fragment->OwnerLayoutBox());
 #endif
-      fragmentainer_fragment_data =
-          &fragmentainer_fragment_data->EnsureNextFragment();
-    } else {
-      const LayoutBox* owner_box = box_fragment->OwnerLayoutBox();
+          fragmentainer_fragment_data =
+              &fragmentainer_fragment_data->EnsureNextFragment();
+        } else {
+          const LayoutBox* owner_box = box_fragment->OwnerLayoutBox();
 #if DCHECK_IS_ON()
-      DCHECK(!fragmentainer_owner_box);
-      fragmentainer_owner_box = owner_box;
+          DCHECK(!fragmentainer_owner_box);
+          fragmentainer_owner_box = owner_box;
 #endif
-      fragmentainer_fragment_data =
-          &owner_box->GetMutableForPainting().FirstFragment();
-      if (box_fragment->IsFirstForNode()) {
-        fragmentainer_fragment_data->ClearNextFragment();
-      } else {
-        // |box_fragment| is nested in another fragmentainer, and that it is
-        // the first one in this loop, but not the first one for the
-        // |LayoutObject|. Append a new |FragmentData| to the last one.
-        fragmentainer_fragment_data =
-            &fragmentainer_fragment_data->LastFragment().EnsureNextFragment();
+          fragmentainer_fragment_data =
+              &owner_box->GetMutableForPainting().FirstFragment();
+          if (box_fragment->IsFirstForNode()) {
+            fragmentainer_fragment_data->ClearNextFragment();
+          } else {
+            // |box_fragment| is nested in another fragmentainer, and that it is
+            // the first one in this loop, but not the first one for the
+            // |LayoutObject|. Append a new |FragmentData| to the last one.
+            fragmentainer_fragment_data =
+                &fragmentainer_fragment_data->LastFragment()
+                     .EnsureNextFragment();
+          }
+        }
+        fragmentainer_fragment_data->SetPaintOffset(paint_offset);
+        fragmentainer_fragment_data->SetFragmentID(
+            context.current_fragmentainer.fragmentainer_idx);
       }
     }
-    fragmentainer_fragment_data->SetPaintOffset(paint_offset);
-    fragmentainer_fragment_data->SetFragmentID(
-        context.current_fragmentainer.fragmentainer_idx);
 
     WalkChildren(actual_parent, box_fragment, context);
 
-    containing_block_context->paint_offset -= child.offset;
+    if (containing_block_context)
+      containing_block_context->paint_offset -= child.offset;
+
     (*inner_fragmentainer_idx)++;
   }
 
@@ -878,8 +758,14 @@ void PrePaintTreeWalk::WalkFragmentationContextRootChildren(
   // means that their containing block lives outside the fragmentation context
   // root. Walk these missed fixepos elements now.
   if (!pending_fixedpos_missables_.IsEmpty()) {
-    for (const auto& fixedpos : pending_fixedpos_missables_) {
+    // First make a copy, clear the original set, and then walk the copy. There
+    // may be descendants attempting to walk the set as well, which will cause
+    // an infinite recursion.
+    HeapHashSet<Member<const LayoutObject>> copy;
+    copy.swap(pending_fixedpos_missables_);
+    for (const auto& fixedpos : copy) {
       DCHECK(!walked_fixedpos_.Contains(fixedpos));
+      walked_fixedpos_.insert(fixedpos);
       Walk(*fixedpos, context, /* pre_paint_info */ nullptr);
     }
   }
@@ -1007,7 +893,9 @@ void PrePaintTreeWalk::WalkLayoutObjectChildren(
       if (child->HasInlineFragments())
         continue;
 
-      if (!child->IsLayoutInline()) {
+      const auto* layout_inline_child = DynamicTo<LayoutInline>(child);
+
+      if (!layout_inline_child) {
         // We end up here for collapsed text nodes. Just clear the paint flags.
         for (const LayoutObject* fragmentless = child; fragmentless;
              fragmentless = fragmentless->NextInPreOrder(child)) {
@@ -1018,13 +906,23 @@ void PrePaintTreeWalk::WalkLayoutObjectChildren(
         continue;
       }
 
-      // We have to enter culled inlines for every block fragment where any of
-      // their children has a representation.
-      if (!parent_fragment->HasItems())
-        continue;
-      if (!parent_fragment->Items()->IsContainerForCulledInline(
-              To<LayoutInline>(*child), &is_first_for_node, &is_last_for_node))
-        continue;
+      if (layout_inline_child->FirstChild()) {
+        // We have to enter culled inlines for every block fragment where any of
+        // their children has a representation.
+        if (!parent_fragment->HasItems())
+          continue;
+
+        if (!parent_fragment->Items()->IsContainerForCulledInline(
+                *layout_inline_child, &is_first_for_node, &is_last_for_node))
+          continue;
+      } else {
+        // Childless and culled. This can happen for AREA elements, if nothing
+        // else. Enter it when at the last container fragment.
+        if (parent_fragment->BreakToken())
+          continue;
+        is_first_for_node = true;
+        is_last_for_node = true;
+      }
 
       // Inlines will pass their containing block fragment (and its incoming
       // break token).

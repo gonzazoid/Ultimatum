@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "base/callback_helpers.h"
+#include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/json/json_writer.h"
 #include "base/strings/string_piece.h"
@@ -117,7 +118,8 @@ void WebUIImpl::WebUIRenderFrameCreated(RenderFrameHost* render_frame_host) {
 }
 
 void WebUIImpl::RenderFrameReused(RenderFrameHost* render_frame_host) {
-  if (!render_frame_host->GetParent()) {
+  // This is expected to be called only for outermost main frames.
+  if (!render_frame_host->GetParentOrOuterDocument()) {
     GURL site_url = render_frame_host->GetSiteInstance()->GetSiteURL();
     GetContentClient()->browser()->LogWebUIUrl(site_url);
   }
@@ -133,8 +135,9 @@ void WebUIImpl::RenderFrameDeleted() {
 
 void WebUIImpl::SetUpMojoConnection() {
   // TODO(nasko): WebUI mojo might be useful to be registered for
-  // subframes as well, though at this time there is no such usage.
-  if (frame_host_->GetParent())
+  // subframes as well, though at this time there is no such usage but currently
+  // this is expected to be called only for outermost main frames.
+  if (frame_host_->GetParentOrOuterDocument())
     return;
 
   frame_host_->GetFrameBindingsControl()->BindWebUI(
@@ -143,7 +146,8 @@ void WebUIImpl::SetUpMojoConnection() {
 }
 
 void WebUIImpl::TearDownMojoConnection() {
-  if (frame_host_->GetParent())
+  // This is expected to be called only for outermost main frames.
+  if (frame_host_->GetParentOrOuterDocument())
     return;
 
   remote_.reset();
@@ -270,6 +274,10 @@ void WebUIImpl::RegisterDeprecatedMessageCallback(
 void WebUIImpl::ProcessWebUIMessage(const GURL& source_url,
                                     const std::string& message,
                                     const base::ListValue& args) {
+  // Crash keys for https://crbug.com/1275766
+  SCOPED_CRASH_KEY_STRING32("WebUI", "URL", source_url.spec());
+  SCOPED_CRASH_KEY_STRING64("WebUI", "message", message);
+
   if (controller_->OverrideHandleWebUIMessage(source_url, message, args))
     return;
 

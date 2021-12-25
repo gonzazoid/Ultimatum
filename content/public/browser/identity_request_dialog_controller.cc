@@ -13,21 +13,21 @@ namespace content {
 // `Sec-` prefix makes this a forbidden header and cannot be added by
 // JavaScript.
 // This header tags browser-generated requests resulting from calls to the
-// WebID API. Its presence can be used for, among other things, CSRF protection
-// on the identity provider's server. This was originally "Sec-WebID" but was
+// FedCM API. Its presence can be used for, among other things, CSRF protection
+// on the identity provider's server. This originally omitted "-CSRF" but was
 // made more specific on speculation that we might need other headers later,
 // though it is unclear what they would be for. It can change back later if
 // no such requirements appear.
 // See https://fetch.spec.whatwg.org/#forbidden-header-name
-const char kSecWebIdCsrfHeader[] = "Sec-WebID-CSRF";
+const char kSecFedCmCsrfHeader[] = "Sec-FedCM-CSRF";
 
-IdentityRequestAccount::IdentityRequestAccount(const std::string& sub,
+IdentityRequestAccount::IdentityRequestAccount(const std::string& account_id,
                                                const std::string& email,
                                                const std::string& name,
                                                const std::string& given_name,
                                                const GURL& picture,
                                                LoginState login_state)
-    : sub{sub},
+    : account_id{account_id},
       email{email},
       name{name},
       given_name{given_name},
@@ -47,6 +47,14 @@ IdentityProviderMetadata::IdentityProviderMetadata() = default;
 IdentityProviderMetadata::~IdentityProviderMetadata() = default;
 IdentityProviderMetadata::IdentityProviderMetadata(
     const IdentityProviderMetadata& other) = default;
+
+int IdentityRequestDialogController::GetBrandIconIdealSize() {
+  return 0;
+}
+
+int IdentityRequestDialogController::GetBrandIconMinimumSize() {
+  return 0;
+}
 
 void IdentityRequestDialogController::ShowInitialPermissionDialog(
     WebContents* rp_web_contents,

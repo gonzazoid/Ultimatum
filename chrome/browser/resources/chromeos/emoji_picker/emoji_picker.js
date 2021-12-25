@@ -13,6 +13,7 @@ import {afterNextRender, html, PolymerElement} from 'chrome://resources/polymer/
 
 import {EMOJI_GROUP_SIZE_PX, EMOJI_ICON_SIZE, EMOJI_PER_ROW, EMOJI_PICKER_HEIGHT_PX, EMOJI_PICKER_SIDE_PADDING_PX, EMOJI_PICKER_TOP_PADDING_PX, EMOJI_PICKER_TOTAL_EMOJI_WIDTH, EMOJI_PICKER_TOTAL_EMOJI_WIDTH_PX, EMOJI_PICKER_WIDTH_PX, EMOJI_SIZE_PX, EMOJI_SPACING_PX, GROUP_ICON_SIZE, GROUP_PER_ROW} from './constants.js';
 import {EmojiButton} from './emoji_button.js';
+import {Feature} from './emoji_picker.mojom-webui.js';
 import {EmojiPickerApiProxy, EmojiPickerApiProxyImpl} from './emoji_picker_api_proxy.js';
 import {createCustomEvent, EMOJI_BUTTON_CLICK, EMOJI_CLEAR_RECENTS_CLICK, EMOJI_DATA_LOADED, EMOJI_VARIANTS_SHOWN, EmojiVariantsShownEvent, GROUP_BUTTON_CLICK} from './events.js';
 import {RecentEmojiStore} from './store.js';
@@ -174,6 +175,8 @@ export class EmojiPicker extends PolymerElement {
     /** @private {boolean} */
     this.groupTabsMoving = false;
 
+    /** @private {boolean} */
+    this.v2Enabled = false;
 
     this.addEventListener(
         GROUP_BUTTON_CLICK, ev => this.selectGroup(ev.detail.group));
@@ -216,10 +219,14 @@ export class EmojiPicker extends PolymerElement {
   ready() {
     super.ready();
 
-    const xhr = new XMLHttpRequest();
-    xhr.onloadend = () => this.onEmojiDataLoaded(xhr.responseText);
-    xhr.open('GET', this.emojiDataUrl);
-    xhr.send();
+    const initializationPromise = Promise.all([
+      this.apiProxy_.getFeatureList().then(
+          (response) => this.setActiveFeatures(response.featureList)),
+      this.fetchEmojiData(),
+    ]);
+
+    initializationPromise.then(
+        () => afterNextRender(this, () => this.apiProxy_.showUI()));
 
     this.updateStyles({
       '--emoji-group-button-size': EMOJI_GROUP_SIZE_PX,
@@ -230,6 +237,25 @@ export class EmojiPicker extends PolymerElement {
       '--emoji-picker-side-padding': EMOJI_PICKER_SIDE_PADDING_PX,
       '--emoji-picker-top-padding': EMOJI_PICKER_TOP_PADDING_PX,
       '--emoji-spacing': EMOJI_SPACING_PX,
+    });
+  }
+
+  /**
+   * @param {!Array<!Feature>} featureList
+   */
+  setActiveFeatures(featureList) {
+    this.v2Enabled = featureList.includes(Feature.EMOJI_PICKER_EXTENSION);
+  }
+
+  fetchEmojiData() {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onloadend = () => {
+        this.onEmojiDataLoaded(xhr.responseText);
+        resolve();
+      };
+      xhr.open('GET', this.emojiDataUrl);
+      xhr.send();
     });
   }
 
@@ -514,7 +540,6 @@ export class EmojiPicker extends PolymerElement {
     // other categories (which will be off screen).
     this.emojiData = [emojidata[0]];
     afterNextRender(this, () => {
-      this.apiProxy_.showUI();
       this.emojiData = emojidata;
       this.updateActiveGroup(/*updateTabsScroll=*/ true);
     });

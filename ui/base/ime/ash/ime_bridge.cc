@@ -75,19 +75,10 @@ ash::IMEAssistiveWindowHandlerInterface* IMEBridge::GetAssistiveWindowHandler()
 }
 
 // static.
-void IMEBridge::Initialize() {
-  if (!g_ime_bridge)
-    g_ime_bridge = new IMEBridge();
-}
-
-// static.
-void IMEBridge::Shutdown() {
-  delete g_ime_bridge;
-  g_ime_bridge = nullptr;
-}
-
-// static.
 IMEBridge* IMEBridge::Get() {
+  if (!g_ime_bridge) {
+    g_ime_bridge = new IMEBridge();
+  }
   return g_ime_bridge;
 }
 

@@ -31,6 +31,7 @@
 #include "ash/public/cpp/keyboard/keyboard_controller.h"
 #include "ash/shell.h"
 #include "ash/system/pcie_peripheral/pcie_peripheral_notification_controller.h"
+#include "ash/system/usb_peripheral/usb_peripheral_notification_controller.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
@@ -926,7 +927,11 @@ void ChromeBrowserMainPartsAsh::PreProfileInit() {
     std::string user_id_hash =
         parsed_command_line().GetSwitchValueASCII(switches::kLoginProfile);
 
-    BrowserDataMigrator::MaybeRestartToMigrate(account_id, user_id_hash);
+    if (BrowserDataMigratorImpl::MaybeRestartToMigrate(account_id,
+                                                       user_id_hash)) {
+      LOG(WARNING) << "Restarting chrome to run profile migration.";
+      return;
+    }
 
     session_manager::SessionManager::Get()->CreateSessionForRestart(
         account_id, user_id_hash);
@@ -1253,6 +1258,9 @@ void ChromeBrowserMainPartsAsh::PostBrowserStart() {
         /*initial_state=*/false);
     Shell::Get()
         ->pcie_peripheral_notification_controller()
+        ->OnPeripheralNotificationManagerInitialized();
+    Shell::Get()
+        ->usb_peripheral_notification_controller()
         ->OnPeripheralNotificationManagerInitialized();
   }
 

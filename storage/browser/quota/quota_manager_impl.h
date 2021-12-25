@@ -30,10 +30,12 @@
 #include "components/services/storage/public/cpp/quota_error_or.h"
 #include "components/services/storage/public/mojom/quota_client.mojom.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
+#include "mojo/public/cpp/bindings/receiver_set.h"
 #include "mojo/public/cpp/bindings/remote.h"
 #include "storage/browser/quota/quota_callbacks.h"
 #include "storage/browser/quota/quota_client_type.h"
 #include "storage/browser/quota/quota_database.h"
+#include "storage/browser/quota/quota_internals.mojom.h"
 #include "storage/browser/quota/quota_settings.h"
 #include "storage/browser/quota/quota_task.h"
 #include "storage/browser/quota/special_storage_policy.h"
@@ -125,7 +127,8 @@ struct UsageInfo {
 class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
     : public QuotaTaskObserver,
       public QuotaEvictionHandler,
-      public base::RefCountedDeleteOnSequence<QuotaManagerImpl> {
+      public base::RefCountedDeleteOnSequence<QuotaManagerImpl>,
+      public storage::mojom::QuotaInternalsHandler {
  public:
   using UsageAndQuotaCallback = base::OnceCallback<
       void(blink::mojom::QuotaStatusCode, int64_t usage, int64_t quota)>;
@@ -169,6 +172,8 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
   // Returns a proxy object that can be used on any thread.
   QuotaManagerProxy* proxy() { return proxy_.get(); }
 
+  void BindInternalsHandler(
+      mojo::PendingReceiver<mojom::QuotaInternalsHandler> receiver);
   // Gets the bucket with `bucket_name` for the `storage_key` for StorageType
   // kTemporary and returns the BucketInfo. If one doesn't exist, it creates
   // a new bucket with the specified policies. Returns a QuotaError if the
@@ -339,6 +344,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
                              QuotaClientTypes quota_client_types,
                              base::OnceClosure callback);
 
+  // storage::mojom::QuotaInternalsHandler implementation
+  void GetDiskAvailability(GetDiskAvailabilityCallback callback) override;
+  void GetStatistics(GetStatisticsCallback callback) override;
+
   // Called by UI and internal modules.
   void GetPersistentHostQuota(const std::string& host, QuotaCallback callback);
   void SetPersistentHostQuota(const std::string& host,
@@ -349,8 +358,6 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
   void GetHostUsageWithBreakdown(const std::string& host,
                                  blink::mojom::StorageType type,
                                  UsageWithBreakdownCallback callback);
-
-  std::map<std::string, std::string> GetStatistics();
 
   bool IsStorageUnlimited(const blink::StorageKey& storage_key,
                           blink::mojom::StorageType type) const;
@@ -388,6 +395,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
   static constexpr int kEvictionIntervalInMilliSeconds =
       30 * kMinutesInMilliSeconds;
   static constexpr int kThresholdOfErrorsToBeDenylisted = 3;
+  static constexpr int kThresholdOfErrorsToDisableDatabase = 3;
   static constexpr int kThresholdRandomizationPercent = 5;
 
   static constexpr char kDatabaseName[] = "QuotaManager";
@@ -625,6 +633,7 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
   // points to never changes), and the underlying object is thread-safe.
   const scoped_refptr<QuotaManagerProxy> proxy_;
 
+  int db_error_count_ = 0;
   bool db_disabled_ = false;
   bool eviction_disabled_ = false;
   absl::optional<blink::StorageKey>
@@ -658,6 +667,10 @@ class COMPONENT_EXPORT(STORAGE_BROWSER) QuotaManagerImpl
 
   std::map<blink::StorageKey, QuotaOverride> devtools_overrides_;
   int next_override_handle_id_ = 0;
+
+  // Serve mojo connections for chrome://quota-internals-2 pages.
+  mojo::ReceiverSet<mojom::QuotaInternalsHandler> internals_handlers_receivers_
+      GUARDED_BY_CONTEXT(sequence_checker_);
 
   // Owns the QuotaClient remotes registered via RegisterClient().
   //

@@ -16,8 +16,8 @@ import {get as deepGet, html, PolymerElement} from 'chrome://resources/polymer/v
 
 import {ariaLabel, TabData, TabItemType} from './tab_data.js';
 import {colorName} from './tab_group_color_helper.js';
-import {Tab, TabGroup} from './tab_search.mojom-webui.js';
-import {highlightText} from './tab_search_utils.js';
+import {Tab} from './tab_search.mojom-webui.js';
+import {highlightText, tabHasMediaAlerts} from './tab_search_utils.js';
 import {TabAlertState} from './tabs.mojom-webui.js';
 
 export interface TabSearchItem {
@@ -87,21 +87,8 @@ export class TabSearchItem extends TabSearchItemBase {
   }
 
   private isOpenTabAndHasMediaAlert_(tabData: TabData): boolean {
-    if (tabData.type != TabItemType.OPEN_TAB ||
-        !(tabData.tab as Tab).alertStates ||
-        (tabData.tab as Tab).alertStates.length == 0) {
-      return false;
-    }
-
-    /* Current UI mocks only have specs for the following media related alert
-     * states. */
-    function validAlertState(alert: TabAlertState): boolean {
-      return alert == TabAlertState.kMediaRecording ||
-          alert == TabAlertState.kAudioPlaying ||
-          alert == TabAlertState.kAudioMuting;
-    }
-
-    return (tabData.tab as Tab).alertStates.some(validAlertState);
+    return tabData.type == TabItemType.OPEN_TAB &&
+        tabHasMediaAlerts(tabData.tab as Tab);
   }
 
   /**

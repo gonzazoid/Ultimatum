@@ -786,14 +786,6 @@ class BASE_EXPORT ListValue : public Value {
   explicit ListValue(span<const Value> in_list);
   explicit ListValue(ListStorage&& in_list) noexcept;
 
-  // Sets the list item at the given index to be the Value specified by
-  // the value given.  If the index beyond the current end of the list, null
-  // Values will be used to pad out the list.
-  // Returns true if successful, or false if the index was negative or
-  // the value is a null pointer.
-  // DEPRECATED, use `GetList()::operator[] instead.
-  bool Set(size_t index, std::unique_ptr<Value> in_value);
-
   // Gets the Value at the given index.  Modifies `out_value` (and returns true)
   // only if the index falls within the current list range.
   // Note that the list always owns the Value passed out via `out_value`.
@@ -871,6 +863,9 @@ class BASE_EXPORT ValueDeserializer {
   //  - Values 1000 and above mean an error in the metadata (i.e. context). The
   //    file could not be read, the network is down, etc.
   //  - Negative values are reserved.
+  //
+  // These values are persisted to logs. Entries should not be renumbered and
+  // numeric values should never be reused.
   enum ErrorCode {
     kErrorCodeNoError = 0,
     // kErrorCodeInvalidFormat is a generic error code for "the data is not in

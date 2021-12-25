@@ -19,6 +19,7 @@
 #include "ui/android/color_utils_android.h"
 #include "ui/android/view_android.h"
 #include "ui/android/window_android.h"
+#include "ui/gfx/android/java_bitmap.h"
 #include "url/android/gurl_android.h"
 #include "url/gurl.h"
 #include "url/origin.h"
@@ -34,7 +35,7 @@ namespace {
 ScopedJavaLocalRef<jobject> ConvertToJavaAccount(JNIEnv* env,
                                                  const Account& account) {
   return Java_Account_Constructor(
-      env, ConvertUTF8ToJavaString(env, account.sub),
+      env, ConvertUTF8ToJavaString(env, account.account_id),
       ConvertUTF8ToJavaString(env, account.email),
       ConvertUTF8ToJavaString(env, account.name),
       ConvertUTF8ToJavaString(env, account.given_name),
@@ -45,9 +46,13 @@ ScopedJavaLocalRef<jobject> ConvertToJavaAccount(JNIEnv* env,
 ScopedJavaLocalRef<jobject> ConvertToJavaIdentityProviderMetadata(
     JNIEnv* env,
     const content::IdentityProviderMetadata& metadata) {
+  base::android::ScopedJavaLocalRef<jobject> java_brand_icon;
+  if (!metadata.brand_icon.isNull())
+    java_brand_icon = gfx::ConvertToJavaBitmap(metadata.brand_icon);
   return Java_IdentityProviderMetadata_Constructor(
       env, ui::OptionalSkColorToJavaColor(metadata.brand_text_color),
-      ui::OptionalSkColorToJavaColor(metadata.brand_background_color));
+      ui::OptionalSkColorToJavaColor(metadata.brand_background_color),
+      java_brand_icon);
 }
 
 ScopedJavaLocalRef<jobject> ConvertToJavaClientIdMetadata(
@@ -82,7 +87,7 @@ Account ConvertFieldsToAccount(
     bool is_sign_in) {
   std::vector<std::string> string_fields;
   AppendJavaStringArrayToStringVector(env, string_fields_obj, &string_fields);
-  auto sub = string_fields[0];
+  auto account_id = string_fields[0];
   auto email = string_fields[1];
   auto name = string_fields[2];
   auto given_name = string_fields[3];
@@ -91,7 +96,7 @@ Account ConvertFieldsToAccount(
       is_sign_in ? Account::LoginState::kSignIn : Account::LoginState::kSignUp;
 
   GURL picture_url = *url::GURLAndroid::ToNativeGURL(env, picture_url_obj);
-  return Account(sub, email, name, given_name, picture_url, login_state);
+  return Account(account_id, email, name, given_name, picture_url, login_state);
 }
 
 }  // namespace
@@ -176,4 +181,16 @@ bool AccountSelectionViewAndroid::RecreateJavaObject() {
 std::unique_ptr<AccountSelectionView> AccountSelectionView::Create(
     AccountSelectionView::Delegate* delegate) {
   return std::make_unique<AccountSelectionViewAndroid>(delegate);
+}
+
+// static
+int AccountSelectionView::GetBrandIconMinimumSize() {
+  return Java_AccountSelectionBridge_getBrandIconMinimumSize(
+      base::android::AttachCurrentThread());
+}
+
+// static
+int AccountSelectionView::GetBrandIconIdealSize() {
+  return Java_AccountSelectionBridge_getBrandIconIdealSize(
+      base::android::AttachCurrentThread());
 }

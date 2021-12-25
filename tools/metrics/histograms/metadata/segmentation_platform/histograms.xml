@@ -23,6 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <variants name="BooleanModel">
+  <variant name="ChromeLowUserEngagement"/>
   <variant name="ChromeStartAndroid"/>
   <variant name="QueryTiles"/>
 </variants>
@@ -36,12 +37,14 @@ chromium-metrics-reviews@google.com.
 
 <variants name="SegmentationKey">
   <variant name="AdaptiveToolbar"/>
+  <variant name="ChromeLowUserEngagement"/>
   <variant name="ChromeStartAndroid"/>
   <variant name="DummyFeature"/>
   <variant name="QueryTiles"/>
 </variants>
 
 <variants name="SegmentationModel">
+  <variant name="ChromeLowUserEngagement"/>
   <variant name="ChromeStartAndroid"/>
   <variant name="Dummy"/>
   <variant name="NewTab"/>
@@ -87,7 +90,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="SegmentationPlatform.AdaptiveToolbar.SegmentSelection.Computed"
-    enum="AdaptiveToolbarButtonVariant" expires_after="2022-06-05">
+    enum="AdaptiveToolbarButtonVariant" expires_after="2022-06-12">
   <owner>shaktisahu@chromium.org</owner>
   <owner>chrome-segmentation-platform@google.com</owner>
   <summary>
@@ -111,7 +114,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SegmentationPlatform.AdaptiveToolbar.SegmentSwitched"
-    enum="AdaptiveToolbarSegmentSwitch" expires_after="2022-04-10">
+    enum="AdaptiveToolbarSegmentSwitch" expires_after="2022-06-12">
   <owner>shaktisahu@chromium.org</owner>
   <owner>chrome-segmentation-platform@google.com</owner>
   <summary>
@@ -160,6 +163,19 @@ chromium-metrics-reviews@google.com.
 
     Recorded every time maintenance is performed.
   </summary>
+</histogram>
+
+<histogram name="SegmentationPlatform.ModelAvailability.{SegmentationModel}"
+    enum="SegmentationModelAvailability" expires_after="2022-06-01">
+  <owner>ssid@chromium.org</owner>
+  <owner>chrome-segmentation-platform@google.com</owner>
+  <summary>
+    Records the availability of the segmentation models. Since there is no good
+    way to check if a model is available, this histogram records an entry when
+    model is requested and one when model is available. The difference should
+    show how often a model is not returned.
+  </summary>
+  <token key="SegmentationModel" variants="SegmentationModel"/>
 </histogram>
 
 <histogram
@@ -212,7 +228,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="SegmentationPlatform.ModelDelivery.Received"
-    enum="SegmentationPlatformSegmentationModel" expires_after="2022-04-10">
+    enum="SegmentationPlatformSegmentationModel" expires_after="2022-06-12">
   <owner>nyquist@chromium.org</owner>
   <owner>shaktisahu@chromium.org</owner>
   <owner>chrome-segmentation-platform@google.com</owner>
@@ -379,6 +395,17 @@ chromium-metrics-reviews@google.com.
     successfully.
   </summary>
   <token key="SegmentID" variants="SegmentationModel"/>
+</histogram>
+
+<histogram name="SegmentationPlatform.SelectionFailedReason"
+    enum="SegmentationSelectionFailureReason" expires_after="2022-06-01">
+  <owner>ssid@chromium.org</owner>
+  <owner>chrome-segmentation-platform@google.com</owner>
+  <summary>
+    Records the reason why the segmentation platform was unable to return a
+    segment selection to any client, or a result was available. Recorded when
+    failure is hit when trying to compute selection.
+  </summary>
 </histogram>
 
 <histogram

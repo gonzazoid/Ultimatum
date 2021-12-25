@@ -113,6 +113,7 @@ mojom("mojom_platform") {
     "loader/same_document_navigation_type.mojom",
     "loader/transferrable_url_loader.mojom",
     "loader/url_loader_factory_bundle.mojom",
+    "lock_screen/lock_screen.mojom",
     "locks/lock_manager.mojom",
     "manifest/capture_links.mojom",
     "manifest/display_mode.mojom",
@@ -483,6 +484,20 @@ mojom("mojom_platform") {
         },
       ]
       traits_headers = [ "//third_party/blink/public/common/navigation/prefetched_signed_exchange_info_mojom_traits.h" ]
+    },
+    {
+      types = [
+        {
+          mojom = "blink.mojom.LinkGenerationError"
+          cpp = "::shared_highlighting::LinkGenerationError"
+        },
+        {
+          mojom = "blink.mojom.LinkGenerationReadyStatus"
+          cpp = "::shared_highlighting::LinkGenerationReadyStatus"
+        },
+      ]
+      traits_headers = [ "//third_party/blink/public/common/link_to_text/link_to_text_mojom_traits.h" ]
+      traits_public_deps = [ "//components/shared_highlighting/core/common" ]
     },
   ]
   cpp_typemaps = [

@@ -12,6 +12,7 @@
 #include "ash/session/session_controller_impl.h"
 #include "ash/shell.h"
 #include "ash/system/hps/hps_configuration.h"
+#include "ash/system/power/hps_sense_controller.h"
 #include "base/bind.h"
 #include "base/callback.h"
 #include "base/time/default_tick_clock.h"
@@ -124,6 +125,10 @@ PowerPrefs::PowerPrefs(chromeos::PowerPolicyController* power_policy_controller,
   DCHECK(power_manager_client);
   DCHECK(power_policy_controller_);
   DCHECK(tick_clock_);
+
+  // Only construct hps_sense_controller_ if quick dim is enabled.
+  if (features::IsQuickDimEnabled())
+    hps_sense_controller_ = std::make_unique<HpsSenseController>();
 
   power_manager_client_observation_.Observe(power_manager_client);
   Shell::Get()->session_controller()->AddObserver(this);
@@ -287,11 +292,18 @@ void PowerPrefs::UpdatePowerPolicyFromPrefs() {
         prefs->GetDouble(prefs::kPowerUserActivityScreenDimDelayFactor);
   }
 
-  if (prefs->GetBoolean(prefs::kPowerQuickDimEnabled)) {
-    values.battery_quick_dim_delay_ms =
-        ash::GetQuickDimDelay().InMilliseconds();
-    values.ac_quick_dim_delay_ms = ash::GetQuickDimDelay().InMilliseconds();
-    values.send_feedback_if_undimmed = ash::GetQuickDimFeedbackEnabled();
+  // Only set power_manager and hps if quick dim is enabled.
+  if (hps_sense_controller_) {
+    if (prefs->GetBoolean(prefs::kPowerQuickDimEnabled)) {
+      values.battery_quick_dim_delay_ms =
+          ash::GetQuickDimDelay().InMilliseconds();
+      values.ac_quick_dim_delay_ms = ash::GetQuickDimDelay().InMilliseconds();
+      values.send_feedback_if_undimmed = ash::GetQuickDimFeedbackEnabled();
+
+      hps_sense_controller_->EnableHpsSense();
+    } else {
+      hps_sense_controller_->DisableHpsSense();
+    }
   }
 
   values.wait_for_initial_user_activity =
@@ -307,7 +319,8 @@ void PowerPrefs::UpdatePowerPolicyFromPrefs() {
           prefs::kPowerPeakShiftBatteryThreshold) &&
       local_state_->IsManagedPreference(prefs::kPowerPeakShiftDayConfig)) {
     const base::DictionaryValue* configs_value =
-        local_state_->GetDictionary(prefs::kPowerPeakShiftDayConfig);
+        &base::Value::AsDictionaryValue(
+            *local_state_->GetDictionary(prefs::kPowerPeakShiftDayConfig));
     DCHECK(configs_value);
     std::vector<PeakShiftDayConfig> configs;
     if (chromeos::PowerPolicyController::GetPeakShiftDayConfigs(*configs_value,
@@ -327,12 +340,12 @@ void PowerPrefs::UpdatePowerPolicyFromPrefs() {
           prefs::kAdvancedBatteryChargeModeEnabled) &&
       local_state_->IsManagedPreference(
           prefs::kAdvancedBatteryChargeModeDayConfig)) {
-    const base::DictionaryValue* configs_value =
+    const base::Value* configs_value =
         local_state_->GetDictionary(prefs::kAdvancedBatteryChargeModeDayConfig);
     DCHECK(configs_value);
     std::vector<AdvancedBatteryChargeModeDayConfig> configs;
     if (chromeos::PowerPolicyController::GetAdvancedBatteryChargeModeDayConfigs(
-            *configs_value, &configs)) {
+            base::Value::AsDictionaryValue(*configs_value), &configs)) {
       values.advanced_battery_charge_mode_enabled = true;
       values.advanced_battery_charge_mode_day_configs = std::move(configs);
     } else {

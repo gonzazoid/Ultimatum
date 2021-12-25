@@ -62,8 +62,6 @@ import org.chromium.chrome.browser.autofill_assistant.proto.TriggerScriptConditi
 import org.chromium.chrome.browser.autofill_assistant.proto.TriggerScriptConditionsProto;
 import org.chromium.chrome.browser.autofill_assistant.proto.TriggerScriptProto;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
-import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
-import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
 import org.chromium.chrome.test.ChromeTabbedActivityTestRule;
@@ -273,8 +271,7 @@ public class AutofillAssistantTriggerScriptIntegrationTest {
                                                                 .build();
         setupTriggerScripts(triggerScripts);
         AutofillAssistantPreferencesUtil.setInitialPreferences(true);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, false);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(false);
         startAutofillAssistantOnTab(TEST_PAGE_A);
 
         waitUntilViewMatchesCondition(withText("Trigger script"), isCompletelyDisplayed());
@@ -324,8 +321,7 @@ public class AutofillAssistantTriggerScriptIntegrationTest {
                                                                 .build();
         setupTriggerScripts(triggerScripts);
         AutofillAssistantPreferencesUtil.setInitialPreferences(true);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, true);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(true);
         startAutofillAssistantOnTab(TEST_PAGE_A);
 
         waitUntilViewMatchesCondition(withText("Trigger script"), isCompletelyDisplayed());
@@ -398,15 +394,13 @@ public class AutofillAssistantTriggerScriptIntegrationTest {
                                                                 .build();
         setupTriggerScripts(triggerScripts);
         AutofillAssistantPreferencesUtil.setInitialPreferences(true);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, false);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(false);
         startAutofillAssistantOnTab(TEST_PAGE_A);
 
         waitUntilViewMatchesCondition(withText("Trigger script"), isCompletelyDisplayed());
 
         // Simulate the user accepting the onboarding in a different tab.
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, true);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(true);
 
         ArrayList<ActionProto> list = new ArrayList<>();
         list.add(ActionProto.newBuilder()
@@ -607,8 +601,7 @@ public class AutofillAssistantTriggerScriptIntegrationTest {
                                                                 .build();
         setupTriggerScripts(triggerScripts);
         AutofillAssistantPreferencesUtil.setInitialPreferences(true);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, false);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(false);
         startAutofillAssistantOnTab(TEST_PAGE_A);
 
         waitUntilViewMatchesCondition(withText("Trigger script"), isCompletelyDisplayed());
@@ -669,8 +662,7 @@ public class AutofillAssistantTriggerScriptIntegrationTest {
                                                                 .build();
         setupTriggerScripts(triggerScripts);
         AutofillAssistantPreferencesUtil.setInitialPreferences(true);
-        SharedPreferencesManager.getInstance().writeBoolean(
-                ChromePreferenceKeys.AUTOFILL_ASSISTANT_ONBOARDING_ACCEPTED, false);
+        AutofillAssistantPreferencesUtil.setOnboardingAcceptedPreference(false);
         startAutofillAssistantOnTab(TEST_PAGE_A);
 
         waitUntilViewMatchesCondition(withText("Trigger script"), isCompletelyDisplayed());

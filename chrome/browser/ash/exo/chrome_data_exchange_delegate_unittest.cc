@@ -142,11 +142,15 @@ class ChromeDataExchangeDelegateTest : public testing::Test {
 };
 
 TEST_F(ChromeDataExchangeDelegateTest, GetDataTransferEndpointType) {
+  // Create container window as the parent for other windows.
+  aura::Window container_window(nullptr, aura::client::WINDOW_TYPE_NORMAL);
+  container_window.Init(ui::LAYER_NOT_DRAWN);
+
   // ChromeDataExchangeDelegate always checks app type in
   // window->GetToplevelWindow(), so we must create a parent window with
   // delegate and app type set, but use the child window in tests. Arc:
   aura::Window* arc_toplevel = aura::test::CreateTestWindowWithDelegate(
-      &delegate_, 0, gfx::Rect(), nullptr);
+      &delegate_, 0, gfx::Rect(), &container_window);
   arc_toplevel->SetProperty(aura::client::kAppType,
                             static_cast<int>(ash::AppType::ARC_APP));
   ASSERT_TRUE(ash::IsArcWindow(arc_toplevel));
@@ -156,7 +160,7 @@ TEST_F(ChromeDataExchangeDelegateTest, GetDataTransferEndpointType) {
 
   // Crostini:
   aura::Window* crostini_toplevel = aura::test::CreateTestWindowWithDelegate(
-      &delegate_, 0, gfx::Rect(), nullptr);
+      &delegate_, 0, gfx::Rect(), &container_window);
   crostini_toplevel->SetProperty(aura::client::kAppType,
                                  static_cast<int>(ash::AppType::CROSTINI_APP));
   ASSERT_TRUE(crostini::IsCrostiniWindow(crostini_toplevel));
@@ -166,7 +170,7 @@ TEST_F(ChromeDataExchangeDelegateTest, GetDataTransferEndpointType) {
 
   // Plugin VM:
   aura::Window* plugin_vm_toplevel = aura::test::CreateTestWindowWithDelegate(
-      &delegate_, 0, gfx::Rect(), nullptr);
+      &delegate_, 0, gfx::Rect(), &container_window);
   exo::SetShellApplicationId(plugin_vm_toplevel, "org.chromium.plugin_vm_ui");
   ASSERT_TRUE(plugin_vm::IsPluginVmAppWindow(plugin_vm_toplevel));
   aura::Window* plugin_vm_window =

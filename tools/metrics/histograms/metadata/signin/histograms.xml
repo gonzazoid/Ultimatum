@@ -160,7 +160,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Signin.AccountFetcher.AccountAvatarFetchTime" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>triploblastic@chromium.org</owner>
   <owner>aliceywang@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
@@ -175,7 +175,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Signin.AccountFetcher.AccountUserInfoFetchTime" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>triploblastic@chromium.org</owner>
   <owner>aliceywang@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
@@ -332,7 +332,7 @@ prefs when the profile is loaded.  -->
 </histogram>
 
 <histogram name="Signin.AndroidNumberOfDeviceAccounts" units="accounts"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>triploblastic@chromium.org</owner>
   <owner>aliceywang@chromium.org</owner>
   <summary>
@@ -367,7 +367,7 @@ prefs when the profile is loaded.  -->
 </histogram>
 
 <histogram name="Signin.AuthError" enum="GoogleServiceAuthError"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>msarda@chromium.org</owner>
   <owner>droger@chromium.org</owner>
   <summary>
@@ -509,7 +509,7 @@ prefs when the profile is loaded.  -->
 </histogram>
 
 <histogram name="Signin.Extensions.GaiaRemoteConsentFlowResult"
-    enum="GaiaRemoteConsentFlowResult" expires_after="2021-12-12">
+    enum="GaiaRemoteConsentFlowResult" expires_after="2022-06-19">
   <owner>alexilin@chromium.org</owner>
   <owner>droger@chromium.org</owner>
   <summary>
@@ -744,6 +744,58 @@ prefs when the profile is loaded.  -->
   </summary>
 </histogram>
 
+<histogram name="Signin.IOSDeviceRestoreIdentityCountAfter" units="identities"
+    expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@google.com</owner>
+  <summary>
+    Records the number of identities after iOS device restore. Recorded at cold
+    start when a device restore is detected, and only if the user was signed in
+    before the device backup.
+  </summary>
+</histogram>
+
+<histogram name="Signin.IOSDeviceRestoreIdentityCountBefore" units="identities"
+    expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@google.com</owner>
+  <summary>
+    Records the number of identities before iOS device restore. Recorded at cold
+    start when a device restore is detected, and only if the user was signed in
+    before the device backup.
+  </summary>
+</histogram>
+
+<histogram name="Signin.IOSDeviceRestoreSentinelError"
+    enum="SigninIOSDeviceRestoreSentinelError" expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@google.com</owner>
+  <summary>
+    Records errors when creating sentinel files at cold start. Those sentinel
+    files are used to detect a device restore. Histogram only for iOS.
+  </summary>
+</histogram>
+
+<histogram name="Signin.IOSDeviceRestoreSentinelPathGenerated"
+    enum="BooleanSuccess" expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@google.com</owner>
+  <summary>
+    Records if the path for a sentinel file (used to detect iOS restore) is
+    generated successfully. Recorded on cold start.
+  </summary>
+</histogram>
+
+<histogram name="Signin.IOSDeviceRestoreSignedInState"
+    enum="IOSDeviceRestoreSignedinState" expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@google.com</owner>
+  <summary>
+    Records whether the user is signed in or signed out before and after a
+    device restore. Recorded at cold start when a device restore is detected.
+  </summary>
+</histogram>
+
 <histogram name="Signin.IOSGaiaCookiePresentOnNavigation" enum="BooleanPresent"
     expires_after="2022-01-30">
   <obsolete>
@@ -762,8 +814,8 @@ prefs when the profile is loaded.  -->
 </histogram>
 
 <histogram name="Signin.IOSGaiaCookieStateOnSignedInNavigation"
-    enum="GaiaCookieStateOnSignedInNavigation" expires_after="2022-04-10">
-  <owner>jebel@chromium.org</owner>
+    enum="GaiaCookieStateOnSignedInNavigation" expires_after="2022-06-12">
+  <owner>jlebel@chromium.org</owner>
   <owner>msarda@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -778,7 +830,7 @@ prefs when the profile is loaded.  -->
 
 <histogram name="Signin.IOSLoginMethodAndSyncState"
     enum="SigninIOSLoginMethodAndSyncState" expires_after="2022-04-01">
-  <owner>jebel@chromium.org</owner>
+  <owner>jlebel@chromium.org</owner>
   <owner>msarda@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -912,7 +964,7 @@ the browser and content area. -->
 </histogram>
 
 <histogram name="Signin.OAuth2MintToken.ApiCallResult"
-    enum="OAuth2MintTokenApiCallResult" expires_after="2022-01-16">
+    enum="OAuth2MintTokenApiCallResult" expires_after="2022-06-12">
   <owner>alexilin@chromium.org</owner>
   <owner>droger@chromium.org</owner>
   <summary>
@@ -1604,7 +1656,7 @@ name="TransactionalReauthEntryPoint" -->
 </histogram>
 
 <histogram name="Signin.TransactionalReauthUserAction"
-    enum="SigninReauthUserAction" expires_after="2022-04-10">
+    enum="SigninReauthUserAction" expires_after="2022-06-12">
 <!-- Name completed by histogram_suffixes
 name="TransactionalReauthEntryPoint" -->
 

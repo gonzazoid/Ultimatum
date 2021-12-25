@@ -1735,7 +1735,7 @@ class CertificateTransparencySSLUITest : public CertVerifierBrowserTest {
 
     EXPECT_NO_FATAL_FAILURE(UpdateChromePolicy(policy_map));
 
-    const base::ListValue* pref_value = pref_service->GetList(pref_name);
+    const base::Value* pref_value = pref_service->GetList(pref_name);
     ASSERT_TRUE(pref_value);
     std::vector<std::string> pref_values;
     for (const auto& value : pref_value->GetList()) {
@@ -1991,7 +1991,10 @@ class SSLUITestWithClientCert : public SSLUITestBase {
 
 // Visit a HTTPS page which requires client cert authentication. The client
 // cert will be selected automatically, then a test which uses WebSocket runs.
-IN_PROC_BROWSER_TEST_F(SSLUITestWithClientCert, TestWSSClientCert) {
+//
+// TODO(https://crbug.com/1279930): disabled because of race in when certs
+// are incorporated.
+IN_PROC_BROWSER_TEST_F(SSLUITestWithClientCert, DISABLED_TestWSSClientCert) {
   // Import a client cert for test.
   crypto::ScopedPK11Slot public_slot = cert_db_->GetPublicSlot();
   std::string pkcs12_data;
@@ -2269,6 +2272,7 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestCertDBChangedFlushesClientAuthCache) {
 
   // Send a CertDBChanged notification.
   net::CertDatabase::GetInstance()->NotifyObserversCertDBChanged();
+  content::FlushNetworkServiceInstanceForTesting();
 
   // Visiting the page which requires client certs should fail, as the socket
   // pool has been flushed and SSL client auth cache has been cleared due to
@@ -3094,7 +3098,7 @@ IN_PROC_BROWSER_TEST_F(SSLUITest, TestRedirectHTTPSToInvalidHTTP) {
 }
 
 class SSLUITestWaitForDOMNotification : public SSLUITestIgnoreCertErrors,
-                                        public content::NotificationObserver {
+                                        public content::WebContentsObserver {
  public:
   SSLUITestWaitForDOMNotification()
       : SSLUITestIgnoreCertErrors(), run_loop_(nullptr) {}
@@ -3103,13 +3107,10 @@ class SSLUITestWaitForDOMNotification : public SSLUITestIgnoreCertErrors,
       delete;
   SSLUITestWaitForDOMNotification& operator=(
       const SSLUITestWaitForDOMNotification&) = delete;
-
-  ~SSLUITestWaitForDOMNotification() override { registrar_.RemoveAll(); }
+  ~SSLUITestWaitForDOMNotification() override = default;
 
   void SetUpOnMainThread() override {
     SSLUITestIgnoreCertErrors::SetUpOnMainThread();
-    registrar_.Add(this, content::NOTIFICATION_DOM_OPERATION_RESPONSE,
-                   content::NotificationService::AllSources());
   }
 
   void set_expected_notification(const std::string& expected_notification) {
@@ -3117,22 +3118,20 @@ class SSLUITestWaitForDOMNotification : public SSLUITestIgnoreCertErrors,
   }
 
   void set_run_loop(base::RunLoop* run_loop) { run_loop_ = run_loop; }
+  void observe(content::WebContents* web_contents) {
+    content::WebContentsObserver::Observe(web_contents);
+  }
 
-  // content::NotificationObserver
-  void Observe(int type,
-               const content::NotificationSource& source,
-               const content::NotificationDetails& details) override {
+  // content::WebContentsObserver
+  void DomOperationResponse(content::RenderFrameHost* render_frame_host,
+                            const std::string& json_string) override {
     DCHECK(run_loop_);
-    if (type == content::NOTIFICATION_DOM_OPERATION_RESPONSE) {
-      content::Details<std::string> dom_op_result(details);
-      if (*dom_op_result.ptr() == expected_notification_) {
-        run_loop_->Quit();
-      }
+    if (json_string == expected_notification_) {
+      run_loop_->Quit();
     }
   }
 
  private:
-  content::NotificationRegistrar registrar_;
   std::string expected_notification_;
   raw_ptr<base::RunLoop> run_loop_;
 };
@@ -3176,6 +3175,7 @@ IN_PROC_BROWSER_TEST_F(SSLUITestWaitForDOMNotification,
   // chain passes through HTTP, the page should be marked as mixed
   // content.
   set_expected_notification("\"mixed-image-loaded\"");
+  observe(tab);
   set_run_loop(&run_loop);
   ASSERT_TRUE(content::ExecuteScript(
       tab,
@@ -4093,15 +4093,7 @@ IN_PROC_BROWSER_TEST_F(SSLUITestIgnoreCertErrors, TestWSS) {
 // --ignore-certificate-errors-spki-list. The connection should be established
 // without interstitial page showing.
 #if !BUILDFLAG(IS_CHROMEOS_ASH)  // Chrome OS does not support the flag.
-// TODO(crbug.com/1176880): Disabled on macOS because the WSS SpawnedTestServer
-// does not support modern TLS on the macOS bots.
-#if defined(OS_MAC)
-#define MAYBE_TestWSSExpired DISABLED_TestWSSExpired
-#else
-#define MAYBE_TestWSSExpired TestWSSExpired
-#endif
-IN_PROC_BROWSER_TEST_F(SSLUITestIgnoreCertErrorsBySPKIWSS,
-                       MAYBE_TestWSSExpired) {
+IN_PROC_BROWSER_TEST_F(SSLUITestIgnoreCertErrorsBySPKIWSS, TestWSSExpired) {
   ASSERT_TRUE(wss_server_expired_.Start());
 
   // Setup page title observer.

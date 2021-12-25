@@ -277,7 +277,6 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
   }
 
   void SetUp() override {
-    ui::IMEBridge::Initialize();
     input_method_manager_ = new TestInputMethodManager();
     im::InputMethodManager::Initialize(input_method_manager_);
     profile_ = std::make_unique<TestingProfile>();
@@ -305,7 +304,6 @@ class ArcInputMethodManagerServiceTest : public testing::Test {
     tablet_mode_controller_.reset();
     profile_.reset();
     im::InputMethodManager::Shutdown();
-    ui::IMEBridge::Shutdown();
   }
 
  private:

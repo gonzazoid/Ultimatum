@@ -113,6 +113,7 @@
 <translation id="1308113895091915999">មាន​ការផ្ដល់ជូន</translation>
 <translation id="1312803275555673949">តើមាន​ភស្តុតាងអ្វី​សម្រាប់គាំទ្រវា?</translation>
 <translation id="131405271941274527"><ph name="URL" /> ចង់ផ្ញើ និង​ទទួលព័ត៌មាន នៅពេល​អ្នកចុច​ទូរសព្ទ​របស់អ្នក នៅលើ​ឧបករណ៍ NFC</translation>
+<translation id="1314311879718644478">មើលខ្លឹមសារ AR</translation>
 <translation id="1314509827145471431">ភ្ជាប់​ខាងស្ដាំ</translation>
 <translation id="1318023360584041678">បានរក្សាទុក​នៅក្នុង​ក្រុមផ្ទាំង</translation>
 <translation id="1319245136674974084">កុំ​​សួរ​ទៀត​សម្រាប់​កម្មវិធី​នេះ</translation>
@@ -216,6 +217,7 @@
 <translation id="1583429793053364125">មានបញ្ហាអ្វីមួយកើតឡើង ខណៈពេលកំពុងបង្ហាញគេហទំព័រនេះ</translation>
 <translation id="1586541204584340881">ថាតើកម្មវិធីបន្ថែមណាខ្លះដែលអ្នកបានដំឡើង</translation>
 <translation id="1588438908519853928">ធម្មតា</translation>
+<translation id="1589050138437146318">ដំឡើង ARCore ឬ?</translation>
 <translation id="1592005682883173041">ការចូលប្រើទិន្នន័យមូលដ្ឋាន</translation>
 <translation id="1594030484168838125">ជ្រើសរើស</translation>
 <translation id="160851722280695521">លេងហ្គេមដាយណូស័រត់នៅក្នុង Chrome</translation>
@@ -1266,6 +1268,7 @@
 <translation id="4968522289500246572">កម្មវិធីនេះត្រូវបានបង្កើតឡើងសម្រាប់ឧបករណ៍ចល័ត ហើយប្រហែលជាមិនអាចប្ដូរទំហំ​បានល្អទេ។ កម្មវិធីនេះអាចមានបញ្ហា ឬចាប់ផ្ដើមឡើងវិញ។</translation>
 <translation id="4969341057194253438">លុបការថត</translation>
 <translation id="4973922308112707173">ចោះ​ពីររន្ធ​ខាងលើ</translation>
+<translation id="4976702386844183910">បានចូល​មើល​លើកចុង​ក្រោយនៅថ្ងៃទី <ph name="DATE" /></translation>
 <translation id="4984088539114770594">ប្រើមីក្រូហ្វូនឬ?</translation>
 <translation id="4984339528288761049">Prc5 (ស្រោម​សំបុត្រ)</translation>
 <translation id="4989163558385430922">មើល​ទាំងអស់</translation>
@@ -1351,6 +1354,7 @@
 <translation id="5215116848420601511">វិធី​បង់ប្រាក់ និង​អាសយដ្ឋាន​ដែលប្រើ Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">ទម្រទី 13</translation>
+<translation id="5216942107514965959">បានចូលមើល​លើកចុងក្រោយ​នៅថ្ងៃនេះ</translation>
 <translation id="5222812217790122047">តម្រូវ​ឲ្យ​មាន​អ៊ីមែល</translation>
 <translation id="5230733896359313003">អាសយដ្ឋាន​ដឹក​ជញ្ជូន</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1394,6 +1398,7 @@
 <translation id="5333022057423422993">Chrome បានរកឃើញ​ពាក្យសម្ងាត់​ដែលអ្នកទើបតែប្រើ នៅក្នុង​ការបែកធ្លាយ​ទិន្នន័យ។ ដើម្បី​រក្សាសុវត្ថិភាព​គណនីរបស់អ្នក យើងសូមណែនាំឱ្យ​ពិនិត្យមើល​ពាក្យសម្ងាត់​ដែលអ្នកបានរក្សាទុក។</translation>
 <translation id="5334013548165032829">កំណត់ហេតុ​ប្រព័ន្ធលម្អិត</translation>
 <translation id="5334145288572353250">រក្សាទុក​អាសយដ្ឋាន​ឬ?</translation>
+<translation id="5335920952954443287">​បេះដូង​លោត</translation>
 <translation id="5340250774223869109">កម្មវិធី​ត្រូវបាន​ទប់ស្កាត់</translation>
 <translation id="534295439873310000">ឧបករណ៍ NFC</translation>
 <translation id="5344579389779391559">ទំព័រ​នេះ​អាច​នឹងព្យាយាម​គិតប្រាក់ពីអ្នក</translation>
@@ -1536,6 +1541,7 @@
 <translation id="5869522115854928033">ពាក្យសម្ងាត់ដែលបានរក្សាទុក</translation>
 <translation id="5873013647450402046">ធនាគារ​របស់អ្នក​ចង់បញ្ជាក់ថា ពិតជាអ្នក។</translation>
 <translation id="5887400589839399685">បានរក្សាទុក​កាត</translation>
+<translation id="5887687176710214216">បានចូលមើល​លើកចុងក្រោយ​កាលពីម្សិលមិញ</translation>
 <translation id="5895138241574237353">ចាប់ផ្តើមឡើងវិញ</translation>
 <translation id="5895187275912066135">ចេញនៅថ្ងៃទី</translation>
 <translation id="5901630391730855834">លឿង</translation>
@@ -1729,6 +1735,7 @@
 <translation id="6529602333819889595">ធ្វើការលុបវិញ</translation>
 <translation id="6545864417968258051">ការស្កេនប៊្លូធូស</translation>
 <translation id="6547208576736763147">ចោះ​ពីររន្ធ​ខាងឆ្វេង</translation>
+<translation id="6554732001434021288">បានចូលមើល​លើកចុងក្រោយ​កាលពី <ph name="NUM_DAYS" /> ថ្ងៃមុន</translation>
 <translation id="6556866813142980365">ធ្វើវិញ</translation>
 <translation id="6569060085658103619">អ្នក​កំពុងមើល​ទំព័រ​កម្មវិធី​បន្ថែម</translation>
 <translation id="6573200754375280815">ចោះ​ពីររន្ធ​ខាងស្ដាំ</translation>
@@ -2065,6 +2072,7 @@
 <translation id="7654909834015434372">នៅពេល​អ្នក​កែ​ចំណារ ឯកសារនេះ​នឹងត្រឡប់ទៅ​ការបង្វិល​ដើម​របស់វា​វិញ</translation>
 <translation id="765676359832457558">លាក់ការកំណត់កម្រិតខ្ពស់...</translation>
 <translation id="7658239707568436148">បដិសេធ</translation>
+<translation id="7659878911471462949">រំភើបចិត្តដល់ស្រក់ទឹកភ្នែក</translation>
 <translation id="7662298039739062396">ការកំណត់​គ្រប់គ្រង​ដោយ​កម្មវិធីបន្ថែម</translation>
 <translation id="7663736086183791259">វិញ្ញាបនបត្រ <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">មិនអនុញ្ញាត​នៅក្នុង​មុខងារឯកជនទេ</translation>
@@ -2166,7 +2174,6 @@
 <translation id="798134797138789862">អាចស្នើសុំ​ប្រើទិន្នន័យ និងឧបករណ៍ VR</translation>
 <translation id="7984945080620862648">អ្នកមិនអាចទៅកាន់ <ph name="SITE" /> ឥឡូវនេះទេ ពីព្រោះគេហទំព័ររបស់អ្នកបានផ្ញើអត្តសញ្ញាណសម្គាល់រញេរញៃដែល Chrome មិនអាចដំណើរការបាន។ ជាធម្មតាកំហុសឆ្គងបណ្តាញ
 និងការវាយប្រហារជារឿងបណ្ណោះអាសន្ន ដូច្នេះទំព័រនេះនឹងអាចដំណើរពេលក្រោយ។</translation>
-<translation id="79859296434321399">ដើម្បី​មើលខ្លឹមសារ AR សូមដំឡើង ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">ភ្ជាប់</translation>
 <translation id="7992044431894087211">ការបង្ហាញអេក្រង់​ជាមួយ <ph name="APPLICATION_TITLE" /> ត្រូវបានបន្ត</translation>
@@ -2270,6 +2277,7 @@
 <translation id="830498451218851433">បត់​ពាក់កណ្ដាល</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">កម្មវិធី​ដែលបានដំឡើង និងភាពញឹកញាប់​នៃការប្រើប្រាស់កម្មវិធីទាំងនោះ</translation>
+<translation id="8317207217658302555">ដំឡើងកំណែ ARCore ឬ?</translation>
 <translation id="831997045666694187">ល្ងាច</translation>
 <translation id="8321476692217554900">ការជូន​ដំណឹង</translation>
 <translation id="8328484624016508118">បន្ទាប់ពីបិទ​ផ្ទាំងឯកជន​ទាំងអស់ Chrome នឹងសម្អាត៖
@@ -2340,7 +2348,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{កំណត់ការអនុញ្ញាតឡើងវិញ}other{កំណត់ការអនុញ្ញាតឡើងវិញ}}</translation>
 <translation id="8555010941760982128">ប្រើប្រាស់លេខ​កូដ​នេះ​នៅ​ពេល​គិត​លុយ</translation>
 <translation id="8557066899867184262">CVC ស្ថិត​នៅក្រោយ​បណ្ណ​របស់អ្នក។</translation>
-<translation id="8558485628462305855">ដើម្បី​មើលខ្លឹមសារ AR សូមដំឡើងជំនាន់ ARCore</translation>
 <translation id="8559762987265718583">ការភ្ជាប់ឯកជនទៅ <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> មិនអាចធ្វើឡើងទេ ពីព្រោះកាលបរិច្ឆេទ និងម៉ោងឧបករណ៍របស់អ្នក (<ph name="DATE_AND_TIME" />)មិនត្រឹមត្រូវ។</translation>
 <translation id="8564182942834072828">ឯកសារ​ដាច់ដោយឡែក/ច្បាប់ចម្លង​ដាច់ដោយឡែក</translation>
 <translation id="8564985650692024650">Chromium ណែនាំឱ្យ​កំណត់​ពាក្យសម្ងាត់ <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> របស់អ្នក​ឡើងវិញ ប្រសិនបើ​អ្នកបាន​ប្រើ​វាម្តងទៀត​នៅលើ​ទំព័រផ្សេង។</translation>

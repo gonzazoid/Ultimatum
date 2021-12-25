@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Ofertă disponibilă</translation>
 <translation id="1312803275555673949">Ce dovezi există?</translation>
 <translation id="131405271941274527"><ph name="URL" /> dorește să trimită și să primească informații când atingi telefonul de pe un dispozitiv NFC</translation>
+<translation id="1314311879718644478">Vezi conținutul în realitatea augmentată</translation>
 <translation id="1314509827145471431">Legare în dreapta</translation>
 <translation id="1318023360584041678">Salvată în grupul de file</translation>
 <translation id="1319245136674974084">Nu mai întreba pentru această aplicație</translation>
@@ -215,6 +216,7 @@
 <translation id="1583429793053364125">A apărut o eroare la afișarea paginii web.</translation>
 <translation id="1586541204584340881">extensiile instalate;</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Instalezi ARCore?</translation>
 <translation id="1592005682883173041">Accesul la datele locale</translation>
 <translation id="1594030484168838125">Alegeți</translation>
 <translation id="160851722280695521">Joacă jocul Dino Run în Chrome</translation>
@@ -1262,6 +1264,7 @@
 <translation id="4968522289500246572">Aplicația este creată pentru dispozitive mobile și poate să nu fie redimensionată corect. Poate să aibă erori sau să repornească.</translation>
 <translation id="4969341057194253438">Șterge înregistrarea</translation>
 <translation id="4973922308112707173">Perforare dublă în partea de sus</translation>
+<translation id="4976702386844183910">Accesat ultima dată pe <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Folosești microfonul?</translation>
 <translation id="4984339528288761049">Prc5 (Plic)</translation>
 <translation id="4989163558385430922">Afișează-le pe toate</translation>
@@ -1347,6 +1350,7 @@
 <translation id="5215116848420601511">Metodele de plată și adresele care folosesc Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Tava 13</translation>
+<translation id="5216942107514965959">Accesat ultima dată azi</translation>
 <translation id="5222812217790122047">Adresa de e-mail este obligatorie</translation>
 <translation id="5230733896359313003">Adresă de expediere</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1390,6 +1394,7 @@
 <translation id="5333022057423422993">Chrome a găsit parola pe care tocmai ai folosit-o într-o încălcare a securității datelor. Pentru a-ți securiza conturile, verifică parolele salvate.</translation>
 <translation id="5334013548165032829">Jurnale de sistem detaliate</translation>
 <translation id="5334145288572353250">Salvezi adresa?</translation>
+<translation id="5335920952954443287">Inimă bătând</translation>
 <translation id="5340250774223869109">Aplicația a fost blocată</translation>
 <translation id="534295439873310000">Dispozitive NFC</translation>
 <translation id="5344579389779391559">Această pagină poate să genereze costuri</translation>
@@ -1532,6 +1537,7 @@
 <translation id="5869522115854928033">Parole salvate</translation>
 <translation id="5873013647450402046">Banca dorește să îți confirme identitatea.</translation>
 <translation id="5887400589839399685">Cardul a fost salvat</translation>
+<translation id="5887687176710214216">Accesat ultima dată ieri</translation>
 <translation id="5895138241574237353">Reîncepe</translation>
 <translation id="5895187275912066135">Emis la</translation>
 <translation id="5901630391730855834">Galben</translation>
@@ -1725,6 +1731,7 @@
 <translation id="6529602333819889595">&amp;Repetați ștergerea</translation>
 <translation id="6545864417968258051">Căutare Bluetooth</translation>
 <translation id="6547208576736763147">Perforare dublă în stânga</translation>
+<translation id="6554732001434021288">Accesat ultima dată acum <ph name="NUM_DAYS" /> zile</translation>
 <translation id="6556866813142980365">Repetă</translation>
 <translation id="6569060085658103619">Se afișează pagina unei extensii</translation>
 <translation id="6573200754375280815">Perforare dublă în dreapta</translation>
@@ -2060,6 +2067,7 @@ Detalii suplimentare:
 <translation id="7654909834015434372">Când editezi adnotări, acest document va reveni la orientarea inițială</translation>
 <translation id="765676359832457558">Ascundeți setările avansate...</translation>
 <translation id="7658239707568436148">Anulează</translation>
+<translation id="7659878911471462949">Lacrimi de bucurie</translation>
 <translation id="7662298039739062396">Setare controlată de o extensie</translation>
 <translation id="7663736086183791259">Certificat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Nu sunt permise în modul Incognito</translation>
@@ -2160,7 +2168,6 @@ Detalii suplimentare:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Poate solicita permisiunea de a folosi dispozitive de realitate virtuală și date conexe</translation>
 <translation id="7984945080620862648">Nu puteți accesa acum site-ul <ph name="SITE" />, deoarece acesta a trimis date de conectare într-un format necunoscut, pe care Chrome nu le poate procesa. Erorile de rețea și atacurile sunt de obicei temporare și probabil că această pagină va funcționa mai târziu.</translation>
-<translation id="79859296434321399">Pentru a vedea conținut din realitatea augmentată, instalează ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Legare</translation>
 <translation id="7992044431894087211">Permiterea accesului la eran pentru <ph name="APPLICATION_TITLE" /> a fost reluată</translation>
@@ -2264,6 +2271,7 @@ Detalii suplimentare:
 <translation id="830498451218851433">Îndoire la jumătate</translation>
 <translation id="8307358339886459768">Fotografie-Mic</translation>
 <translation id="8307888238279532626">Aplicațiile instalate și frecvența de folosire a acestora</translation>
+<translation id="8317207217658302555">Actualizezi ARCore?</translation>
 <translation id="831997045666694187">Seara</translation>
 <translation id="8321476692217554900">Notificări</translation>
 <translation id="8328484624016508118">După ce închizi toate filele incognito, Chrome șterge:
@@ -2334,7 +2342,6 @@ Detalii suplimentare:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Resetează permisiunea}few{Resetează permisiunile}other{Resetează permisiunile}}</translation>
 <translation id="8555010941760982128">Folosește codul la finalizarea achiziției</translation>
 <translation id="8557066899867184262">Codul CVC se află pe spatele cardului.</translation>
-<translation id="8558485628462305855">Pentru a vedea conținut din realitatea augmentată, actualizează ARCore</translation>
 <translation id="8559762987265718583">O conexiune privată la <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> nu poate fi stabilită, deoarece data și ora dispozitivului (<ph name="DATE_AND_TIME" />) sunt incorecte.</translation>
 <translation id="8564182942834072828">Documente separate/Copii necolaționate</translation>
 <translation id="8564985650692024650">Chromium îți recomandă să resetezi parola pentru <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> dacă ai folosit-o și pe alte site-uri.</translation>

@@ -6,6 +6,7 @@
 
 #include "ash/constants/ash_pref_names.h"
 #include "ash/public/cpp/projector/projector_controller.h"
+#include "ash/public/cpp/projector/projector_new_screencast_precondition.h"
 #include "ash/public/cpp/test/mock_projector_controller.h"
 #include "ash/webui/projector_app/test/mock_app_client.h"
 #include "base/files/file_path.h"
@@ -49,6 +50,8 @@ const char kOnSodaInstallError[] = "onSodaInstallError";
 const char kShouldDownloadSodaCallback[] = "shouldDownloadSodaCallbck";
 const char kInstallSodaCallback[] = "installSodaCallback";
 const char kGetPendingScreencastsCallback[] = "getPendingScreencastsCallback";
+
+const char kOpenFeedbackDialogCallback[] = "openFeedbackDialog";
 
 const char kSetUserPrefCallback[] = "setUserPrefCallback";
 const char kGetUserPrefCallback[] = "getUserPrefCallback";
@@ -147,9 +150,12 @@ TEST_F(ProjectorMessageHandlerUnitTest, GetAccounts) {
 }
 
 TEST_F(ProjectorMessageHandlerUnitTest, CanStartProjectorSession) {
-  EXPECT_CALL(controller(), CanStartNewSession());
-  ON_CALL(controller(), CanStartNewSession)
-      .WillByDefault(testing::Return(true));
+  NewScreencastPrecondition precondition;
+  precondition.state = NewScreencastPreconditionState::kEnabled;
+
+  EXPECT_CALL(controller(), GetNewScreencastPrecondition());
+  ON_CALL(controller(), GetNewScreencastPrecondition)
+      .WillByDefault(testing::Return(precondition));
 
   base::ListValue list_args;
   list_args.Append(kGetNewScreencastPreconditionCallback);
@@ -270,13 +276,14 @@ TEST_F(ProjectorMessageHandlerUnitTest, SendXhrWithUnSupportedUrl) {
   EXPECT_EQ("UNSUPPORTED_URL", *error);
 }
 
-TEST_F(ProjectorMessageHandlerUnitTest, CanStartNewSession) {
-  message_handler()->OnNewScreencastPreconditionChanged(/** canStart = */ true);
-  const content::TestWebUI::CallData& call_data = FetchCallData(0);
+TEST_F(ProjectorMessageHandlerUnitTest, NewScreencastPreconditionChanged) {
+  NewScreencastPrecondition precondition;
+  precondition.state = NewScreencastPreconditionState::kEnabled;
+  message_handler()->OnNewScreencastPreconditionChanged(precondition);
+  const content::TestWebUI::CallData& call_data = *(web_ui().call_data()[0]);
   EXPECT_EQ(call_data.function_name(), kWebUIListenerCall);
   EXPECT_EQ(call_data.arg1()->GetString(), kOnNewScreencastPreconditionChanged);
-  EXPECT_EQ(*(call_data.arg2()->FindIntKey(kState)),
-            static_cast<int>(NewScreencastPreconditionState::kEnabled));
+  EXPECT_EQ(*(call_data.arg2()), precondition.ToValue());
 }
 
 TEST_F(ProjectorMessageHandlerUnitTest, OnSodaProgress) {
@@ -331,10 +338,10 @@ TEST_F(ProjectorMessageHandlerUnitTest, InstallSoda) {
 }
 
 TEST_F(ProjectorMessageHandlerUnitTest, GetPendingScreencasts) {
-  const std::set<ash::PendingScreencast> expectedScreencasts{
-      ash::PendingScreencast{
-          /*container_dir*/ base::FilePath(kTestScreencastPath),
-          /*name*/ kTestScreencastName}};
+  const PendingScreencastSet expectedScreencasts{ash::PendingScreencast{
+      /*container_dir=*/base::FilePath(kTestScreencastPath),
+      /*name=*/kTestScreencastName, /*total_size_in_bytes=*/1,
+      /*bytes_untransferred=*/0}};
   ON_CALL(mock_app_client(), GetPendingScreencasts())
       .WillByDefault(testing::ReturnRef(expectedScreencasts));
 
@@ -364,8 +371,7 @@ TEST_F(ProjectorMessageHandlerUnitTest, GetPendingScreencasts) {
 }
 
 TEST_F(ProjectorMessageHandlerUnitTest, OnScreencastsStateChange) {
-  message_handler()->OnScreencastsPendingStatusChanged(
-      std::set<ash::PendingScreencast>());
+  message_handler()->OnScreencastsPendingStatusChanged(PendingScreencastSet());
   ExpectCallToWebUI(kWebUIListenerCall, "onScreencastsStateChange",
                     /*call_count=*/1u);
 }
@@ -435,6 +441,18 @@ TEST_F(ProjectorMessageHandlerUnitTest, SetCreationFlowEnabledInvalidValue) {
   EXPECT_EQ(*(rejected_args->FindPath(kRejectedRequestArgsKey)), func_args);
 }
 
+TEST_F(ProjectorMessageHandlerUnitTest, OpenFeedbackDialog) {
+  base::ListValue list_args;
+  list_args.Append(base::Value(kOpenFeedbackDialogCallback));
+
+  web_ui().HandleReceivedMessage("openFeedbackDialog", &list_args);
+  base::RunLoop().RunUntilIdle();
+
+  const content::TestWebUI::CallData& call_data = FetchCallData(0);
+  EXPECT_EQ(call_data.function_name(), kWebUIResponse);
+  EXPECT_EQ(call_data.arg1()->GetString(), kOpenFeedbackDialogCallback);
+}
+
 TEST_F(ProjectorMessageHandlerUnitTest, SetCreationFlowEnabledUnsupportedPref) {
   base::ListValue list_args;
   list_args.Append(base::Value(kSetUserPrefCallback));
@@ -462,7 +480,7 @@ TEST_F(ProjectorMessageHandlerUnitTest, SetCreationFlowEnabledUnsupportedPref) {
 }
 
 class ProjectorSessionStartUnitTest
-    : public ::testing::WithParamInterface<bool>,
+    : public ::testing::WithParamInterface<NewScreencastPrecondition>,
       public ProjectorMessageHandlerUnitTest {
  public:
   ProjectorSessionStartUnitTest() = default;
@@ -473,10 +491,12 @@ class ProjectorSessionStartUnitTest
 };
 
 TEST_P(ProjectorSessionStartUnitTest, ProjectorSessionTest) {
-  bool success = GetParam();
-  EXPECT_CALL(controller(), CanStartNewSession());
-  ON_CALL(controller(), CanStartNewSession)
-      .WillByDefault(testing::Return(success));
+  const auto& precondition = GetParam();
+  EXPECT_CALL(controller(), GetNewScreencastPrecondition());
+  ON_CALL(controller(), GetNewScreencastPrecondition)
+      .WillByDefault(testing::Return(precondition));
+
+  bool success = precondition.state == NewScreencastPreconditionState::kEnabled;
 
   EXPECT_CALL(controller(), StartProjectorSession("folderId"))
       .Times(success ? 1 : 0);
@@ -500,9 +520,14 @@ TEST_P(ProjectorSessionStartUnitTest, ProjectorSessionTest) {
   EXPECT_EQ(call_data.arg3()->GetBool(), success);
 }
 
-INSTANTIATE_TEST_CASE_P(SessionStartSuccessFailTest,
-                        ProjectorSessionStartUnitTest,
-                        ::testing::Values(true, false));
+INSTANTIATE_TEST_CASE_P(
+    SessionStartSuccessFailTest,
+    ProjectorSessionStartUnitTest,
+    ::testing::Values(
+        NewScreencastPrecondition(NewScreencastPreconditionState::kEnabled, {}),
+        NewScreencastPrecondition(
+            NewScreencastPreconditionState::kDisabled,
+            {NewScreencastPreconditionReason::kInProjectorSession})));
 
 // Tests getting and setting the Projector onboarding preferences.
 // Parameterized by the preference strings.

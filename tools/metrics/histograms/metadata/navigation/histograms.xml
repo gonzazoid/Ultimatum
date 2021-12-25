@@ -34,6 +34,21 @@ chromium-metrics-reviews@google.com.
   <variant name="WillStartRequest"/>
 </variants>
 
+<variants name="PrerenderTriggerType">
+<!--
+Also used in tools/metrics/histograms/metadata/page/histograms.xml.
+-->
+
+  <variant name="">
+    <obsolete>
+      Base histogram. Use suffixes of this histogram instead. Non-suffix name
+      was removed in Nov 2021.
+    </obsolete>
+  </variant>
+  <variant name=".Embedder_DirectURLInput"/>
+  <variant name=".SpeculationRule"/>
+</variants>
+
 <histogram name="BackForwardCache.AllSites.EvictedAfterDocumentRestoredReason"
     enum="BackForwardCacheEvictedAfterDocumentRestoredReason"
     expires_after="2022-10-01">
@@ -51,7 +66,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackForwardCache.AllSites.HistoryNavigationOutcome"
-    enum="BackForwardCacheHistoryNavigationOutcome" expires_after="2022-04-10">
+    enum="BackForwardCacheHistoryNavigationOutcome" expires_after="2022-06-12">
   <owner>hajimehoshi@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -65,7 +80,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="BackForwardCache.AllSites.HistoryNavigationOutcome.BlocklistedFeature"
-    enum="WebSchedulerTrackedFeature" expires_after="2022-04-17">
+    enum="WebSchedulerTrackedFeature" expires_after="2022-06-19">
   <owner>hajimehoshi@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -144,7 +159,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="BackForwardCache.AllSites.HistoryNavigationOutcome.NotRestoredReason"
-    enum="BackForwardCacheNotRestoredReason" expires_after="2022-04-17">
+    enum="BackForwardCacheNotRestoredReason" expires_after="2022-06-19">
   <owner>hajimehoshi@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -174,7 +189,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="BackForwardCache.EvictedAfterDocumentRestoredReason"
     enum="BackForwardCacheEvictedAfterDocumentRestoredReason"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>hajimehoshi@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -190,7 +205,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackForwardCache.Eviction.Renderer"
-    enum="BackForwardCacheRendererEvictionReason" expires_after="2022-04-17">
+    enum="BackForwardCacheRendererEvictionReason" expires_after="2022-06-19">
   <owner>rakina@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -276,7 +291,7 @@ chromium-metrics-reviews@google.com.
 <histogram
     name="BackForwardCache.HistoryNavigationOutcome.BrowsingInstanceNotSwappedReason"
     enum="BackForwardCacheBrowsingInstanceNotSwappedReason"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>hajimehoshi@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -509,7 +524,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="BackForwardCache.Restore.NavigationToFirstPaint" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>sreejakshetty@chromium.org</owner>
   <owner>altimin@chromium.org</owner>
   <owner>bfcache-dev@chromium.org</owner>
@@ -546,7 +561,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram
     name="BackForwardCache.UnexpectedRendererToBrowserMessage.InterfaceName"
-    enum="MojoInterfaceName" expires_after="2022-04-17">
+    enum="MojoInterfaceName" expires_after="2022-06-19">
   <owner>carlscab@google.com</owner>
   <owner>bfcache-dev@chromium.org</owner>
   <summary>
@@ -791,7 +806,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Navigation.EngagementTime.HTTPS" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>estark@chromium.org</owner>
   <owner>security-enamel@chromium.org</owner>
   <summary>
@@ -946,7 +961,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Navigation.MainFrame.ThirdPartyCookieBlockingEnabled"
-    enum="ThirdPartyCookieBlockState" expires_after="2022-01-23">
+    enum="ThirdPartyCookieBlockState" expires_after="2022-07-23">
   <owner>dullweber@chromium.org</owner>
   <owner>feuunk@chromium.org</owner>
   <summary>
@@ -991,7 +1006,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Navigation.MainFrameProfileType2" enum="BrowserProfileType"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>rhalavati@chromium.org</owner>
   <owner>chrome-privacy-core@google.com</owner>
   <summary>
@@ -1096,7 +1111,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Navigation.OriginAgentCluster.Result"
-    enum="OriginAgentClusterEndResult" expires_after="2022-04-10">
+    enum="OriginAgentClusterEndResult" expires_after="2022-06-12">
   <owner>alexmos@chromium.org</owner>
   <owner>creis@chromium.org</owner>
   <owner>wjmaclean@chromium.org</owner>
@@ -1386,7 +1401,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Navigation.UserAgentStringType" enum="UserAgentStringType"
-    expires_after="M100">
+    expires_after="2022-06-12">
   <owner>abeyad@chromium.org</owner>
   <owner>aarontag@chromium.org</owner>
   <summary>
@@ -1610,6 +1625,41 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram
+    name="Prerender.Experimental.CrossOriginRedirectionDomain{PrerenderTriggerType}"
+    enum="PrerenderCrossOriginRedirectionDomain" expires_after="2022-03-27">
+  <owner>lingqi@chromium.org</owner>
+  <owner>nhiroki@chromium.org</owner>
+  <owner>src/content/browser/prerender/OWNERS</owner>
+  <summary>
+    A breakdown metric for analyzing cross-origin redirection cases during
+    embedder-triggered prerendering. Recorded when a prerendering page was
+    redirected to a subdomain.
+
+    Note that for now it is not used for prerendering that are triggered by
+    speculation rules.
+  </summary>
+  <token key="PrerenderTriggerType" variants="PrerenderTriggerType"/>
+</histogram>
+
+<histogram
+    name="Prerender.Experimental.CrossOriginRedirectionProtocolChange{PrerenderTriggerType}"
+    enum="PrerenderCrossOriginRedirectionProtocolChange"
+    expires_after="2022-03-27">
+  <owner>lingqi@chromium.org</owner>
+  <owner>nhiroki@chromium.org</owner>
+  <owner>src/content/browser/prerender/OWNERS</owner>
+  <summary>
+    A breakdown metric for analyzing cross-origin redirection cases during
+    embedder-triggered prerendering, Recorded when redirections were caused due
+    to HTTP protocol upgrades.
+
+    Note that for now it is not used for prerendering that are triggered by
+    speculation rules.
+  </summary>
+  <token key="PrerenderTriggerType" variants="PrerenderTriggerType"/>
+</histogram>
+
 <histogram name="Prerender.Experimental.PrerenderCancelledInterface"
     enum="PrerenderCancelledInterface" expires_after="2022-06-05">
   <owner>nhiroki@chromium.org</owner>
@@ -1649,6 +1699,27 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram
+    name="Prerender.Experimental.PrerenderCrossOriginRedirectionMismatch{PrerenderTriggerType}"
+    enum="PrerenderCrossOriginRedirectionMismatch" expires_after="2022-03-27">
+  <owner>lingqi@chromium.org</owner>
+  <owner>nhiroki@chromium.org</owner>
+  <owner>src/content/browser/prerender/OWNERS</owner>
+  <summary>
+    A breakdown metric for analyzing cross-origin redirection cases during
+    embedder-triggered prerendering. Recorded when the embedder-triggered
+    prerendering was redirected to another origin that differs from the initial
+    one.
+
+    The cases are encoded into 3 bits(scheme mismatch, host mismatch, port
+    mismatch).
+
+    Note that for now it is not used for prerendering that are triggered by
+    speculation rules.
+  </summary>
+  <token key="PrerenderTriggerType" variants="PrerenderTriggerType"/>
+</histogram>
+
+<histogram
     name="Prerender.Experimental.PrerenderHostCancelReasonBeforeActivation"
     enum="PrerenderHostFinalStatus" expires_after="2021-08-06">
   <obsolete>
@@ -1682,15 +1753,18 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Prerender.Experimental.PrerenderHostFinalStatus"
+<histogram
+    name="Prerender.Experimental.PrerenderHostFinalStatus{PrerenderTriggerType}"
     enum="PrerenderHostFinalStatus" expires_after="2022-06-05">
   <owner>nhiroki@chromium.org</owner>
   <owner>toyoshim@chromium.org</owner>
   <owner>lingqi@chromium.org</owner>
+  <owner>asamidoi@chromium.org</owner>
   <summary>
     Final status for a prerendering attempt. Recorded by PrerenderHost or
     PrerenderHostRegistry in the browser process when the attempt finishes.
   </summary>
+  <token key="PrerenderTriggerType" variants="PrerenderTriggerType"/>
 </histogram>
 
 <histogram name="Prerender.FinalStatus" enum="PrerenderFinalStatus"

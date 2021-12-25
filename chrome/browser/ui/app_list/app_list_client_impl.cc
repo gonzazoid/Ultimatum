@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "ash/constants/ash_features.h"
 #include "ash/public/cpp/app_list/app_list_controller.h"
 #include "ash/public/cpp/new_window_delegate.h"
 #include "ash/public/cpp/shelf_model.h"
@@ -20,6 +21,7 @@
 #include "base/strings/strcat.h"
 #include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ash/crosapi/browser_util.h"
+#include "chrome/browser/ash/crosapi/url_handler_ash.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -45,8 +47,11 @@
 #include "chrome/browser/ui/browser_navigator.h"
 #include "chrome/browser/ui/browser_navigator_params.h"
 #include "chrome/browser/ui/browser_window.h"
+#include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
+#include "chromeos/crosapi/cpp/gurl_os_handler_utils.h"
 #include "components/session_manager/core/session_manager.h"
 #include "extensions/common/extension.h"
+#include "ui/base/page_transition_types.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/display/types/display_constants.h"
@@ -125,17 +130,32 @@ void AppListClientImpl::OnAppListControllerDestroyed() {
     current_model_updater_->SetActive(false);
 }
 
-void AppListClientImpl::StartZeroStateSearch(base::OnceClosure on_done,
-                                             base::TimeDelta timeout) {
-  // TODO(https://crbug.com/1269115): Refresh the zero state results.
-  base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
-      FROM_HERE, std::move(on_done), timeout);
+void AppListClientImpl::StartSearch(const std::u16string& trimmed_query) {
+  // TODO(crbug.com/1269115): In the productivity launcher we handle empty
+  // queries, eg. from a user deleting a query, by re-routing them to
+  // StartZeroStateSearch. We may want to change this behavior so that ash calls
+  // StartZeroStateSearch directly.
+  if (search_controller_) {
+    if (trimmed_query.empty() &&
+        ash::features::IsProductivityLauncherEnabled()) {
+      // We use a long timeout here because the we don't have an
+      // animation-related deadline for these results, unlike a call to
+      // StartZeroStateSearch.
+      StartZeroStateSearch(base::DoNothing(), base::Seconds(1));
+    } else {
+      search_controller_->StartSearch(trimmed_query);
+    }
+    OnSearchStarted();
+  }
 }
 
-void AppListClientImpl::StartSearch(const std::u16string& trimmed_query) {
+void AppListClientImpl::StartZeroStateSearch(base::OnceClosure on_done,
+                                             base::TimeDelta timeout) {
   if (search_controller_) {
-    search_controller_->Start(trimmed_query);
+    search_controller_->StartZeroState(std::move(on_done), timeout);
     OnSearchStarted();
+  } else {
+    std::move(on_done).Run();
   }
 }
 
@@ -301,8 +321,11 @@ void AppListClientImpl::GetContextMenuModel(
 
 void AppListClientImpl::OnAppListVisibilityWillChange(bool visible) {
   app_list_target_visibility_ = visible;
-  if (visible && search_controller_)
-    search_controller_->Start(std::u16string());
+  // TODO(crbug.com/1258415): This is only used in the old launcher, and can be
+  // removed once the productivity launcher is launched.
+  if (visible && search_controller_ &&
+      !ash::features::IsProductivityLauncherEnabled())
+    search_controller_->StartSearch(std::u16string());
 }
 
 void AppListClientImpl::OnAppListVisibilityChanged(bool visible) {
@@ -434,6 +457,11 @@ app_list::SearchController* AppListClientImpl::search_controller() {
   return search_controller_.get();
 }
 
+void AppListClientImpl::SetSearchControllerForTest(
+    std::unique_ptr<app_list::SearchController> test_controller) {
+  search_controller_ = std::move(test_controller);
+}
+
 AppListModelUpdater* AppListClientImpl::GetModelUpdaterForTest() {
   return current_model_updater_;
 }
@@ -531,7 +559,18 @@ void AppListClientImpl::OpenURL(Profile* profile,
                                 ui::PageTransition transition,
                                 WindowOpenDisposition disposition) {
   if (crosapi::browser_util::IsLacrosPrimaryBrowser()) {
-    ash::NewWindowDelegate::GetPrimary()->OpenUrl(url, true);
+    const GURL sanitized_url =
+        crosapi::gurl_os_handler_utils::SanitizeAshURL(url);
+    if ((PageTransitionCoreTypeIs(transition, ui::PAGE_TRANSITION_TYPED) ||
+         PageTransitionCoreTypeIs(transition, ui::PAGE_TRANSITION_GENERATED)) &&
+        ChromeWebUIControllerFactory::GetInstance()->CanHandleUrl(
+            sanitized_url)) {
+      // Let our os url handler take care of the call.
+      crosapi::UrlHandlerAsh().OpenUrl(sanitized_url);
+    } else {
+      // Send the url to the current primary browser.
+      ash::NewWindowDelegate::GetPrimary()->OpenUrl(url, true);
+    }
   } else {
     NavigateParams params(profile, url, transition);
     params.disposition = disposition;
@@ -583,6 +622,14 @@ void AppListClientImpl::MaybeRecordViewShown() {
   // elegant way. For example, do not bother showing the app list when handling
   // the app list toggling event because the app list is not visible in OOBE.
   if (!IsSessionActive())
+    return;
+
+  // Return early if `state_for_new_user_` is null.
+  // TODO(https://crbug.com/1278947): Theoretically, `state_for_new_user_`
+  // should be meaningful when the current user is new. However, it is not hold
+  // under some edge cases. When the root issue gets fixed, replace it with a
+  // check statement.
+  if (!state_for_new_user_)
     return;
 
   if (state_for_new_user_->showing_recorded) {

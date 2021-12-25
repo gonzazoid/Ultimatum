@@ -171,7 +171,8 @@ class VideoCaptureImplTest : public ::testing::Test {
     ON_CALL(mock_video_capture_host_, DoStart(_, _, _))
         .WillByDefault(InvokeWithoutArgs([this]() {
           video_capture_impl_->OnStateChanged(
-              media::mojom::VideoCaptureState::STARTED);
+              media::mojom::blink::VideoCaptureResult::NewState(
+                  media::mojom::VideoCaptureState::STARTED));
         }));
 
     video_capture_impl_->SetGpuMemoryBufferSupportForTesting(
@@ -256,10 +257,6 @@ class VideoCaptureImplTest : public ::testing::Test {
   void GetDeviceFormatsInUse() {
     video_capture_impl_->GetDeviceFormatsInUse(WTF::Bind(
         &VideoCaptureImplTest::OnDeviceFormatsInUse, base::Unretained(this)));
-  }
-
-  void OnStateChanged(media::mojom::VideoCaptureState state) {
-    video_capture_impl_->OnStateChanged(state);
   }
 
   const base::UnguessableToken session_id_ = base::UnguessableToken::Create();
@@ -711,7 +708,8 @@ TEST_F(VideoCaptureImplTest, AlreadyStarted) {
   EXPECT_CALL(mock_video_capture_host_, DoStart(_, session_id_, params_small_))
       .WillOnce(DoAll(InvokeWithoutArgs([this]() {
                         video_capture_impl_->OnStateChanged(
-                            media::mojom::VideoCaptureState::STARTED);
+                            media::mojom::blink::VideoCaptureResult::NewState(
+                                media::mojom::VideoCaptureState::STARTED));
                       }),
                       SaveArg<2>(&params)));
   EXPECT_CALL(mock_video_capture_host_, Stop(_));
@@ -733,7 +731,9 @@ TEST_F(VideoCaptureImplTest, EndedBeforeStop) {
 
   StartCapture(0, params_small_);
 
-  OnStateChanged(media::mojom::VideoCaptureState::ENDED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::ENDED));
 
   StopCapture(0);
 }
@@ -747,7 +747,9 @@ TEST_F(VideoCaptureImplTest, ErrorBeforeStop) {
 
   StartCapture(0, params_small_);
 
-  OnStateChanged(media::mojom::VideoCaptureState::FAILED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewErrorCode(
+          media::VideoCaptureError::kIntentionalErrorRaisedByUnitTest));
 
   StopCapture(0);
 
@@ -755,6 +757,18 @@ TEST_F(VideoCaptureImplTest, ErrorBeforeStop) {
   // Successful start before the error, so StartOutcome is kStarted.
   histogram_tester.ExpectUniqueSample("Media.VideoCapture.StartOutcome",
                                       VideoCaptureStartOutcome::kStarted, 1);
+}
+
+TEST_F(VideoCaptureImplTest, WinSystemPermissionsErrorUpdatesCorrectState) {
+  EXPECT_CALL(*this,
+              OnStateUpdate(
+                  blink::VIDEO_CAPTURE_STATE_ERROR_SYSTEM_PERMISSIONS_DENIED));
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewErrorCode(
+          media::VideoCaptureError::kWinMediaFoundationSystemPermissionDenied));
+
+  StartCapture(0, params_small_);
+  StopCapture(0);
 }
 
 TEST_F(VideoCaptureImplTest, BufferReceivedBeforeOnStarted) {
@@ -778,14 +792,18 @@ TEST_F(VideoCaptureImplTest, BufferReceivedBeforeOnStarted) {
 
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
   // Additional STARTED will cause RequestRefreshFrame a second time.
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
@@ -816,14 +834,18 @@ TEST_F(VideoCaptureImplTest,
 
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
   // Additional STARTED will cause RequestRefreshFrame a second time.
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
@@ -853,14 +875,18 @@ TEST_F(VideoCaptureImplTest,
 
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
   // Additional STARTED will cause RequestRefreshFrame a second time.
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
   EXPECT_CALL(mock_video_capture_host_, RequestRefreshFrame(_));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
   Mock::VerifyAndClearExpectations(this);
   Mock::VerifyAndClearExpectations(&mock_video_capture_host_);
 
@@ -904,7 +930,9 @@ TEST_F(VideoCaptureImplTest, StartTimeout_FeatureDisabled) {
 
   // Finally callback that the capture has started, should respond.
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STARTED));
-  video_capture_impl_->OnStateChanged(media::mojom::VideoCaptureState::STARTED);
+  video_capture_impl_->OnStateChanged(
+      media::mojom::blink::VideoCaptureResult::NewState(
+          media::mojom::VideoCaptureState::STARTED));
 
   EXPECT_CALL(*this, OnStateUpdate(blink::VIDEO_CAPTURE_STATE_STOPPED));
   EXPECT_CALL(mock_video_capture_host_, Stop(_));
@@ -924,7 +952,8 @@ TEST_F(VideoCaptureImplTest, ErrorBeforeStart) {
       .WillByDefault(InvokeWithoutArgs([this]() {
         // Go straight to Failed. Do not pass Go. Do not collect £200.
         video_capture_impl_->OnStateChanged(
-            media::mojom::VideoCaptureState::FAILED);
+            media::mojom::blink::VideoCaptureResult::NewErrorCode(
+                media::VideoCaptureError::kIntentionalErrorRaisedByUnitTest));
       }));
 
   StartCapture(0, params_small_);

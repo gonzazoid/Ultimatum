@@ -272,6 +272,11 @@ const base::Feature kDesktopPWAsAdditionalWindowingControls{
 const base::Feature kDesktopPWAsCacheDuringDefaultInstall{
     "DesktopPWAsCacheDuringDefaultInstall", base::FEATURE_ENABLED_BY_DEFAULT};
 
+// Generates customised default offline page that is shown when web app is
+// offline if no custom page is provided by developer.
+const base::Feature kDesktopPWAsDefaultOfflinePage{
+    "DesktopPWAsDefaultOfflinePage", base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Moves the Extensions "puzzle piece" icon from the title bar into the app menu
 // for web app windows.
 const base::Feature kDesktopPWAsElidedExtensionsMenu{
@@ -282,12 +287,6 @@ const base::Feature kDesktopPWAsElidedExtensionsMenu{
       base::FEATURE_DISABLED_BY_DEFAULT
 #endif
 };
-
-// Replaces the origin text flash in web app titlebars with the name of
-// the app.
-const base::Feature kDesktopPWAsFlashAppNameInsteadOfOrigin{
-    "DesktopPWAsFlashAppNameInsteadOfOrigin",
-    base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Replaces the origin text flash and the icon in web app notifications with
 // the name of the app and the icon of the app.
@@ -533,6 +532,10 @@ const base::FeatureParam<bool>
     kHappinessTrackingSurveysForDesktopSettingsPrivacyNoSandbox{
         &kHappinessTrackingSurveysForDesktopSettingsPrivacy, "no-sandbox",
         false};
+const base::FeatureParam<bool>
+    kHappinessTrackingSurveysForDesktopSettingsPrivacyNoReview{
+        &kHappinessTrackingSurveysForDesktopSettingsPrivacy, "no-review",
+        false};
 const base::FeatureParam<base::TimeDelta>
     kHappinessTrackingSurveysForDesktopSettingsPrivacyTime{
         &kHappinessTrackingSurveysForDesktopSettingsPrivacy, "settings-time",
@@ -559,6 +562,9 @@ const base::FeatureParam<base::TimeDelta>
 // Enables or disables the Happiness Tracking System for the General survey.
 const base::Feature kHappinessTrackingSystem{"HappinessTrackingSystem",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
+// Enables or disables the Happiness Tracking System for the Ent survey.
+const base::Feature kHappinessTrackingSystemEnt{
+    "HappinessTrackingSystemEnt", base::FEATURE_DISABLED_BY_DEFAULT};
 // Enables or disables the Happiness Tracking System for the Stability survey.
 const base::Feature kHappinessTrackingSystemStability{
     "HappinessTrackingSystemStability", base::FEATURE_DISABLED_BY_DEFAULT};
@@ -669,6 +675,11 @@ const base::Feature kIPHInWebUIDemo{"IPHInWebUIDemo",
 #if BUILDFLAG(IS_CHROMEOS_ASH)
 const base::Feature kKernelnextVMs{"KernelnextVMs",
                                    base::FEATURE_DISABLED_BY_DEFAULT};
+#endif
+
+#if defined(OS_CHROMEOS)
+const base::Feature kLinkCapturingUiUpdate{"LinkCapturingUiUpdate",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
 #endif
 
 #if defined(OS_LINUX) && !defined(OS_CHROMEOS)

@@ -55,9 +55,9 @@
 #include "third_party/blink/public/mojom/web_feature/web_feature.mojom-blink.h"
 #include "third_party/blink/public/mojom/worker/subresource_loader_updater.mojom.h"
 #include "third_party/blink/public/platform/modules/service_worker/web_service_worker_error.h"
-#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_fetch_context.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_url.h"
+#include "third_party/blink/public/platform/web_v8_value_converter.h"
 #include "third_party/blink/renderer/bindings/core/v8/callback_promise_adapter.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
@@ -83,6 +83,7 @@
 #include "third_party/blink/renderer/core/messaging/message_port.h"
 #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/script/classic_script.h"
 #include "third_party/blink/renderer/core/trustedtypes/trusted_script_url.h"
 #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
 #include "third_party/blink/renderer/core/workers/worker_classic_script_loader.h"
@@ -126,7 +127,9 @@
 #include "third_party/blink/renderer/modules/service_worker/service_worker_thread.h"
 #include "third_party/blink/renderer/modules/service_worker/service_worker_window_client.h"
 #include "third_party/blink/renderer/modules/service_worker/wait_until_observer.h"
+#include "third_party/blink/renderer/modules/service_worker/web_service_worker_fetch_context_impl.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
+#include "third_party/blink/renderer/platform/bindings/v8_binding.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/heap/garbage_collected.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_client_settings_object_snapshot.h"
@@ -216,7 +219,7 @@ ServiceWorkerGlobalScope* ServiceWorkerGlobalScope::Create(
     DCHECK(creation_params->outside_content_security_policies.IsEmpty());
     DCHECK_EQ(network::mojom::ReferrerPolicy::kDefault,
               creation_params->referrer_policy);
-    DCHECK(creation_params->origin_trial_tokens->IsEmpty());
+    DCHECK(creation_params->inherited_trial_features->IsEmpty());
   }
 #endif  // DCHECK_IS_ON()
 
@@ -1595,7 +1598,7 @@ void ServiceWorkerGlobalScope::InitializeGlobalScope(
                             GetTaskRunner(TaskType::kInternalDefault));
 
   if (subresource_loader_factories) {
-    static_cast<WebServiceWorkerFetchContext*>(web_worker_fetch_context())
+    static_cast<WebServiceWorkerFetchContextImpl*>(web_worker_fetch_context())
         ->GetSubresourceLoaderUpdater()
         ->UpdateSubresourceLoaderFactories(
             std::move(subresource_loader_factories));
@@ -2057,9 +2060,7 @@ void ServiceWorkerGlobalScope::DispatchPushEvent(
       base::Seconds(mojom::blink::kPushEventTimeoutSeconds));
 }
 
-void ServiceWorkerGlobalScope::StartPushEvent(
-    String payload,
-    int event_id) {
+void ServiceWorkerGlobalScope::StartPushEvent(String payload, int event_id) {
   DCHECK(IsContextThread());
   TRACE_EVENT_WITH_FLOW0(
       "ServiceWorker", "ServiceWorkerGlobalScope::DispatchPushEvent",
@@ -2133,10 +2134,9 @@ void ServiceWorkerGlobalScope::DispatchSyncEvent(
       CreateAbortCallback(&sync_event_callbacks_), timeout);
 }
 
-void ServiceWorkerGlobalScope::StartSyncEvent(
-    String tag,
-    bool last_chance,
-    int event_id) {
+void ServiceWorkerGlobalScope::StartSyncEvent(String tag,
+                                              bool last_chance,
+                                              int event_id) {
   DCHECK(IsContextThread());
   TRACE_EVENT_WITH_FLOW0(
       "ServiceWorker", "ServiceWorkerGlobalScope::DispatchSyncEvent",
@@ -2166,9 +2166,8 @@ void ServiceWorkerGlobalScope::DispatchPeriodicSyncEvent(
       CreateAbortCallback(&periodic_sync_event_callbacks_), timeout);
 }
 
-void ServiceWorkerGlobalScope::StartPeriodicSyncEvent(
-    String tag,
-    int event_id) {
+void ServiceWorkerGlobalScope::StartPeriodicSyncEvent(String tag,
+                                                      int event_id) {
   DCHECK(IsContextThread());
   TRACE_EVENT_WITH_FLOW0(
       "ServiceWorker", "ServiceWorkerGlobalScope::DispatchPeriodicSyncEvent",
@@ -2423,9 +2422,8 @@ void ServiceWorkerGlobalScope::DispatchContentDeleteEvent(
       CreateAbortCallback(&content_delete_callbacks_), absl::nullopt);
 }
 
-void ServiceWorkerGlobalScope::StartContentDeleteEvent(
-    String id,
-    int event_id) {
+void ServiceWorkerGlobalScope::StartContentDeleteEvent(String id,
+                                                       int event_id) {
   DCHECK(IsContextThread());
   TRACE_EVENT_WITH_FLOW0(
       "ServiceWorker", "ServiceWorkerGlobalScope::DispatchContentDeleteEvent",
@@ -2463,6 +2461,83 @@ void ServiceWorkerGlobalScope::AddMessageToConsole(
       mojom::ConsoleMessageSource::kOther, level, message,
       SourceLocation::Capture(/* url= */ "", /* line_number= */ 0,
                               /* column_number= */ 0)));
+}
+
+void ServiceWorkerGlobalScope::ExecuteScriptForTest(
+    const String& javascript,
+    bool wants_result,
+    ExecuteScriptForTestCallback callback) {
+  ScriptState* script_state = ScriptController()->GetScriptState();
+  v8::Isolate* isolate = script_state->GetIsolate();
+  v8::HandleScope handle_scope(isolate);
+
+  // It's safe to use `kDoNotSanitize` because this method is for testing only.
+  ClassicScript* script = ClassicScript::CreateUnspecifiedScript(
+      javascript, ScriptSourceLocationType::kUnknown,
+      SanitizeScriptErrors::kDoNotSanitize);
+
+  v8::TryCatch try_catch(isolate);
+  ScriptEvaluationResult result = script->RunScriptOnScriptStateAndReturnValue(
+      script_state, ExecuteScriptPolicy::kDoNotExecuteScriptWhenScriptsDisabled,
+      V8ScriptRunner::RethrowErrorsOption::Rethrow(String()));
+
+  // If the script throws an error, the returned value is a stringification of
+  // the error message.
+  if (try_catch.HasCaught()) {
+    String exception_string;
+    if (try_catch.Message().IsEmpty() || try_catch.Message()->Get().IsEmpty()) {
+      exception_string = "Unknown exception while executing script.";
+    } else {
+      exception_string = ToCoreStringWithNullCheck(try_catch.Message()->Get());
+    }
+    std::move(callback).Run(base::Value(), std::move(exception_string));
+    return;
+  }
+
+  // If the script didn't want a result, just return immediately.
+  if (!wants_result) {
+    std::move(callback).Run(base::Value(), String());
+    return;
+  }
+
+  // Otherwise, the script should have succeeded, and we return the value from
+  // the execution.
+  DCHECK_EQ(ScriptEvaluationResult::ResultType::kSuccess,
+            result.GetResultType());
+
+  v8::Local<v8::Value> v8_result = result.GetSuccessValue();
+  DCHECK(!v8_result.IsEmpty());
+
+  // Only convert the value to a base::Value if it's not null or undefined.
+  // Null and undefined are valid results, but will fail to convert using the
+  // WebV8ValueConverter. They are accurately represented (though no longer
+  // distinguishable) by the empty base::Value.
+  if (v8_result->IsNullOrUndefined()) {
+    std::move(callback).Run(base::Value(), String());
+    return;
+  }
+
+  base::Value value;
+  String exception;
+
+  // TODO(devlin): Is this thread-safe? Platform::Current() is set during
+  // blink initialization and the created V8ValueConverter is constructed
+  // without any special access, but it's *possible* a future implementation
+  // here would be thread-unsafe (if it relied on member data in Platform).
+  std::unique_ptr<WebV8ValueConverter> converter =
+      Platform::Current()->CreateWebV8ValueConverter();
+  converter->SetDateAllowed(true);
+  converter->SetRegExpAllowed(true);
+
+  std::unique_ptr<base::Value> converted_value =
+      converter->FromV8Value(v8_result, script_state->GetContext());
+  if (!converted_value) {
+    std::move(callback).Run(base::Value(),
+                            "Failed to convert V8 result from script");
+    return;
+  }
+
+  std::move(callback).Run(std::move(*converted_value), String());
 }
 
 void ServiceWorkerGlobalScope::NoteNewFetchEvent(

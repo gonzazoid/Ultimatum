@@ -244,7 +244,6 @@
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
-#include "third_party/blink/renderer/platform/graphics/graphics_layer_client.h"
 #include "third_party/blink/renderer/platform/graphics/paint/drawing_recorder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scoped_paint_chunk_properties.h"
@@ -265,6 +264,11 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/casting.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+
+#if defined(OS_WIN)
+#include "third_party/blink/public/web/win/web_font_family_names.h"
+#include "third_party/blink/renderer/core/layout/layout_font_accessor_win.h"
+#endif
 
 namespace blink {
 
@@ -669,6 +673,21 @@ bool WebLocalFrameImpl::ConsumeTransientUserActivation(
 bool WebLocalFrameImpl::LastActivationWasRestricted() const {
   return GetFrame()->LastActivationWasRestricted();
 }
+
+#if defined(OS_WIN)
+WebFontFamilyNames WebLocalFrameImpl::GetWebFontFamilyNames() const {
+  FontFamilyNames font_family_names;
+  GetFontsUsedByFrame(*GetFrame(), font_family_names);
+  WebFontFamilyNames result;
+  for (const String& font_family_name : font_family_names.primary_fonts)
+    result.primary_family_names.push_back(font_family_name);
+  for (const String& font_family_name : font_family_names.fallback_fonts) {
+    if (!font_family_names.primary_fonts.Contains(font_family_name))
+      result.fallback_family_names.push_back(font_family_name);
+  }
+  return result;
+}
+#endif
 
 WebLocalFrame* WebLocalFrame::FrameForContext(v8::Local<v8::Context> context) {
   return WebLocalFrameImpl::FromFrame(ToLocalFrameIfNotDetached(context));

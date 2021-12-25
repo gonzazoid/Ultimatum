@@ -559,9 +559,8 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
   }
 }
 
-// TODO(https://crbug.com/1075936) disabled due to flakiness
 IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
-                       DISABLED_DoesNotCacheIfMainFrameStillLoading) {
+                       DoesNotCacheIfMainFrameStillLoading) {
   net::test_server::ControllableHttpResponse response(embedded_test_server(),
                                                       "/main_document");
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -968,37 +967,30 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
 
   EXPECT_TRUE(ExecJs(rfh_1, R"(
     window.onpagehide = (e) => {
-      if (e.persisted) {
-        window.domAutomationController.send('pagehide.persisted');
-      }
+      console.log("onagepagehide", e.persisted);
+      localStorage.setItem('pagehide_persisted',
+        e.persisted ? 'true' : 'false');
     }
     document.onvisibilitychange = () => {
-      if (document.visibilityState == 'hidden') {
-        window.domAutomationController.send('visibilitychange.hidden');
-      }
+      localStorage.setItem('visibilitychange',
+        document.visibilityState);
     }
     window.onunload = () => {
-      window.domAutomationController.send('unload');
+      localStorage.setItem('unload', true);
     }
   )"));
 
-  DOMMessageQueue dom_message_queue(shell()->web_contents());
   // 3) Navigate to |url_2|.
   EXPECT_TRUE(NavigateToURL(shell(), url_2));
   // |rfh_1| will not get into the back-forward cache and eventually get deleted
   // because it uses a blocklisted feature.
   delete_observer_rfh_1.WaitUntilDeleted();
 
-  // Only the pagehide and visibilitychange events will be dispatched.
-  int num_messages_received = 0;
-  std::string expected_messages[] = {"\"pagehide.persisted\"",
-                                     "\"visibilitychange.hidden\""};
-  std::string message;
-  while (dom_message_queue.PopMessage(&message)) {
-    EXPECT_EQ(expected_messages[num_messages_received], message);
-    num_messages_received++;
-  }
-  EXPECT_EQ(num_messages_received, 2);
+  EXPECT_EQ("true",
+            GetLocalStorage(current_frame_host(), "pagehide_persisted"));
+  EXPECT_EQ("hidden",
+            GetLocalStorage(current_frame_host(), "visibilitychange"));
+  EXPECT_EQ(nullptr, GetLocalStorage(current_frame_host(), "unload"));
 }
 
 // Track the events dispatched when a page is deemed ineligible for back-forward
@@ -1053,7 +1045,7 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
   EXPECT_EQ(num_messages_received, 3);
 }
 
-enum class FrameType {
+enum class TestFrameType {
   kMainFrame,
   kSubFrame,
 };
@@ -1066,13 +1058,13 @@ enum class StickinessType {
 class BackForwardCacheBrowserTestWithVaryingFrameAndFeatureStickinessType
     : public BackForwardCacheBrowserTest,
       public ::testing::WithParamInterface<
-          testing::tuple<FrameType, StickinessType>> {};
+          testing::tuple<TestFrameType, StickinessType>> {};
 
 INSTANTIATE_TEST_SUITE_P(
     All,
     BackForwardCacheBrowserTestWithVaryingFrameAndFeatureStickinessType,
-    ::testing::Combine(::testing::Values(FrameType::kMainFrame,
-                                         FrameType::kSubFrame),
+    ::testing::Combine(::testing::Values(TestFrameType::kMainFrame,
+                                         TestFrameType::kSubFrame),
                        ::testing::Values(StickinessType::kSticky,
                                          StickinessType::kNonSticky)));
 
@@ -1088,13 +1080,13 @@ IN_PROC_BROWSER_TEST_P(
 
   // 1) Navigate to A(B).
   EXPECT_TRUE(NavigateToURL(shell(), url_a));
-  FrameType parameter_frame = std::get<0>(GetParam());
+  TestFrameType parameter_frame = std::get<0>(GetParam());
   StickinessType use_sticky_feature = std::get<1>(GetParam());
 
   // Depending on the parameter, pick the mainframe or subframe to add a
   // blocking feature.
   RenderFrameHostImplWrapper rfh_with_blocking_feature(
-      parameter_frame == FrameType::kSubFrame
+      parameter_frame == TestFrameType::kSubFrame
           ? current_frame_host()->child_at(0)->current_frame_host()
           : current_frame_host());
 
@@ -1130,8 +1122,7 @@ IN_PROC_BROWSER_TEST_P(
   // usage, so pagehide's persisted is true, since the page might still get into
   // BFCache.
   EXPECT_EQ(use_sticky_feature == StickinessType::kSticky ? "false" : "true",
-            EvalJs(current_frame_host(),
-                   "localStorage.getItem('pagehide_persisted')"));
+            GetLocalStorage(current_frame_host(), "pagehide_persisted"));
 
   // 7) Confirm that the page was not restored from the BFCache in both the
   // sticky and non-sticky cases.
@@ -1500,10 +1491,9 @@ IN_PROC_BROWSER_TEST_F(BackForwardCacheBrowserTest,
   // Check that the value for 'pagehide_storage' and 'visibilitychange_storage'
   // are set correctly.
   EXPECT_EQ("dispatched_once",
-            EvalJs(main_frame_3, "localStorage.getItem('pagehide_storage')"));
-  EXPECT_EQ(
-      "dispatched_once",
-      EvalJs(main_frame_3, "localStorage.getItem('visibilitychange_storage')"));
+            GetLocalStorage(main_frame_3, "pagehide_storage"));
+  EXPECT_EQ("dispatched_once",
+            GetLocalStorage(main_frame_3, "visibilitychange_storage"));
 }
 
 // Tests that the history value saved in the renderer is updated correctly when

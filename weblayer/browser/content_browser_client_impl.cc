@@ -10,7 +10,6 @@
 #include "base/containers/flat_set.h"
 #include "base/files/file.h"
 #include "base/files/file_util.h"
-#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/strings/string_piece.h"
 #include "base/threading/thread_restrictions.h"
@@ -490,12 +489,6 @@ void ContentBrowserClientImpl::OnNetworkServiceCreated(
   if (!SystemNetworkContextManager::HasInstance())
     SystemNetworkContextManager::CreateInstance(
         embedder_support::GetUserAgent());
-// TODO(crbug.com/1052397): Revisit once build flag switch of lacros-chrome is
-// complete.
-#if defined(OS_LINUX) || BUILDFLAG(IS_CHROMEOS_LACROS)
-  network::mojom::CryptConfigPtr config = network::mojom::CryptConfig::New();
-  content::GetNetworkService()->SetCryptConfig(std::move(config));
-#endif
   SystemNetworkContextManager::GetInstance()->OnNetworkServiceCreated(
       network_service);
 }
@@ -1224,6 +1217,11 @@ bool ContentBrowserClientImpl::IsClipboardPasteAllowed(
     return false;
   }
 
+  return true;
+}
+
+bool ContentBrowserClientImpl::ShouldPreconnectNavigation(
+    content::BrowserContext* browser_context) {
   return true;
 }
 

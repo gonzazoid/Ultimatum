@@ -34,8 +34,8 @@ import zipfile
 # https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang.md
 # Reverting problematic clang rolls is safe, though.
 # This is the output of `git describe` and is usable as a commit-ish.
-CLANG_REVISION = 'llvmorg-14-init-11564-g37fbf238'
-CLANG_SUB_REVISION = 4
+CLANG_REVISION = 'llvmorg-14-init-12719-gc4b45eeb'
+CLANG_SUB_REVISION = 1
 
 PACKAGE_VERSION = '%s-%s' % (CLANG_REVISION, CLANG_SUB_REVISION)
 RELEASE_VERSION = '14.0.0'
@@ -219,6 +219,8 @@ def UpdatePackage(package_name, host_os):
     package_file = 'clang'
   elif package_name == 'clang-tidy':
     package_file = 'clang-tidy'
+  elif package_name == 'clang-libs':
+    package_file = 'clang-libs'
   elif package_name == 'objdump':
     package_file = 'llvmobjdump'
   elif package_name == 'translation_unit':

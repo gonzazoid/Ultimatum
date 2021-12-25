@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/core/layout/hit_test_result.h"
 #include "third_party/blink/renderer/core/layout/layout_inline.h"
 #include "third_party/blink/renderer/core/layout/layout_table_cell.h"
+#include "third_party/blink/renderer/core/layout/layout_view.h"
 #include "third_party/blink/renderer/core/layout/ng/geometry/ng_box_strut.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/layout_ng_text_combine.h"
 #include "third_party/blink/renderer/core/layout/ng/inline/ng_fragment_items.h"
@@ -29,7 +30,6 @@
 #include "third_party/blink/renderer/core/paint/box_border_painter.h"
 #include "third_party/blink/renderer/core/paint/box_decoration_data.h"
 #include "third_party/blink/renderer/core/paint/box_painter.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_fieldset_painter.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_fragment_painter.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_inline_box_fragment_painter.h"
@@ -50,6 +50,7 @@
 #include "third_party/blink/renderer/core/paint/scrollable_area_painter.h"
 #include "third_party/blink/renderer/core/paint/theme_painter.h"
 #include "third_party/blink/renderer/core/paint/url_metadata_utils.h"
+#include "third_party/blink/renderer/core/paint/view_painter.h"
 #include "third_party/blink/renderer/core/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect_outsets.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context_state_saver.h"
@@ -571,8 +572,9 @@ void NGBoxFragmentPainter::PaintObject(
     // AddURLRectIfNeeded() for LayoutInline.
     if (paint_info.ShouldAddUrlMetadata()) {
       const auto* layout_object = fragment.GetLayoutObject();
-      if (!layout_object->IsLayoutInline() ||
-          To<LayoutBoxModelObject>(layout_object)->HasSelfPaintingLayer()) {
+      if (layout_object &&
+          (!layout_object->IsLayoutInline() ||
+           To<LayoutBoxModelObject>(layout_object)->HasSelfPaintingLayer())) {
         NGFragmentPainter(fragment, GetDisplayItemClient())
             .AddURLRectIfNeeded(paint_info, paint_offset);
       }
@@ -996,6 +998,11 @@ void NGBoxFragmentPainter::PaintBoxDecorationBackground(
   // TODO(mstensho): Break dependency on LayoutObject functionality.
   const LayoutObject& layout_object = *box_fragment_.GetLayoutObject();
 
+  if (const auto* view = DynamicTo<LayoutView>(&layout_object)) {
+    ViewPainter(*view).PaintBoxDecorationBackground(paint_info);
+    return;
+  }
+
   PhysicalRect paint_rect;
   const DisplayItemClient* background_client = nullptr;
   absl::optional<ScopedBoxContentsPaintState> contents_paint_state;
@@ -1052,25 +1059,10 @@ void NGBoxFragmentPainter::PaintBoxDecorationBackground(
         ToPixelSnappedRect(paint_rect));
   }
 
-  bool needs_scroll_hit_test = true;
-  if (!RuntimeEnabledFeatures::CompositeAfterPaintEnabled()) {
-    // Pre-CompositeAfterPaint, there is no need to emit scroll hit test
-    // display items for composited scrollers because these display items are
-    // only used to create non-fast scrollable regions for non-composited
-    // scrollers. With CompositeAfterPaint, we always paint the scroll hit
-    // test display items but ignore the non-fast region if the scroll was
-    // composited in PaintArtifactCompositor::UpdateNonFastScrollableRegions.
-    const auto* layer = PhysicalFragment().Layer();
-    if (layer && layer->GetCompositedLayerMapping() &&
-        layer->GetCompositedLayerMapping()->ScrollingContentsLayer()) {
-      needs_scroll_hit_test = false;
-    }
-  }
-
   // Record the scroll hit test after the non-scrolling background so
   // background squashing is not affected. Hit test order would be equivalent
   // if this were immediately before the non-scrolling background.
-  if (!painting_background_in_contents_space && needs_scroll_hit_test)
+  if (!painting_background_in_contents_space)
     RecordScrollHitTestData(paint_info, *background_client);
 }
 

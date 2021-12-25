@@ -11,12 +11,12 @@
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_header_synchronizing.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_header_view_controller.h"
 #import "ios/chrome/browser/ui/content_suggestions/content_suggestions_layout.h"
-#import "ios/chrome/browser/ui/content_suggestions/discover_feed_metrics_recorder.h"
 #import "ios/chrome/browser/ui/content_suggestions/ntp_home_constant.h"
 #import "ios/chrome/browser/ui/gestures/view_revealing_vertical_pan_handler.h"
 #import "ios/chrome/browser/ui/ntp/discover_feed_wrapper_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/feed_header_view_controller.h"
 #import "ios/chrome/browser/ui/ntp/feed_menu_commands.h"
+#import "ios/chrome/browser/ui/ntp/feed_metrics_recorder.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_constants.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_content_delegate.h"
 #import "ios/chrome/browser/ui/ntp/new_tab_page_feature.h"
@@ -135,7 +135,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
     [self.contentSuggestionsViewController willMoveToParentViewController:nil];
     [self.contentSuggestionsViewController.view removeFromSuperview];
     [self.contentSuggestionsViewController removeFromParentViewController];
-    [self.discoverFeedMetricsRecorder
+    [self.feedMetricsRecorder
         recordBrokenNTPHierarchy:BrokenNTPHierarchyRelationship::
                                      kContentSuggestionsReset];
   }
@@ -204,7 +204,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
 - (void)viewWillLayoutSubviews {
   [super viewWillLayoutSubviews];
 
-  [self updateContentSuggestionForCurrentLayout];
+  [self updateNTPLayout];
   [self updateHeaderSynchronizerOffset];
   [self updateScrolledToMinimumHeight];
   [self.headerSynchronizer updateConstraints];
@@ -224,7 +224,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
     [self applyCollectionViewConstraints];
   }
 
-  [self updateContentSuggestionForCurrentLayout];
+  [self updateNTPLayout];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -261,7 +261,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
   // we are reopening an existing NTP, the insets are already ok.
   // TODO(crbug.com/1170995): Remove this once we use a custom feed header.
   if (!self.viewDidAppear) {
-    [self updateFeedInsetsForContentSuggestions];
+    [self updateFeedInsetsForContentAbove];
   }
 }
 
@@ -296,7 +296,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
     if (yOffsetBeforeRotation < 0) {
       weakSelf.collectionView.contentOffset =
           CGPointMake(0, yOffsetBeforeRotation - heightAboveFeedDifference);
-      [weakSelf updateContentSuggestionForCurrentLayout];
+      [weakSelf updateNTPLayout];
     } else {
       [weakSelf.contentSuggestionsViewController.collectionView
               .collectionViewLayout invalidateLayout];
@@ -319,7 +319,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
       animateAlongsideTransition:alongsideBlock
                       completion:^(
                           id<UIViewControllerTransitionCoordinatorContext>) {
-                        [self updateFeedInsetsForContentSuggestions];
+                        [self updateFeedInsetsForContentAbove];
                       }];
 }
 
@@ -369,8 +369,8 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
   return self.collectionView.contentOffset.y <= -[self heightAboveFeed];
 }
 
-- (void)updateContentSuggestionForCurrentLayout {
-  [self updateFeedInsetsForContentSuggestions];
+- (void)updateNTPLayout {
+  [self updateFeedInsetsForContentAbove];
 
   // Reload data to ensure the Most Visited tiles and fake omnibox are correctly
   // positioned, in particular during a rotation while a ViewController is
@@ -452,7 +452,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
                                               willDecelerate:decelerate];
   [self.panGestureHandler scrollViewDidEndDragging:scrollView
                                     willDecelerate:decelerate];
-  [self.discoverFeedMetricsRecorder
+  [self.feedMetricsRecorder
       recordFeedScrolled:scrollView.contentOffset.y - self.scrollStartPosition];
 }
 
@@ -639,6 +639,8 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
   [self.ntpContentDelegate reloadContentSuggestions];
 }
 
+// Pins feed header to top of the NTP when scrolled into the feed, below the
+// omnibox.
 - (void)stickFeedHeaderToTop {
   [NSLayoutConstraint deactivateConstraints:self.feedHeaderConstraints];
 
@@ -651,6 +653,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
   [NSLayoutConstraint activateConstraints:self.feedHeaderConstraints];
 }
 
+// Sets initial feed header constraints, between content suggestions and feed.
 - (void)setInitialFeedHeaderConstraints {
   [NSLayoutConstraint deactivateConstraints:self.feedHeaderConstraints];
   self.feedHeaderConstraints = @[
@@ -664,19 +667,26 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
   [NSLayoutConstraint activateConstraints:self.feedHeaderConstraints];
 }
 
-// Sets an inset to the Discover feed equal to the content suggestions height,
-// so that the content suggestions could act as the feed header.
-- (void)updateFeedInsetsForContentSuggestions {
+// Sets an inset to the feed equal to the height of the content above the feed,
+// then place the content above the feed in this space.
+- (void)updateFeedInsetsForContentAbove {
+  // Adds inset to feed to create space for content above feed.
+  self.collectionView.contentInset =
+      UIEdgeInsetsMake([self heightAboveFeed], 0, 0, 0);
+
+  // Sets frame for feed header and content suggestions within the space from
+  // the inset.
   if (self.feedHeaderViewController) {
     self.feedHeaderViewController.view.frame =
-        CGRectMake(0, -[self feedHeaderHeight], self.view.frame.size.width,
+        CGRectMake(self.feedHeaderViewController.view.frame.origin.x,
+                   -[self feedHeaderHeight], self.view.frame.size.width,
                    [self feedHeaderHeight]);
   }
   self.contentSuggestionsViewController.view.frame = CGRectMake(
-      0, -[self contentSuggestionsContentHeight] - [self feedHeaderHeight],
+      self.contentSuggestionsViewController.view.frame.origin.x,
+      -[self contentSuggestionsContentHeight] - [self feedHeaderHeight],
       self.view.frame.size.width, [self contentSuggestionsContentHeight]);
-  self.collectionView.contentInset =
-      UIEdgeInsetsMake([self heightAboveFeed], 0, 0, 0);
+
   self.contentSuggestionsHeightConstraint.constant =
       [self contentSuggestionsContentHeight];
   [self updateHeaderSynchronizerOffset];
@@ -739,7 +749,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
 // Handles device rotation.
 - (void)deviceOrientationDidChange {
   if (self.viewDidAppear) {
-    [self.discoverFeedMetricsRecorder
+    [self.feedMetricsRecorder
         recordDeviceOrientationChanged:[[UIDevice currentDevice] orientation]];
   }
 }
@@ -851,7 +861,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
         didMoveToParentViewController:self.discoverFeedWrapperViewController
                                           .discoverFeed];
 
-    [self.discoverFeedMetricsRecorder
+    [self.feedMetricsRecorder
         recordBrokenNTPHierarchy:BrokenNTPHierarchyRelationship::
                                      kContentSuggestionsParent];
   }
@@ -879,7 +889,7 @@ const CGFloat kFeedHeaderTopPaddingWhenStuck = 10;
     DCHECK([parentView.subviews containsObject:subView]);
     [subView removeFromSuperview];
     [parentView addSubview:subView];
-    [self.discoverFeedMetricsRecorder recordBrokenNTPHierarchy:relationship];
+    [self.feedMetricsRecorder recordBrokenNTPHierarchy:relationship];
   }
 }
 

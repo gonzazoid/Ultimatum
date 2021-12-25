@@ -19,6 +19,7 @@
 #include "ui/events/event_constants.h"
 #include "ui/views/views_export.h"
 #include "ui/views/widget/native_widget_private.h"
+#include "ui/wm/core/transient_window_observer.h"
 #include "ui/wm/public/activation_change_observer.h"
 #include "ui/wm/public/activation_delegate.h"
 
@@ -42,6 +43,7 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
                                       public aura::WindowObserver,
                                       public wm::ActivationDelegate,
                                       public wm::ActivationChangeObserver,
+                                      public wm::TransientWindowObserver,
                                       public aura::client::FocusChangeObserver,
                                       public aura::client::DragDropDelegate {
  public:
@@ -219,11 +221,11 @@ class VIEWS_EXPORT NativeWidgetAura : public internal::NativeWidgetPrivate,
   aura::client::DragUpdateInfo OnDragUpdated(
       const ui::DropTargetEvent& event) override;
   void OnDragExited() override;
-  ui::mojom::DragOperation OnPerformDrop(
-      const ui::DropTargetEvent& event,
-      std::unique_ptr<ui::OSExchangeData> data) override;
   aura::client::DragDropDelegate::DropCallback GetDropCallback(
       const ui::DropTargetEvent& event) override;
+
+  // aura::TransientWindowObserver:
+  void OnTransientParentChanged(aura::Window* new_parent) override;
 
  protected:
   ~NativeWidgetAura() override;

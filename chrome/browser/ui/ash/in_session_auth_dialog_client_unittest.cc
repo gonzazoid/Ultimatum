@@ -4,6 +4,7 @@
 
 #include "chrome/browser/ui/ash/in_session_auth_dialog_client.h"
 
+#include "ash/components/login/auth/fake_extended_authenticator.h"
 #include "ash/public/cpp/in_session_auth_dialog_client.h"
 #include "ash/public/cpp/in_session_auth_dialog_controller.h"
 #include "base/callback.h"
@@ -12,15 +13,14 @@
 #include "base/test/bind.h"
 #include "chrome/browser/ash/login/users/fake_chrome_user_manager.h"
 #include "chrome/browser/ash/profiles/profile_helper.h"
-#include "chromeos/login/auth/fake_extended_authenticator.h"
 #include "components/account_id/account_id.h"
 #include "components/user_manager/scoped_user_manager.h"
 #include "content/public/test/browser_task_environment.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using chromeos::FakeExtendedAuthenticator;
-using chromeos::Key;
-using chromeos::UserContext;
+using ::ash::FakeExtendedAuthenticator;
+using ::ash::Key;
+using ::ash::UserContext;
 
 namespace {
 
@@ -104,7 +104,7 @@ TEST_F(InSessionAuthDialogClientTest, WrongPassword) {
       user_manager::UserManager::Get()->GetActiveUser();
   UserContext expected_user_context(*user);
   expected_user_context.SetKey(
-      Key(chromeos::Key::KEY_TYPE_PASSWORD_PLAIN, std::string(), kPassword));
+      Key(Key::KEY_TYPE_PASSWORD_PLAIN, std::string(), kPassword));
 
   SetExpectedContext(expected_user_context);
 
@@ -127,7 +127,7 @@ TEST_F(InSessionAuthDialogClientTest, PasswordAuthSuccess) {
       user_manager::UserManager::Get()->GetActiveUser();
   UserContext expected_user_context(*user);
   expected_user_context.SetKey(
-      Key(chromeos::Key::KEY_TYPE_PASSWORD_PLAIN, std::string(), kPassword));
+      Key(Key::KEY_TYPE_PASSWORD_PLAIN, std::string(), kPassword));
 
   SetExpectedContext(expected_user_context);
 

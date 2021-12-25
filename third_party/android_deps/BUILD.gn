@@ -382,7 +382,7 @@ java_prebuilt("org_checkerframework_checker_compat_qual_java") {
 
 # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
 java_prebuilt("org_jetbrains_kotlin_kotlin_stdlib_java") {
-  jar_path = "libs/org_jetbrains_kotlin_kotlin_stdlib/kotlin-stdlib-1.6.0.jar"
+  jar_path = "libs/org_jetbrains_kotlin_kotlin_stdlib/kotlin-stdlib-1.6.10.jar"
   output_name = "org_jetbrains_kotlin_kotlin_stdlib"
   supports_android = true
   deps = [
@@ -702,7 +702,7 @@ java_prebuilt("org_jetbrains_annotations_java") {
 
 # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
 java_prebuilt("org_jetbrains_kotlin_kotlin_stdlib_common_java") {
-  jar_path = "libs/org_jetbrains_kotlin_kotlin_stdlib_common/kotlin-stdlib-common-1.6.0.jar"
+  jar_path = "libs/org_jetbrains_kotlin_kotlin_stdlib_common/kotlin-stdlib-common-1.6.10.jar"
   output_name = "org_jetbrains_kotlin_kotlin_stdlib_common"
   supports_android = true
 
@@ -1237,7 +1237,7 @@ if (!limit_android_deps) {
   # This is generated, do not edit. Update BuildConfigGenerator.groovy instead.
   android_aar_prebuilt("com_google_android_material_material_java") {
     aar_path =
-        "libs/com_google_android_material_material/material-1.5.0-alpha05.aar"
+        "libs/com_google_android_material_material/material-1.6.0-alpha01.aar"
     info_path = "libs/com_google_android_material_material/com_google_android_material_material.info"
 
     # Material Design is pulled in via Doubledown, thus this target should not

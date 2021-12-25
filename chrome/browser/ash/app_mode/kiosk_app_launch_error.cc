@@ -4,11 +4,11 @@
 
 #include "chrome/browser/ash/app_mode/kiosk_app_launch_error.h"
 
+#include "ash/components/login/auth/auth_status_consumer.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/ash/app_mode/kiosk_app_manager.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/grit/generated_resources.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
 #include "components/prefs/scoped_user_pref_update.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -100,12 +100,12 @@ KioskAppLaunchError::Error KioskAppLaunchError::Get() {
     return s_last_error;
   s_last_error = Error::kNone;
   PrefService* local_state = g_browser_process->local_state();
-  const base::DictionaryValue* dict =
+  const base::Value* dict =
       local_state->GetDictionary(KioskAppManager::kKioskDictionaryName);
 
-  int error;
-  if (dict->GetInteger(kKeyLaunchError, &error)) {
-    s_last_error = static_cast<KioskAppLaunchError::Error>(error);
+  absl::optional<int> error = dict->FindIntKey(kKeyLaunchError);
+  if (error.has_value()) {
+    s_last_error = static_cast<KioskAppLaunchError::Error>(error.value());
     return s_last_error;
   }
 

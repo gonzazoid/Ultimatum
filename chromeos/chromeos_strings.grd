@@ -545,7 +545,7 @@ Try tapping the mic to ask me anything.
       <message name="IDS_SCANNING_APP_PNG_OPTION_TEXT" desc="The text displayed for the PNG file type option.">
         PNG
       </message>
-      <!-- TODO (kmoed): Remove "translateable="false"" once string is confirmed. -->
+      <!-- TODO (gavinwill): Remove "translateable="false"" once string is confirmed. -->
       <message translateable="false" name="IDS_SCANNING_APP_SEARCHABLE_PDF_OPTION_TEXT" desc="The text displayed for the Searchable PDF file type option. This option utilizes the Object Character Recognition (OCR) service to generate a PDF file whose text has been added as a searchable layer.">
         Searchable PDF
       </message>
@@ -2191,10 +2191,7 @@ Try tapping the mic to ask me anything.
         Use the QR code or <ph name="LINK_BEGIN">&lt;a id="rsuCodeDialogLink"&gt;</ph>this link<ph name="LINK_END">&lt;/a&gt;</ph> to retrieve an 8 character unlock code to perform RMA Server Unlock
       </message>
       <message name="IDS_SHIMLESS_RMA_RSU_CODE_LABEL" desc="Label for the RSU code input box.">
-        Enter the unlock code:
-      </message>
-      <message name="IDS_SHIMLESS_RMA_RSU_CODE_PLACEHOLDER" translateable="false" desc="Placeholder text for empty RSU code input box.">
-        Enter RSU Code
+        Enter the 8-character unlock code
       </message>
       <message name="IDS_SHIMLESS_RMA_RSU_CHALLENGE_DIALOG_TITLE" translateable="false" desc="Title for the dialog that shows the RSU challenge code link.">
         Go to this link for your RSU unlock code
@@ -2240,7 +2237,7 @@ Try tapping the mic to ask me anything.
         Finalizing repair
       </message>
       <message name="IDS_SHIMLESS_RMA_FINALIZE_PROGRESS" translateable="false" desc="Message to display current progress of finalization.">
-        Progress <ph name="PROGRESS_PERCENT">$1<ex>25</ex></ph>%.
+        Finalizing the device. Do not turn off power.
       </message>
       <message name="IDS_SHIMLESS_RMA_FINALIZE_COMPLETE" translateable="false" desc="Message to display when finalization is complete.">
         Complete.
@@ -2266,6 +2263,9 @@ Try tapping the mic to ask me anything.
       </message>
       <message name="IDS_SHIMLESS_RMA_PROVISIONING_FAILED_NON_BLOCKING" translateable="false" desc="Message to display when provisioning failed, but RMA can continue.">
         Failed, non blocking.
+      </message>
+      <message name="IDS_SHIMLESS_RMA_PROVISIONING_FAILED_RETRY_BUTTON_LABEL" translateable="false" desc="The label for the button to retry provisioning.">
+        Retry provisioning
       </message>
       <!-- Repair complete page -->
       <message name="IDS_SHIMLESS_RMA_REPAIR_COMPLETED" desc="Title for the page shown when the RMA process repair process is completed.">
@@ -2310,20 +2310,8 @@ Try tapping the mic to ask me anything.
       <message name="IDS_SHIMLESS_RMA_LOGS_SAVE_BUTTON" translateable="false" desc="Label for the logs dialog save to USB button. This triggers saving to the root of a USB drive with no option to select location or title of the logs. It is automatic as the file browser is not available to the shimless RMA app.">
         Save to USB
       </message>
-      <message name="IDS_SHIMLESS_BATTERY_CUTOFF_TITLE" translateable="false" desc="Title for the battery cutoff dialog for confirming or cancelling the cutoff action">
-        Battery Cutoff
-      </message>
-      <message name="IDS_SHIMLESS_BATTERY_SHUTOFF_UNPLUG_MESSAGE" translateable="false" desc="Message informing user they need to disconnect the power cable to perform battery shutoff">
-        Unplug your cord to cut off battery
-      </message>
-      <message name="IDS_SHIMLESS_BATTERY_SHUTOFF_SHUTDOWN_MESSAGE" translateable="false" desc="Message informing user the device is ready to be shut down and perform battery shutoff">
-        Shut down your device to complete battery cut off
-      </message>
-      <message name="IDS_SHIMLESS_BATTERY_SHUTOFF_CANCEL_BUTTON" translateable="false" desc="Label for the battery shutoff dialog cancel button">
-        Cancel
-      </message>
-      <message name="IDS_SHIMLESS_BATTERY_SHUTOFF_SHUTDOWN_BUTTON" translateable="false" desc="Label for the battery shutoff dialog shut down button.">
-        Shut down
+      <message name="IDS_SHIMLESS_BATTERY_SHUTOFF_TOOLTIP_TEXT" translateable="false" desc="Label for the battery shutoff tooltip.">
+        Unplug power to perform battery cutoff
       </message>
       <!-- Run calibration page -->
       <message name="IDS_SHIMLESS_RMA_RUN_CALIBRATION_PAGE_TITLE" translateable="false" desc="Title for the page shown when running component calibration steps.">

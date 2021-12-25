@@ -31,11 +31,11 @@ import org.chromium.chrome.browser.prefetch.settings.PreloadPagesState;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlServiceFactory;
 import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
-import org.chromium.chrome.browser.version.ChromeVersionInfo;
 import org.chromium.components.embedder_support.util.UrlConstants;
 import org.chromium.components.embedder_support.util.UrlUtilities;
 import org.chromium.components.prefs.PrefService;
 import org.chromium.components.user_prefs.UserPrefs;
+import org.chromium.components.version_info.VersionInfo;
 import org.chromium.url.GURL;
 
 import java.util.regex.Pattern;
@@ -179,6 +179,20 @@ class ContextualSearchPolicy {
                 || ChromeFeatureList.isEnabled(ChromeFeatureList.CONTEXTUAL_SEARCH_TRANSLATIONS);
     }
 
+    /** Returns whether the Delayed Intelligence Feature is currently enabled or not. */
+    boolean isDelayedIntelligenceEnabled() {
+        return ChromeFeatureList.isEnabled(
+                ChromeFeatureList.CONTEXTUAL_SEARCH_DELAYED_INTELLIGENCE);
+    }
+
+    /**
+     * Returns whether the Delayed Intelligence Feature is currently active for the current user.
+     * A user must be in the undecided privacy state for Delayed Intelligence to take affect.
+     */
+    boolean isDelayedIntelligenceActive() {
+        return isDelayedIntelligenceEnabled() && !isContextualSearchFullyEnabled();
+    }
+
     /**
      * Returns whether surrounding context can be accessed by other systems or not.
      * @return Whether surroundings are available.
@@ -308,7 +322,7 @@ class ContextualSearchPolicy {
      */
     boolean shouldShowErrorCodeInBar() {
         // Builds with lots of real users should not see raw error codes.
-        return !(ChromeVersionInfo.isStableBuild() || ChromeVersionInfo.isBetaBuild());
+        return !(VersionInfo.isStableBuild() || VersionInfo.isBetaBuild());
     }
 
     /**
@@ -374,7 +388,7 @@ class ContextualSearchPolicy {
      * @return {@code true} if the URL should be sent.
      */
     boolean doSendBasePageUrl() {
-        if (!isContextualSearchFullyEnabled()) return false;
+        if (!isContextualSearchFullyEnabled() && !isDelayedIntelligenceActive()) return false;
 
         // Check whether there is a Field Trial setting preventing us from sending the page URL.
         if (ContextualSearchFieldTrial.getSwitch(

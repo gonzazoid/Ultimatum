@@ -172,6 +172,7 @@
                   '|chromeos/assistant/'\
                   '|chromeos/services/assistant/'\
                   '|chromeos/services/libassistant/'\
+                  '|chrome/browser/ash/wallpaper_handlers/'\
                   '|chrome/browser/ash/web_applications/personalization_app/'\
                   '|chrome/browser/resources/settings/chromeos/ambient_mode_page/'\
                   '|chrome/browser/ui/ash/.*wallpaper.*/'\
@@ -1485,8 +1486,9 @@
         'ui/gl/gl_.*egl.*|'\
         'ui/gl/gl_.*ozone.*'
     },
-    'ozone_scenic': {
-      'filepath': 'ui/ozone/platform/scenic',
+    'ozone_fuchsia': {
+      'filepath': 'ui/ozone/platform/flatland/|'\
+                  'ui/ozone/platform/scenic/'
     },
     'page_info' : {
       'filepath': 'chrome/browser/ui/page_info/'\
@@ -2563,12 +2565,12 @@
                    'marq+watch@chromium.org'],
     'ios_clean': ['ios-reviews+clean@chromium.org',
                   'marq+scrutinize@chromium.org'],
-    'ios_credential_provider': ['javierrobles+watch@chromium.org'],
+    'ios_credential_provider': ['rkgibson+watch@chromium.org'],
     'ios_flags': ['noyau+watch@chromium.org'],
     'ios_showcase': ['ios-reviews+showcase@chromium.org',
                      'marq+watch@chromium.org'],
     'ios_web': ['ios-reviews+web@chromium.org'],
-    'ios_widget_kit': ['javierrobles+watch@chromium.org'],
+    'ios_widget_kit': ['rkgibson+watch@chromium.org'],
     'language': ['language-reviews@chromium.org'],
     'libaom': ['fgalligan@chromium.org',
                'jianj@chromium.org',
@@ -2670,10 +2672,11 @@
     'origin_trials': ['chasej+watch@chromium.org',
                       'iclelland+watch@chromium.org'],
     'ozone': ['ozone-reviews@chromium.org'],
-    'ozone_scenic': ['dworsham@google.com',
-                     'fuchsia-reviews@chromium.org',
-                     'rjkroege@chromium.org',
-                     'spang+watch@chromium.org'],
+    'ozone_fuchsia': ['dworsham@google.com',
+                      'emircan@google.com',
+                      'fuchsia-reviews@chromium.org',
+                      'rjkroege@chromium.org',
+                      'spang+watch@chromium.org'],
     'page_info' : ['permissions-reviews@chromium.org',
                    'olesiamarukhno+watch@google.com'],
     'page_load_metrics' : ['bmcquade+watch@chromium.org',

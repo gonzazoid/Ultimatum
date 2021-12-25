@@ -5,14 +5,13 @@
 #include "third_party/blink/renderer/platform/graphics/paint/cull_rect.h"
 
 #include "base/containers/adapters.h"
-#include "third_party/blink/renderer/platform/geometry/float_rect.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/graphics/paint/geometry_mapper.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scroll_paint_property_node.h"
 #include "third_party/blink/renderer/platform/graphics/paint/transform_paint_property_node.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/transforms/affine_transform.h"
 #include "ui/gfx/geometry/rect_conversions.h"
+#include "ui/gfx/geometry/rect_f.h"
 
 namespace blink {
 
@@ -28,7 +27,7 @@ static int LocalPixelDistanceToExpand(
   // composited scroll translation or other composited transform.
   static constexpr int kPixelDistanceToExpand = 4000;
 
-  FloatRect rect(0, 0, 1, 1);
+  gfx::RectF rect(0, 0, 1, 1);
   GeometryMapper::SourceToDestinationRect(root_transform, local_transform,
                                           rect);
   // Now rect.Size() is the size of a screen pixel in local coordinates.
@@ -78,9 +77,6 @@ void CullRect::ApplyTransform(const TransformPaintPropertyNode& transform) {
 CullRect::ApplyTransformResult CullRect::ApplyScrollTranslation(
     const TransformPaintPropertyNode& root_transform,
     const TransformPaintPropertyNode& scroll_translation) {
-  DCHECK(RuntimeEnabledFeatures::CompositeAfterPaintEnabled() ||
-         RuntimeEnabledFeatures::CullRectUpdateEnabled());
-
   const auto* scroll = scroll_translation.ScrollNode();
   DCHECK(scroll);
 
@@ -136,9 +132,6 @@ bool CullRect::ApplyPaintProperties(
     const PropertyTreeState& source,
     const PropertyTreeState& destination,
     const absl::optional<CullRect>& old_cull_rect) {
-  DCHECK(RuntimeEnabledFeatures::CompositeAfterPaintEnabled() ||
-         RuntimeEnabledFeatures::CullRectUpdateEnabled());
-
   Vector<const TransformPaintPropertyNode*, 4> scroll_translations;
   Vector<const ClipPaintPropertyNode*, 4> clips;
   bool abnormal_hierarchy = false;
@@ -296,9 +289,6 @@ bool CullRect::ApplyPaintProperties(
 bool CullRect::ChangedEnough(
     const CullRect& old_cull_rect,
     const absl::optional<gfx::Rect>& expansion_bounds) const {
-  DCHECK(RuntimeEnabledFeatures::CompositeAfterPaintEnabled() ||
-         RuntimeEnabledFeatures::CullRectUpdateEnabled());
-
   const auto& new_rect = Rect();
   const auto& old_rect = old_cull_rect.Rect();
   if (old_rect.Contains(new_rect))

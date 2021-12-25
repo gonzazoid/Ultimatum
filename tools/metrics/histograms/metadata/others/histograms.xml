@@ -88,18 +88,6 @@ chromium-metrics-reviews@google.com.
   <variant name="WorkerProcess" summary=""/>
 </variants>
 
-<variants name="TextFragmentSource">
-<!-- Should be synced with TextFragmentLinkOpenSource in enums.xml. -->
-
-  <variant name="" summary="all sources">
-    <obsolete>
-      Replaced by split out versions below.
-    </obsolete>
-  </variant>
-  <variant name=".SearchEngine" summary="the default search engine."/>
-  <variant name=".Unknown" summary="unknown but not the default search engine"/>
-</variants>
-
 <variants name="VoiceIntentTargetVariant">
   <variant name="Assistant" summary="Assistant voice transcription."/>
   <variant name="System" summary="System voice transcription."/>
@@ -1853,7 +1841,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.AddedPerProfileType" enum="BrowserProfileType"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>rhalavati@chromium.org</owner>
   <owner>chrome-privacy-core@google.com</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
@@ -2063,7 +2051,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.LaunchLocation" enum="BookmarkLaunchLocation"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>ianwen@chromium.org</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
   <summary>Logs a UI location from which a bookmark is launched.</summary>
@@ -2134,7 +2122,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.OpenBookmarkType" enum="BookmarkType"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>wychen@chromium.org</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
   <summary>
@@ -2144,7 +2132,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.ReadingList.NumberOfItems" units="items"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>shaktisahu@chromium.org</owner>
   <owner>xingliu@chromium.org</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
@@ -2156,7 +2144,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.ReadingList.NumberOfReadItems" units="items"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>shaktisahu@chromium.org</owner>
   <owner>xingliu@chromium.org</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
@@ -2190,7 +2178,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Bookmarks.UsageCountPerProfileType" enum="BrowserProfileType"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>rhalavati@chromium.org</owner>
   <owner>chrome-privacy-core@google.com</owner>
   <component>UI&gt;Browser&gt;Bookmarks</component>
@@ -2526,7 +2514,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Cast.Sender.RemotePlayback.InitiationLocation"
-    enum="RemotePlaybackInitiationLocation" expires_after="2022-04-17">
+    enum="RemotePlaybackInitiationLocation" expires_after="2022-06-19">
   <owner>muyaoxu@google.com</owner>
   <owner>openscreen-eng@google.com</owner>
   <summary>
@@ -2662,13 +2650,15 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChildProcess.Crashed.UtilityProcessHash"
-    enum="UtilityProcessNameHash" expires_after="2022-04-10">
+    enum="UtilityProcessNameHash" expires_after="never">
+<!-- expires-never: Critical stability metrics. go/chrome-stability-metrics -->
+
   <owner>wfh@chromium.org</owner>
   <owner>chrome-stability-core@google.com</owner>
   <summary>
     Count of child utility process crashes, bucketed by the hash of their
     process name. The process name is typically the service name of the mojo
-    service.
+    service. Recorded when a Utility process crashes.
   </summary>
 </histogram>
 
@@ -2766,12 +2756,50 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ChildProcess.Launched.UtilityProcessHash"
-    enum="UtilityProcessNameHash" expires_after="2022-04-10">
+    enum="UtilityProcessNameHash" expires_after="2022-06-12">
   <owner>wfh@chromium.org</owner>
   <summary>
     Count of child utility process launches, bucketed by the hash of their
     process name. The process name is typically the service name of the mojo
     service.
+  </summary>
+</histogram>
+
+<histogram name="ChildProcess.LaunchFailed.UtilityProcessErrorCode"
+    enum="LaunchErrorCodes" expires_after="never">
+<!-- expires-never: Critical stability metrics. go/chrome-stability-metrics -->
+
+  <owner>wfh@chromium.org</owner>
+  <owner>chrome-stability-core@google.com</owner>
+  <summary>
+    A platform-specific error code returned from the attempt to launch a Utility
+    process. Recorded when a Utility process fails to launch.
+  </summary>
+</histogram>
+
+<histogram name="ChildProcess.LaunchFailed.UtilityProcessHash"
+    enum="UtilityProcessNameHash" expires_after="never">
+<!-- expires-never: Critical stability metrics. go/chrome-stability-metrics -->
+
+  <owner>wfh@chromium.org</owner>
+  <owner>chrome-stability-core@google.com</owner>
+  <summary>
+    Count of child utility process launch failures, bucketed by the hash of
+    their process name. The process name is typically the service name of the
+    mojo service. Recorded when a Utility process fails to launch.
+  </summary>
+</histogram>
+
+<histogram name="ChildProcess.LaunchFailed.WinLastError" enum="WinGetLastError"
+    expires_after="never">
+<!-- expires-never: Critical stability metrics. go/chrome-stability-metrics -->
+
+  <owner>wfh@chromium.org</owner>
+  <owner>chrome-stability-core@google.com</owner>
+  <summary>
+    An extended Windows error code returned from GetLastError when failing to
+    launch a utility process. Recorded when a Utility process fails to launch on
+    Windows.
   </summary>
 </histogram>
 
@@ -3488,102 +3516,6 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram base="true" name="CompositorLatency" units="microseconds"
-    expires_after="2022-05-22">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the duration of various stages in the pipeline as a single frame goes
-    through the various stages in the compositor. This is reported for frames
-    that went through all the compositor stages in chromium, and was presented
-    to the user.
-
-    Warning: This metric may include reports from clients with low-resolution
-    clocks (i.e. on Windows, ref. |TimeTicks::IsHighResolution()|). Such reports
-    will cause this metric to have an abnormal distribution. When considering
-    revising this histogram, see UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES for the
-    solution.
-  </summary>
-</histogram>
-
-<histogram base="true" name="CompositorLatency.CompositorOnlyFrame"
-    units="microseconds" expires_after="2022-04-17">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the duration of various stages in the pipeline as a single frame goes
-    through the various stages in the compositor in the cases that there is no
-    damage from main thread.
-
-    Warning: This metric may include reports from clients with low-resolution
-    clocks (i.e. on Windows, ref. |TimeTicks::IsHighResolution()|). Such reports
-    will cause this metric to have an abnormal distribution. When considering
-    revising this histogram, see UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES for the
-    solution.
-  </summary>
-</histogram>
-
-<histogram
-    name="CompositorLatency.Diagnostic.PresentationTimeDeltaFromDeadline"
-    units="ms" expires_after="M87">
-  <obsolete>
-    Removed in M88.
-  </obsolete>
-  <owner>behdadb@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <summary>
-    For the compositor pipeline, measures how far the presentation time of a
-    compositor frame is from the frame deadline (i.e. vsync time).
-  </summary>
-</histogram>
-
-<histogram base="true" name="CompositorLatency.DroppedFrame"
-    units="microseconds" expires_after="2022-04-24">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the duration of various stages in the pipeline as a single frame goes
-    through the various stages in the compositor. This is reported for frames
-    that the user did not see: this includes frames that are dropped in various
-    stages inside chromium, or even frames that went through all stages in
-    chromium, but ultimately was not presented to the user.
-
-    Warning: This metric may include reports from clients with low-resolution
-    clocks (i.e. on Windows, ref. |TimeTicks::IsHighResolution()|). Such reports
-    will cause this metric to have an abnormal distribution. When considering
-    revising this histogram, see UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES for the
-    solution.
-  </summary>
-</histogram>
-
-<histogram base="true" name="CompositorLatency.MissedDeadlineFrame"
-    units="microseconds" expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the duration of various stages in the pipeline as a single frame goes
-    through the various stages in the compositor. This is reported for frames
-    that went through all the compositor stages in chromium, and was presented
-    to the user, but were delayed and missed their deadline.
-
-    Warning: This metric may include reports from clients with low-resolution
-    clocks (i.e. on Windows, ref. |TimeTicks::IsHighResolution()|). Such reports
-    will cause this metric to have an abnormal distribution. When considering
-    revising this histogram, see UMA_HISTOGRAM_CUSTOM_MICROSECONDS_TIMES for the
-    solution.
-  </summary>
-</histogram>
-
-<histogram name="CompositorLatency.Type" enum="FrameReportType"
-    expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Whether frame is dropped or presented meeting or missing the deadline or is
-    a compositor only frame.
-  </summary>
-</histogram>
-
 <histogram name="Conflicts.ConfirmedBadModules" units="modules"
     expires_after="2018-08-30">
   <owner>chrisha@chromium.org</owner>
@@ -3883,7 +3815,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ContextMenu.TimeToSelectShare" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>gayane@chromium.org</owner>
   <owner>chrome-shared-highlighting@google.com</owner>
   <summary>
@@ -3906,7 +3838,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ContextMenu.TimeToTakeAction.SelectedItem" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>twellington@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
   <summary>
@@ -3944,6 +3876,21 @@ chromium-metrics-reviews@google.com.
     Logs true when the context menu gesture recognizer fully recognizes a long
     press, but is still waiting on the DOM element details before the context
     menu can be shown. Only logged on iOS.
+  </summary>
+</histogram>
+
+<histogram name="Conversions.AppToWeb.AttributionEvents"
+    enum="AttributionEvent" expires_after="2022-12-08">
+  <owner>johnidel@chromium.org</owner>
+  <owner>mthiesse@chromium.org</owner>
+  <owner>measurement-api-dev+metrics@google.com</owner>
+  <summary>
+    Records events for the App To Web Impressions ContentProvider in order to
+    track how many attributions are received/lost/reported to the native
+    conversions code. Note that reported post-native only counts impressions
+    that were cached pre-native, not all reported impressions.
+
+    A single impression may emit multiple different attribution events.
   </summary>
 </histogram>
 
@@ -4819,7 +4766,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="DirectSockets.PermissionDeniedFailures"
-    enum="DirectSocketPermissionFailureType" expires_after="2022-1-20">
+    enum="DirectSocketPermissionFailureType" expires_after="2022-06-07">
   <owner>ericwilligers@chromium.org</owner>
   <owner>glenrob@chromium.org</owner>
   <summary>
@@ -5966,7 +5913,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ExploreSites.MonthlyHostCount" units="hosts"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>dimich@chromium.org</owner>
   <summary>
     Number of unique hosts visited by the user during the last 30 days. Reported
@@ -6573,6 +6520,25 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
+<histogram name="Feedback.ReportSending.Online" units="boolean"
+    expires_after="2022-12-15">
+  <owner>xiangdongkong@google.com</owner>
+  <owner>cros-feedback-app@google.com</owner>
+  <summary>
+    Records whether the user is online when the feedback report was submitted.
+  </summary>
+</histogram>
+
+<histogram name="Feedback.ReportSending.Result"
+    enum="FeedbackReportSendingResult" expires_after="2022-12-15">
+  <owner>xiangdongkong@google.com</owner>
+  <owner>cros-feedback-app@google.com</owner>
+  <summary>
+    Records the feedback report sending states to help track the success rate of
+    feedback report offline submission.
+  </summary>
+</histogram>
+
 <histogram name="Feedback.RequestSource" enum="FeedbackSource"
     expires_after="2022-06-05">
   <owner>afakhry@chromium.org</owner>
@@ -6581,7 +6547,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Feedback.TrustSafetySentiment.SurveyRequested"
-    enum="TrustSafetySentimentFeatureArea" expires_after="2022-04-17">
+    enum="TrustSafetySentimentFeatureArea" expires_after="2022-06-19">
   <owner>sauski@google.com</owner>
   <owner>chrome-hats-eng@google.com</owner>
   <summary>
@@ -6591,7 +6557,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Feedback.TrustSafetySentiment.TriggerOccurred"
-    enum="TrustSafetySentimentFeatureArea" expires_after="2022-04-17">
+    enum="TrustSafetySentimentFeatureArea" expires_after="2022-06-19">
   <owner>sauski@google.com</owner>
   <owner>chrome-hats-eng@google.com</owner>
   <summary>
@@ -6657,7 +6623,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="FirstRun.NewUserExperience.NtpBackgroundInteraction"
-    enum="NuxNtpBackgroundInteractions" expires_after="2022-04-10">
+    enum="NuxNtpBackgroundInteractions" expires_after="2022-06-12">
   <owner>hcarmona@chromium.org</owner>
   <owner>johntlee@chromium.org</owner>
   <summary>
@@ -6971,7 +6937,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Gamepad.KnownGamepadConnectedWithId"
-    enum="GamepadVendorProduct" expires_after="2022-04-17">
+    enum="GamepadVendorProduct" expires_after="2022-06-19">
   <owner>mattreynolds@chromium.org</owner>
   <owner>deviceapi-team@google.com</owner>
   <summary>
@@ -7028,7 +6994,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="GestureNavigation.Completed" enum="GestureNavigationDirection"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>jinsukkim@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
   <summary>
@@ -7092,7 +7058,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="GestureNavigation.Type" enum="GestureNavigationType"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>jinsukkim@chromium.org</owner>
   <owner>clank-app-team@google.com</owner>
   <summary>
@@ -7100,552 +7066,6 @@ chromium-metrics-reviews@google.com.
     supports back and forward navigation or OS-provided default system gesture
     navigation that supports only back action on both left and right edge. This
     is recorded on Chrome startup at the feature component initialization.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.PresentationTimestamp.InvalidBeforeSwap" units="ms"
-    expires_after="2022-05-01">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Presentation timestamp comes from the driver when showing a display frame on
-    screen. These timestamps could be invalid, and be earlier than the swap
-    time. This metric records how much time before the swap-time such invalid
-    timestamps are. If the presentation timestamp is after the swap-time, then
-    this metric is not recorded.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.PresentationTimestamp.InvalidFromFuture" units="ms"
-    expires_after="2022-01-02">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Presentation timestamp comes from the driver when showing a display frame on
-    screen. These timestamps can sometimes be in the future. This metric records
-    how far in the future these timestamps can be. If the timestamp is not in
-    the future, then this metric is not recorded.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.PresentationTimestamp.LargePresentationDelta"
-    units="ms" expires_after="2022-01-02">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Measures very large (more than 3 minutes) delay in presenting display
-    frames. Presentation timestamp comes from the driver when showing a display
-    frame on screen. There are times when the presentation can be delayed a long
-    time. This metric reports how often this can happen. This is reported only
-    if the presentation takes 3 minutes or more.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.95pctPercentDroppedFrames_1sWindow"
-    units="%" expires_after="2022-04-17">
-  <owner>behdadb@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <summary>
-    The percent dropped frame is calculated for each sliding window of 1 second
-    length and added to a histogram, and then the 95 percentile of that
-    histogram is reported as 95pctPercentDroppedFrames_1sWindow.
-
-    The sliding windows cover the duration of page-load (From start of page-load
-    until user navigates away, or closes the tab/chrome, or when app goes to
-    background). Note that this means that this metric will bias toward tabs
-    that are closed more quickly, and might underreport tabs that remain open
-    for a long duration.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Checkerboarding" units="%"
-    expires_after="2022-05-22">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of frames that were shown with checkerboards during a
-    particular sequence of frames (e.g. during scroll, animation, etc.). Note
-    that this is only recorded for sequences of length &gt; 4.
-
-    Checkerboarding is measured by tracking the number of times checkerboard
-    frames are displayed (as opposed to the number of checkerboard frames
-    produced), since the same checkerboard frame can be displayed more than
-    once.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Diagnostic.DiscardedDependentCount"
-    units="dependent reporters" expires_after="2022-04-17">
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>
-    Diagnostic metric to measure how many dependent reporters have been
-    discarded.
-
-    The reporters might be dependant on another reporter (when having partial
-    updates) but if the number of dependents go over a limit we would discard
-    them earlier. This metric count how many of such reporters been discarded
-    earlier than expected as a result of outstanding number of dependent
-    reporters. The metric will be reported at the end of each frame if there has
-    been any discarded dependent reporters.
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.Diagnostic.DroppedFrameAfterScrollStart.Frames"
-    units="vsyncs" expires_after="2021-09-01">
-  <obsolete>
-    Removed 2021-11-29.
-  </obsolete>
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>Metric is replaced by DroppedFrameAfterScrollStart2.Time.</summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.Diagnostic.DroppedFrameAfterScrollStart.Time"
-    units="ms" expires_after="2021-09-01">
-  <obsolete>
-    Removed 2021-11-29.
-  </obsolete>
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>Metric is replaced by DroppedFrameAfterScrollStart2.Time.</summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.Diagnostic.DroppedFrameAfterScrollStart2.Frames"
-    units="vsyncs" expires_after="2022-11-29">
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>
-    Diagnostic metric to measure how long after scroll-start a frame is dropped.
-
-    For every frame dropped during a scroll, this metric reports how long after
-    scroll started the frame dropped (in number of vsyncs).
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.Diagnostic.DroppedFrameAfterScrollStart2.Time"
-    units="ms" expires_after="2022-11-29">
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>
-    Diagnostic metric to measure how long after scroll-start a frame is dropped.
-
-    For every frame dropped during a scroll, this metric reports how long after
-    scroll started the frame dropped (in milliseconds).
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Diagnostic.ReadSharedMemoryDuration"
-    units="microseconds" expires_after="2021-09-01">
-  <owner>sadrul@chromium.org</owner>
-  <owner>behdadb@chromium.org</owner>
-  <summary>
-    Diagnostic metric to track how long it takes to read the smoothness data
-    from shared memory.
-
-    Warning: This metric may include reports from clients with low-resolution
-    clocks (i.e. on Windows, ref. |TimeTicks::IsHighResolution()|). Such reports
-    will cause this metric to have an abnormal distribution.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Diagnostic.ReadSharedMemoryUKMSuccess"
-    units="boolean" expires_after="2021-09-01">
-  <owner>sadrul@chromium.org</owner>
-  <owner>fangzhoug@chromium.org</owner>
-  <summary>
-    Diagnostic metric to track how often reading the smoothness data for UKM
-    from the shared memory (using atomic memcpy) fails (or succeeds).
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.FrameSequenceLength" units="count"
-    expires_after="2021-08-15">
-  <obsolete>
-    Removed 2021-07-09.
-  </obsolete>
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Counts the number of frames expected during a particular sequence of frames
-    (e.g. during scroll, animation, etc.).
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Jank" units="%" expires_after="2022-06-01">
-  <owner>sadrul@chromium.org</owner>
-  <owner>mjzhang@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of janks for a particular sequence of frames (e.g. during
-    scroll, animation, etc.). This is reported in various sub-metrics with
-    suffixes describing the type of the sequence (e.g. TouchScroll etc.).
-
-    Jank is measured by tracking the number of abrupt increases in frame
-    presentation interval, divided by the total number of frames expected to be
-    produced and displayed. The lower this number is, the less the smoothness
-    varies over time.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Jank.All{Type}" units="%"
-    expires_after="2022-06-01">
-  <owner>sadrul@chromium.org</owner>
-  <owner>mjzhang@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of janks for a particular frame sequence. {Type}
-
-    Jank is measured by tracking the number of abrupt increases in frame
-    presentation interval, divided by the total number of frames expected to be
-    produced and displayed. The lower this number is, the less the smoothness
-    varies over time.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-  <token key="Type">
-    <variant name="Animations"
-        summary="This metric aggregates data reported from all types of
-                 animations (e.g. comositor-driven animations, main-thread
-                 driven animations, and raf-driven animations, etc.)."/>
-    <variant name="Interactions"
-        summary="This metric aggregates data reported for all supported
-                 combinations of interaction types (e.g. scrolling, pinching,
-                 etc.) and input device types (e.g. touchscreen, touchpad,
-                 mousewheel, etc.)."/>
-    <variant name="Sequences"
-        summary="This metric aggregates data from all animations and all
-                 interactions."/>
-  </token>
-</histogram>
-
-<histogram name="Graphics.Smoothness.MaxPercentDroppedFrames_1sWindow"
-    units="%" expires_after="2022-04-10">
-  <owner>behdadb@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames for in a 1 second sliding window.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.MaxStale" units="ms"
-    expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>mjzhang@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the maximum staleness value for all presentations for a particular
-    sequence of frames (e.g. during scroll, animation, etc.). This is reported
-    in various sub-metrics with suffixes describing the type of the sequence
-    (e.g. TouchScroll etc.).
-
-    Typically, a frame presentation is expected to last at least one vsync
-    cycle, plus any number of additional vsync cycles if no updates are expected
-    duration that time. If the presentation interval is prolonged due to reasons
-    other than listed above, then that prolonged portion will be considered
-    staleness for that frame.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentDroppedFrames" units="%"
-    expires_after="2022-09-30">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames for a particular sequence of frames
-    (e.g. during scroll, animation, etc.). This is reported in various
-    sub-metrics with suffixes describing the type of the sequence (e.g.
-    TouchScroll etc.).
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentDroppedFrames.AllAnimations"
-    units="%" expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>ericrk@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames for a particular sequence of frames for
-    all animations. This metric is reported for all animations (e.g.
-    comositor-driven animations, main-thread driven animations, and raf-driven
-    animations).
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentDroppedFrames.AllInteractions"
-    units="%" expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>ericrk@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames for a particular sequence of frames
-    where a user-input (e.g. scroll, pinch) is active. This metric is reported
-    for all sources of user-input (i.e. both touchscreen and
-    touchpad/mouse-wheel).
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentDroppedFrames.AllSequences"
-    units="%" expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>ericrk@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames for a particular sequence of frames.
-    This metric is reported for all animations and all interactions.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram base="true" name="Graphics.Smoothness.PercentMissedDeadlineFrames"
-    units="%" expires_after="2022-09-30">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of frames that missed the deadline for a particular
-    sequence of frames (e.g. during scroll, animation, etc.). This is reported
-    in various sub-metrics with suffixes describing the type of the sequence
-    (e.g. TouchScroll etc.).
-
-    PercentMissedDeadlineFrames is measured by tracking the number of frames
-    which were displayed on screen but missed the vsync interval.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentMissedDeadlineFrames.AllAnimations"
-    units="%" expires_after="2022-09-30">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of frames that missed the deadline for a particular
-    sequence of frames for all animations. This metric is reported for all
-    animations (e.g. comositor-driven animations, main-thread driven animations,
-    and raf-driven animations).
-
-    PercentMissedDeadlineFrames is measured by tracking the number of frames
-    which were displayed on screen but missed the vsync interval.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.PercentMissedDeadlineFrames.AllInteractions"
-    units="%" expires_after="2022-09-30">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of frames that missed the deadline for a particular
-    sequence of frames where a user-input (e.g. scroll, pinch) is active. This
-    metric is reported for all sources of user-input (i.e. both touchscreen and
-    touchpad/mouse-wheel).
-
-    PercentMissedDeadlineFrames is measured by tracking the number of frames
-    which were displayed on screen but missed the vsync interval.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PercentMissedDeadlineFrames.AllSequences"
-    units="%" expires_after="2022-09-30">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of frames that missed the deadline for a particular
-    sequence of frames. This metric is reported for all animations and all
-    interactions.
-
-    PercentMissedDeadlineFrames is measured by tracking the number of frames
-    which were displayed on screen but missed the vsync interval.
-
-    Note that this metric is reported only when there are sufficient number of
-    frames (&gt;= 100). If there are sequences with fewer frames, then these are
-    aggregated until there are enough frames to produce the metric.
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.PerSession.95pctPercentDroppedFrames_1sWindow"
-    units="%" expires_after="2022-04-17">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the 95th percentile of dropped frames percent of a sliding window of
-    1 second. The metric is reported once per page-load when the page closes. If
-    there are fewer than 20 sliding windows for calculating 95th percentile, the
-    max value will be used instead of 95th percentile.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.PerSession.AveragePercentDroppedFrames"
-    units="%" expires_after="2022-06-05">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the percent of dropped frames. The metric is reported once per
-    page-load when the page closes.
-
-    AveragePercentDroppedFrames is measured by tracking the number of frames
-    which were not displayed on screen out of the total number of frames
-    expected to be produced and displayed. In other words, the lower this number
-    is, the smoother experience.
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.PerSession.MaxPercentDroppedFrames_1sWindow"
-    units="%" expires_after="2022-05-29">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the Max of dropped frames percent of a sliding window of 1 second.
-    The metric is reported once per page-load when the page closes.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-  </summary>
-</histogram>
-
-<histogram
-    name="Graphics.Smoothness.PerSession.TimeMaxPercentDroppedFrames_1sWindow"
-    units="ms" expires_after="2021-11-18">
-  <owner>sadrul@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the time since First Contentful Paint when the sliding window with
-    the max percent of dropped frames occurs, up to 25 seconds. The metric is
-    reported once per page-load when the page closes.
-
-    PercentDroppedFrames is measured by tracking the number of frames which were
-    not displayed on screen out of the total number of frames expected to be
-    produced and displayed. In other words, the lower this number is, the
-    smoother experience.
-  </summary>
-</histogram>
-
-<histogram name="Graphics.Smoothness.Stale" units="ms"
-    expires_after="2022-04-10">
-  <owner>sadrul@chromium.org</owner>
-  <owner>mjzhang@chromium.org</owner>
-  <owner>graphics-dev@chromium.org</owner>
-  <summary>
-    Tracks the staleness value for each frame presentation for a particular
-    sequence of frames (e.g. during scroll, animation, etc.). This is reported
-    in various sub-metrics with suffixes describing the type of the sequence
-    (e.g. TouchScroll etc.).
-
-    Typically, a frame presentation is expected to last at least one vsync
-    cycle, plus any number of additional vsync cycles if no updates are expected
-    duration that time. If the presentation interval is prolonged due to reasons
-    other than listed above, then that prolonged portion will be considered
-    staleness.
-
-    Note that the reporting of this metric occurs as soon as a frame is
-    presented, and is not affected by the length of the frame sequence.
-  </summary>
-</histogram>
-
-<histogram name="GraphicsPipeline.ReceivedBeginFrame" units="microseconds"
-    expires_after="M85">
-  <obsolete>
-    Expired in M85.
-  </obsolete>
-  <owner>yiyix@chromium.org</owner>
-  <owner>chrome-gpu-metrics@google.com</owner>
-  <summary>
-    The amount of time it takes for the BeginFrame to travel to the Client from
-    the DisplayCompositor.
-
-    Note that this metrics is only recorded on clients on which a
-    high-resolution clock is available
-  </summary>
-</histogram>
-
-<histogram name="GraphicsPipeline.SubmitCompositorFrameAfterBeginFrame"
-    units="microseconds" expires_after="M85">
-  <obsolete>
-    Expired in M85.
-  </obsolete>
-  <owner>yiyix@chromium.org</owner>
-  <owner>chrome-gpu-metrics@google.com</owner>
-  <summary>
-    How long the client takes to prepare a compositor frame after receiving a
-    BeginFrameArgs.
-
-    Note that this is only recorded on clients on which a high-resolution clock
-    is available.
   </summary>
 </histogram>
 
@@ -7729,7 +7149,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hardware.Display.Count.OnChange" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>sashamcintosh@chromium.org</owner>
   <owner>chromeos-gfx@chromium.org</owner>
   <summary>
@@ -7739,7 +7159,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Hardware.Display.Count.OnStartup" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>sashamcintosh@chromium.org</owner>
   <owner>chromeos-gfx@chromium.org</owner>
   <summary>
@@ -7761,7 +7181,7 @@ chromium-metrics-reviews@google.com.
   </summary>
 </histogram>
 
-<histogram name="Hardware.TotalDiskSpace" units="GB" expires_after="2022-04-17">
+<histogram name="Hardware.TotalDiskSpace" units="GB" expires_after="2022-06-19">
   <owner>sadrul@chromium.org</owner>
   <owner>zmo@chromium.org</owner>
   <summary>
@@ -7890,125 +7310,6 @@ chromium-metrics-reviews@google.com.
     Number of times that each menu item is clicked from the hosted app window
     menu button.
   </summary>
-</histogram>
-
-<histogram name="HttpCache.AccessToDone" units="ms" expires_after="2021-12-19">
-  <owner>morlovich@chromium.org</owner>
-  <summary>
-    For every http cache transaction with a pattern (see HttpCache.Pattern), the
-    time from the first access to the disk cache until the transaction was done.
-  </summary>
-</histogram>
-
-<histogram base="true" name="HttpCache.AfterSend" units="ms"
-    expires_after="M81">
-  <owner>morlovich@chromium.org</owner>
-  <summary>
-    For http cache transactions in which a network request was sent, the time
-    elapsed between sending it over the network until the transaction was done.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.BeforeSend" units="ms" expires_after="2021-03-15">
-  <owner>morlovich@chromium.org</owner>
-  <summary>
-    For http cache transactions in which a network request was sent, the time
-    elapsed between beginning the request and sending it over the network; this
-    is the time spent accessing the disk cache.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.CantConditionalizeCause"
-    enum="HttpCacheValidationCause" expires_after="M85">
-  <owner>jkarlin@chromium.org</owner>
-  <summary>
-    For each request that results in an unconditionalizable network request, the
-    cause for the request.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.CantConditionalizeZeroFreshnessFromMemHint"
-    enum="Boolean" expires_after="M81">
-  <owner>morlovich@chromium.org</owner>
-  <summary>
-    For each request with HttpCache.CantConditionalizeCause == Zero Freshness,
-    this is true iff the zero freshness status was determined by looking at
-    in-memory hints in disk cache index, rather than by opening the entry and
-    looking at headers.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.EntryLockWait" units="ms" expires_after="M87">
-  <owner>jkarlin@chromium.org</owner>
-  <owner>morlovich@chromium.org</owner>
-  <summary>
-    The time spent waiting for write lock on a disk cache entry.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.HardReset" enum="Boolean" expires_after="2021-06-15">
-  <owner>shivanisha@chromium.org</owner>
-  <owner>jkarlin@chromium.org</owner>
-  <summary>
-    Whether the HttpCache was forced to reset upon creation, effectively
-    clearing out its previous content. This is recorded when the cache is
-    created for the browsing session.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.MaxFileSizeOnInit" units="KB"
-    expires_after="2022-02-20">
-  <owner>shivanisha@chromium.org</owner>
-  <owner>jkarlin@chromium.org</owner>
-  <summary>
-    Max file size allowed to be cached in the http cache. This is logged at the
-    time the backend is created.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.NetworkIsolationKeyPresent2"
-    enum="NetworkIsolationKeyPresent" expires_after="2020-09-10">
-  <owner>jkarlin@chromium.org</owner>
-  <owner>shivanisha@chromium.org</owner>
-  <summary>
-    Records whether a cache request has a network isolation key set or not,
-    which is used for double-keying.
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.ParallelWritingPattern"
-    enum="HttpCacheParallelWritingPattern" expires_after="M77">
-  <owner>shivanisha@chromium.org</owner>
-  <summary>
-    Records whether a transaction either created a Writers object when one
-    didn't exist, or joined an existing Writers object, or why it failed to do
-    so (e.g., it's a range request, it's not a GET request, etc.).
-  </summary>
-</histogram>
-
-<histogram name="HttpCache.Pattern" enum="HttpCachePattern"
-    expires_after="2022-04-24">
-  <owner>morlovich@chromium.org</owner>
-  <owner>jkarlin@chromium.org</owner>
-  <summary>For each http cache transaction, the recorded pattern.</summary>
-</histogram>
-
-<histogram name="HttpCache.ReadErrorNonRestartable" enum="NetErrorCodes"
-    expires_after="M85">
-  <owner>morlovich@chromium.org</owner>
-  <summary>Net error results from non-restartable cache read errors.</summary>
-</histogram>
-
-<histogram name="HttpCache.ReadErrorRestartable" enum="NetErrorCodes"
-    expires_after="M85">
-  <owner>morlovich@chromium.org</owner>
-  <summary>Net error results from restartable cache read errors.</summary>
-</histogram>
-
-<histogram name="HttpCache.ValidationCause" enum="HttpCacheValidationCause"
-    expires_after="M77">
-  <owner>jkarlin@chromium.org</owner>
-  <summary>For each validation attempt, the cause for the validation.</summary>
 </histogram>
 
 <histogram base="true" name="Hwsec.Attestation.Status"
@@ -9178,7 +8479,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Linux.Wayland.Shell" enum="LinuxWaylandShellName"
-    expires_after="2021-12-31">
+    expires_after="never">
+<!-- expires-never: Needed to measure Linux ecosystem. -->
+
   <owner>rjkroege@chromium.org</owner>
   <owner>adunaev@igalia.com</owner>
   <summary>
@@ -9211,9 +8514,11 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="LoadingPredictor.OptimizationHintsReceiveStatus"
     enum="LoadingPredictorOptimizationHintsReceiveStatus"
-    expires_after="2022-04-24">
+    expires_after="2022-12-19">
   <owner>sophiechang@chromium.org</owner>
   <owner>tbansal@chromium.org</owner>
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     The status of when the optimization hints were received by the Loading
     Predictor. This will be recorded on navigations for which predictions from
@@ -9222,8 +8527,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.PreconnectCount" units="origins"
-    expires_after="2021-12-19">
-  <owner>alexilin@chromium.org</owner>
+    expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     The number of origins that were preconnected for a page load. It includes
     preconnect attempts that don't result in new opened connection. Logged after
@@ -9232,8 +8538,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.PreconnectHitsPercentage" units="%"
-    expires_after="2021-12-19">
-  <owner>alexilin@chromium.org</owner>
+    expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     The percentage of origins that were preconnected and requested by a page
     load to the total number of origins that were preconnected for a page load.
@@ -9243,9 +8550,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="LoadingPredictor.PreconnectLearningCount"
-    units="origins" expires_after="2021-08-15">
-  <owner>alexilin@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+    units="origins" expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     When the loading predictor has origins in the local database for a given
     navigation to preconnect and preresolve, the count of predicted origins.
@@ -9253,9 +8560,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="LoadingPredictor.PreconnectLearningPrecision"
-    units="%" expires_after="2021-08-15">
-  <owner>alexilin@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+    units="%" expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     When the loading predictor has origins in the local database for a given
     navigation to preconnect and preresolve, the precision of the predictions in
@@ -9265,9 +8572,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="LoadingPredictor.PreconnectLearningRecall"
-    units="%" expires_after="2021-08-09">
-  <owner>alexilin@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+    units="%" expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     When the loading predictor has origins in the local database for a given
     navigation to preconnect and preresolve, the recall of the predictions, in
@@ -9277,9 +8584,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="LoadingPredictor.PreconnectLearningRedirectStatus"
-    enum="ResourcePrefetchPredictorRedirectStatus" expires_after="M82">
-  <owner>alexilin@chromium.org</owner>
-  <owner>tbansal@chromium.org</owner>
+    enum="ResourcePrefetchPredictorRedirectStatus" expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     When the prefetch predictor has origins in the local database for a given
     navigation to preconnect and preresolve, records stats about whether
@@ -9288,8 +8595,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.PreresolveCount" units="hosts"
-    expires_after="2021-12-19">
-  <owner>alexilin@chromium.org</owner>
+    expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     The number of hosts that were preresolved for a page load. It includes only
     successful DNS lookups. Logged after the preconnect manager completes all
@@ -9298,8 +8606,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="LoadingPredictor.PreresolveHitsPercentage" units="%"
-    expires_after="M85">
-  <owner>alexilin@chromium.org</owner>
+    expires_after="2022-12-19">
+  <owner>spelchat@chromium.org</owner>
+  <owner>chrome-brapp-loading@chromium.org</owner>
   <summary>
     The percentage of hosts that were preresolved and requested by a page load
     to the total number of hosts that were preresolved for a page load. Logged
@@ -9369,7 +8678,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ManagedUsers.FilteringResult"
-    enum="SupervisedUserSafetyFilterResult" expires_after="2022-04-10">
+    enum="SupervisedUserSafetyFilterResult" expires_after="2022-06-12">
   <owner>agawronska@chromium.org</owner>
   <owner>cros-families@google.com</owner>
   <summary>
@@ -9913,7 +9222,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Mojo.Channel.WriteMessageSize" units="bytes"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>amistry@chromium.org</owner>
   <owner>bgeffon@chromium.org</owner>
   <owner>rockot@google.com</owner>
@@ -11089,7 +10398,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Pepper.InterfaceUsed" enum="PepperInterface"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>bbudge@chromium.org</owner>
   <owner>raymes@chromium.org</owner>
   <summary>
@@ -12315,7 +11624,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Privacy.AccuracyTip.AccuracyTipInteraction"
-    enum="AccuracyTipInteraction" expires_after="2022-04-17">
+    enum="AccuracyTipInteraction" expires_after="2022-06-19">
   <owner>dullweber@chromium.org</owner>
   <owner>eokoyomon@chromium.org</owner>
   <summary>
@@ -12438,7 +11747,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="PrivacySandbox.AggregationService.ReportStatus"
     enum="PrivacySandboxAggregationServiceReportStatus"
-    expires_after="2022-01-16">
+    expires_after="2022-07-16">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -12453,7 +11762,7 @@ chromium-metrics-reviews@google.com.
 
 <histogram name="PrivacySandbox.AggregationService.Storage.Sql.InitStatus"
     enum="PrivacySandboxAggregationServiceStorageSqlInitStatus"
-    expires_after="2022-01-16">
+    expires_after="2022-07-16">
   <owner>alexmt@chromium.org</owner>
   <owner>linnan@chromium.org</owner>
   <summary>
@@ -12568,7 +11877,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.CheckOriginForAbuseTime" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>knollr@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <summary>
@@ -12579,7 +11888,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.DeliverQueuedMessageTime" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>knollr@chromium.org</owner>
   <owner>peter@chromium.org</owner>
   <summary>
@@ -12591,7 +11900,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.DeliveryStatus" enum="PushEventStatus"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>
@@ -12670,7 +11979,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.RegistrationStatus"
-    enum="PushRegistrationStatus" expires_after="2022-04-17">
+    enum="PushRegistrationStatus" expires_after="2022-06-19">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>
@@ -12752,7 +12061,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="PushMessaging.UserVisibleStatus" enum="PushUserVisibleStatus"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>peter@chromium.org</owner>
   <owner>knollr@chromium.org</owner>
   <summary>
@@ -12992,7 +12301,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="ReadingList.WindowDisplayedDuration" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>corising@chromium.org</owner>
   <owner>chrome-desktop-ui-sea@google.com</owner>
   <summary>
@@ -13776,7 +13085,7 @@ Safe Browsing lookups, which is critical for security. -->
 </histogram>
 
 <histogram base="true" name="SB2.RequestDestination" enum="RequestDestination"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>xinghuilu@chromium.org</owner>
   <owner>chrome-safebrowsing-alerts@google.com</owner>
   <summary>
@@ -14790,7 +14099,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SpellCheck.SpellingService.Enabled" enum="BooleanEnabled"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>groby@chromium.org</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -14833,7 +14142,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SpellCheck.SuggestionHitRatio" units="%"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>gujen@google.com</owner>
   <owner>chrome-language@google.com</owner>
   <summary>
@@ -15205,7 +14514,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SSORecallPromo.PromoAction" enum="SSOPromoUserAction"
-    expires_after="2022-04-20">
+    expires_after="2022-06-19">
   <owner>fernandex@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -15214,7 +14523,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SSORecallPromo.PromoSeenCount" units="units"
-    expires_after="2022-04-20">
+    expires_after="2022-06-19">
   <owner>fernandex@chromium.org</owner>
   <owner>chrome-signin-team@google.com</owner>
   <summary>
@@ -15258,7 +14567,7 @@ should be kept until we remove incident reporting. -->
 </histogram>
 
 <histogram name="SubresourceWebBundles.BundleFetchErrorCode"
-    enum="NetErrorCodes" expires_after="2022-04-10">
+    enum="NetErrorCodes" expires_after="2022-06-12">
   <owner>ksakamoto@chromium.org</owner>
   <owner>webpackage-dev@chromium.org</owner>
   <summary>
@@ -15814,263 +15123,6 @@ should be kept until we remove incident reporting. -->
     number of tasks serviced due to priroity. Incremented whenever a task queue
     is selected to service.
   </summary>
-</histogram>
-
-<histogram name="TextFragmentAnchor.ElementIdFragmentFound" enum="Boolean"
-    expires_after="2022-05-01">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether an element-id based fragment was found in the document. Counted only
-    when a fragment was specified and it wasn't parsed into a |targetText| style
-    anchor.
-  </summary>
-</histogram>
-
-<histogram name="TextFragmentAnchor.LinkOpenSource"
-    enum="TextFragmentLinkOpenSource" expires_after="2022-06-05">
-  <owner>gayane@chromium.org</owner>
-  <owner>chrome-shared-highlighting@google.com</owner>
-  <summary>
-    Recorded for every navigation to a link with a valid text fragment selector
-    (e.g. #:=:text=SELECTOR). Indicates source type that navigation originated
-    from. It only know about search engines that come from the pre-populated
-    list installed with Chrome. If the user uses a search engine not on the
-    list, it will be recorded as Unknown. This is even true if the user have a
-    custom search engine. These custom search engines can be created by hand or
-    auto-generated. In either case, it's not going to count as a search engine.
-    Also, it only checks to see if the *referrer* is from a domain associated
-    with search engine. If someone posts a link somewhere on a web site that
-    happens to have a search engine known to Google and that links includes the
-    fragment tokens, then if a user clicks that link, it'll look like it came
-    from a search engine even thought they did not.
-  </summary>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.AmbiguousMatch"
-    enum="Boolean" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether we found multiple matches for a selector. Recorded when
-    TextFragmentAnchor finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.DidScrollIntoView"
-    enum="Boolean" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether the page did a non-zero scroll in order to scroll the match into
-    view. Only recorded if we found a match and scrolled it into view. Recorded
-    when TextFragmentAnchor finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.DirectiveLength"
-    units="characters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The raw length of the directive in the URL (e.g. spaces count as the three
-    characters '%20'), regardless of how many text= terms there are. Recorded if
-    there was a text directive, regardless of whether a match was found.
-    Recorded when TextFragmentAnchor finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.EndTextLength"
-    units="characters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The length of the end parameter, in the case of a range match. Only recorded
-    if a match was found. Recorded when TextFragmentAnchor finishes searching
-    once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.ExactTextLength"
-    units="characters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The length of the matched text, in the case of an exact match. Only recorded
-    if a match was found. Recorded when TextFragmentAnchor finishes searching
-    once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.ListItemMatch"
-    units="Boolean" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether the match was within a list item. Only recorded for exact text
-    fragments and only if a match was found. Recorded when TextFragmentAnchor
-    finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.MatchRate" units="%"
-    expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The percentage of selectors for which a match was found in the document.
-    Recorded when TextFragmentAnchor finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.Parameters"
-    enum="TextFragmentAnchorParameters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    An enum indicating which parameters were specified in the text fragment
-    anchor. Only recorded if a match was found. Recorded when TextFragmentAnchor
-    finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.RangeMatchLength"
-    units="characters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The length of the matched text, in the case of a range match. Only recorded
-    if a match was found. Recorded when TextFragmentAnchor finishes searching
-    once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.ScrollCancelled"
-    enum="Boolean" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether the scroll into view was cancelled by a user gesture or programmatic
-    scroll. Recorded when TextFragmentAnchor finishes searching once the page is
-    loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.SelectorCount"
-    units="selectors" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The number of selectors in the text fragment anchor if it is present.
-    Recorded when TextFragmentAnchor finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.SpansMultipleBlocks"
-    units="Boolean" expires_after="2021-12-31">
-  <owner>bokan@chromium.org</owner>
-  <owner>input-dev@chromium.org</owner>
-  <summary>
-    Whether or not a range-based text fragment match crosses any block
-    boundaries. That is, the start and end of the range are in different blocks
-    or in the same block but contain an intervening block. Only recorded for
-    range-based (start,end) text fragments. Only recorded on successful match.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.StartTextLength"
-    units="characters" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The length of the start parameter, in the case of a range match. Only
-    recorded if a match was found. Recorded when TextFragmentAnchor finishes
-    searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.TableCellMatch"
-    units="Boolean" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    Whether the match was within a table cell. Only recorded for exact text
-    fragments and only if a match was found. Recorded when TextFragmentAnchor
-    finishes searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.TimeToScrollIntoView"
-    units="ms" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The time between creating the TextFragmentAnchor (i.e. when it is parsed)
-    and scrolling the target into view. Only recorded if there is a match and we
-    scroll it into view. Recorded when TextFragmentAnchor finishes searching
-    once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
-</histogram>
-
-<histogram name="TextFragmentAnchor{TextFragmentSource}.TimeToScrollToTop"
-    units="ms" expires_after="2021-12-31">
-  <owner>nburris@chromium.org</owner>
-  <owner>bokan@chromium.org</owner>
-  <summary>
-    The time between scrolling a match into view and the user scrolling back to
-    the top of the page. Used as a signal for whether a match was useful. Only
-    recorded if a match is scrolled into view and the user subsequently scrolled
-    back to the top of the page. Recorded when TextFragmentAnchor finishes
-    searching once the page is loaded.
-
-    Recorded from text fragment links followed from {TextFragmentSource}.
-  </summary>
-  <token key="TextFragmentSource" variants="TextFragmentSource"/>
 </histogram>
 
 <histogram name="ThirdPartyModules.Certificates.Microsoft" units="certificates"
@@ -16720,7 +15772,7 @@ should be kept until we use this API.  -->
 </histogram>
 
 <histogram name="Tracing.Background.FinalizingTraceSizeInKB" units="KB"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>oysteine@chromium.org</owner>
   <summary>
     The size, in kilobytes, of a finalized trace ready to be uploaded.
@@ -17337,150 +16389,6 @@ regressions. -->
   <summary>
     Records whenever an intermediate keyboard state has been active for longer
     than a fixed timeout.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DelegatedCompositing.Status" enum="DelegatedStatus"
-    expires_after="2022-07-15">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>rjkroege@chromium.org</owner>
-  <summary>
-    An enum status result for attempted delegated compositing (success or
-    failure reason) recorded every drawn frame. Currently only recorded for
-    LaCros delegated compositing.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.OverlayNumProposedCandidates"
-    units="units" expires_after="2022-04-17">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>dcastagna@chromium.org</owner>
-  <summary>
-    A count of the number of proposed overlay candidates available for overlay
-    selection. Recorded every time a frame is rendered by the display
-    compositor.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.OverlayQuadMaterial"
-    enum="OverlayQuadMaterial" expires_after="2022-04-17">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>dcastagna@chromium.org</owner>
-  <summary>
-    Quad material for current promoted overlay, per frame. Recorded every time a
-    frame is rendered by the display compositor.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.OverlayStrategy"
-    enum="OverlayStrategies" expires_after="2022-05-15">
-  <owner>dcastagna@chromium.org</owner>
-  <owner>hoegsberg@chromium.org</owner>
-  <summary>
-    Overlay strategies used to promote Hardware Overlays, per frame. Recorded
-    every time a frame is rendered by the display compositor.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.OverlaySwitchInterval" units="ms"
-    expires_after="2022-05-01">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>dcastagna@chromium.org</owner>
-  <summary>
-    The time, in milliseconds, since the change in overlay selection. Recorded
-    every time a frame is rendered by the display compositor.
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.RootDamageRect.Overlay"
-    enum="BooleanOverlayDamageRect" expires_after="2022-04-17">
-  <owner>magchen@chromium.org</owner>
-  <owner>zmo@chromium.org</owner>
-  <summary>
-    Any root damage excluding overlay damage in the current frame?
-  </summary>
-</histogram>
-
-<histogram name="Viz.DisplayCompositor.RootDamageRect.Underlay"
-    enum="UnderlayDamageRect" expires_after="2022-04-17">
-  <owner>magchen@chromium.org</owner>
-  <owner>zmo@chromium.org</owner>
-  <summary>
-    The root damage type excluding underlay damage in the current frame.
-  </summary>
-</histogram>
-
-<histogram name="Viz.FileDescriptorTracking.TimeToCompute" units="microseconds"
-    expires_after="2022-07-09">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>rjkroege@chromium.org</owner>
-  <summary>
-    Time spent computing the number of active File Descriptors. This is logged
-    once every 5 minutes as the cost of this computation is estimated to be at
-    least 1ms. Currently only recorded for LaCros delegated compositing.
-
-    Warning: This metric does not include reports from clients with
-    low-resolution clocks.
-  </summary>
-</histogram>
-
-<histogram name="Viz.FileDescriptorTracking.{FdStat}" units="units"
-    expires_after="2022-07-09">
-  <owner>petermcneeley@chromium.org</owner>
-  <owner>rjkroege@chromium.org</owner>
-  <summary>
-    {FdStat} File Descriptors for the GPU process. This is logged once every 5
-    minutes as the cost of this computation is estimated to be at least 1ms.
-    Currently only recorded for LaCros delegated compositing.
-  </summary>
-  <token key="FdStat">
-    <variant name="NumActive" summary="Current number of active"/>
-    <variant name="NumSoftMax" summary="Maximum number of"/>
-    <variant name="PercentageUsed" summary="Percentage of in use"/>
-  </token>
-</histogram>
-
-<histogram name="Viz.FrameSinkVideoCapturer.I420.CaptureDuration" units="ms"
-    expires_after="2021-03-07">
-  <owner>samans@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <owner>viz-team-wat@google.com</owner>
-  <summary>
-    The time it took from when FrameSinkVideoCapturerImpl sent a request for an
-    I420 readback until the result comes back and ReadI420Planes successfully
-    finishes.
-  </summary>
-</histogram>
-
-<histogram name="Viz.FrameSinkVideoCapturer.I420.CaptureSucceeded"
-    enum="BooleanSuccess" expires_after="2020-12-31">
-  <owner>samans@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <owner>viz-team-wat@google.com</owner>
-  <summary>
-    Whether an I420 readback initiated by FrameSinkVideoCapturerImpl succeeded.
-  </summary>
-</histogram>
-
-<histogram name="Viz.FrameSinkVideoCapturer.RGBA.CaptureDuration" units="ms"
-    expires_after="2022-05-01">
-  <owner>samans@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <owner>viz-team-wat@google.com</owner>
-  <summary>
-    The time it took from when FrameSinkVideoCapturerImpl sent a request for an
-    RGBA readback until the result comes back and ReadRGBAPlane successfully
-    finishes.
-  </summary>
-</histogram>
-
-<histogram name="Viz.FrameSinkVideoCapturer.RGBA.CaptureSucceeded"
-    enum="BooleanSuccess" expires_after="2020-12-31">
-  <owner>samans@chromium.org</owner>
-  <owner>sadrul@chromium.org</owner>
-  <owner>viz-team-wat@google.com</owner>
-  <summary>
-    Whether an RGBA readback initiated by FrameSinkVideoCapturerImpl succeeded.
   </summary>
 </histogram>
 
@@ -18191,7 +17099,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUITabStrip.OpenAction" enum="WebUITabStripOpenActions"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>collinbaker@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -18202,7 +17110,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUITabStrip.OpenDuration" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>collinbaker@chromium.org</owner>
   <owner>tluk@chromium.org</owner>
   <summary>
@@ -18213,7 +17121,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUITabStrip.TabActivation" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>robliao@chromium.org</owner>
   <owner>johntlee@chromium.org</owner>
   <summary>
@@ -18223,7 +17131,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WebUITabStrip.TabCreation" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>robliao@chromium.org</owner>
   <owner>johntlee@chromium.org</owner>
   <summary>
@@ -18274,6 +17182,10 @@ regressions. -->
 
 <histogram name="WebView.ApiCall" enum="WebViewApiCall"
     expires_after="2022-01-31">
+  <obsolete>
+    Renamed in M99. Please see &quot;Android.WebView.ApiCall&quot; going
+    forward, which has the same logging behavior.
+  </obsolete>
   <owner>ntfschr@chromium.org</owner>
   <owner>src/android_webview/OWNERS</owner>
   <summary>Records calls to WebView APIs in WebViewChromium.</summary>
@@ -18440,7 +17352,7 @@ regressions. -->
 </histogram>
 
 <histogram name="WrenchMenu.MenuAction" enum="WrenchMenuAction"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>ainslie@chromium.org</owner>
   <owner>edwardjung@chromium.org</owner>
   <summary>Number of times that each menu item is clicked.</summary>

@@ -18,6 +18,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "build/build_config.h"
+#include "http_proxy_client_socket.h"
 #include "net/base/host_port_pair.h"
 #include "net/base/http_user_agent_settings.h"
 #include "net/base/net_errors.h"
@@ -27,7 +28,6 @@
 #include "net/quic/quic_http_utils.h"
 #include "net/quic/quic_proxy_client_socket.h"
 #include "net/quic/quic_stream_factory.h"
-#include "net/socket/client_socket_factory.h"
 #include "net/socket/client_socket_handle.h"
 #include "net/socket/ssl_client_socket.h"
 #include "net/socket/ssl_connect_job.h"
@@ -561,11 +561,11 @@ int HttpProxyConnectJob::DoHttpProxyConnect() {
   }
 
   // Add a HttpProxy connection on top of the tcp socket.
-  transport_socket_ = client_socket_factory()->CreateProxyClientSocket(
+  transport_socket_ = std::make_unique<HttpProxyClientSocket>(
       nested_connect_job_->PassSocket(), GetUserAgent(), params_->endpoint(),
       ProxyServer(GetProxyServerScheme(), GetDestination()),
       http_auth_controller_.get(), params_->tunnel(), using_spdy_,
-      negotiated_protocol_, common_connect_job_params()->proxy_delegate,
+      common_connect_job_params()->proxy_delegate,
       params_->traffic_annotation());
   nested_connect_job_.reset();
   return transport_socket_->Connect(base::BindOnce(

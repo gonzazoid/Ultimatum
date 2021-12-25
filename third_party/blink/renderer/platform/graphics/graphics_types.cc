@@ -231,4 +231,34 @@ String ImageDataStorageFormatName(ImageDataStorageFormat format) {
   return String();
 }
 
+String PredefinedColorSpaceName(PredefinedColorSpace color_space) {
+  switch (color_space) {
+    case PredefinedColorSpace::kSRGB:
+      return "srgb";
+    case PredefinedColorSpace::kRec2020:
+      return "rec2020";
+    case PredefinedColorSpace::kP3:
+      return "display-p3";
+    case PredefinedColorSpace::kRec2100HLG:
+      return "rec2100-hlg";
+    case PredefinedColorSpace::kRec2100PQ:
+      return "rec2100-pq";
+    case PredefinedColorSpace::kSRGBLinear:
+      return "srgb-linear";
+  };
+  NOTREACHED();
+  return String();
+}
+
+String CanvasPixelFormatName(CanvasPixelFormat pixel_format) {
+  switch (pixel_format) {
+    case CanvasPixelFormat::kUint8:
+      return "uint8";
+    case CanvasPixelFormat::kF16:
+      return "float16";
+  }
+  NOTREACHED();
+  return String();
+}
+
 }  // namespace blink

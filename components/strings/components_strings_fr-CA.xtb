@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Offre proposée</translation>
 <translation id="1312803275555673949">Par quelles preuves est-ce appuyé?</translation>
 <translation id="131405271941274527"><ph name="URL" /> souhaite vous envoyer et recevoir de l'information lorsque vous touchez votre téléphone sur un appareil CCP</translation>
+<translation id="1314311879718644478">Affichez les contenus en réalité augmentée</translation>
 <translation id="1314509827145471431">Reliure à droite</translation>
 <translation id="1318023360584041678">Enregistré dans le groupe de l'onglet</translation>
 <translation id="1319245136674974084">Ne plus me poser la question pour cette application</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">Plus</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Vous recherchez la version du navigateur? Consultez</translation>
 <translation id="1476595624592550506">Modifiez votre mot de passe</translation>
 <translation id="1483493594462132177">Envoi</translation>
 <translation id="1484290072879560759">Choisir une adresse d'expédition</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">Une erreur s'est produite lors de l'affichage de cette page Web.</translation>
 <translation id="1586541204584340881">Les extensions que vous avez installées</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Installer ARCore?</translation>
 <translation id="1592005682883173041">Accès aux données locales</translation>
 <translation id="1594030484168838125">Choisir</translation>
 <translation id="160851722280695521">Jouer au jeu du dinosaure dans Chrome</translation>
@@ -1252,6 +1255,7 @@
 <translation id="4968522289500246572">Cette application est développée pour les appareils mobiles et elle ne sera peut-être pas bien redimensionnée. L'application peut rencontrer des problèmes ou redémarrer.</translation>
 <translation id="4969341057194253438">Supprimer l'enregistrement</translation>
 <translation id="4973922308112707173">Double perforation en haut</translation>
+<translation id="4976702386844183910">Dernière visite : <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Utiliser le microphone?</translation>
 <translation id="4984339528288761049">Enveloppe Prc5</translation>
 <translation id="4989163558385430922">Tout afficher</translation>
@@ -1337,6 +1341,7 @@
 <translation id="5215116848420601511">Modes de paiement et adresses utilisant Google Pay</translation>
 <translation id="5215363486134917902">Folio SP</translation>
 <translation id="521659676233207110">Bac 13</translation>
+<translation id="5216942107514965959">Dernière visite : aujourd'hui</translation>
 <translation id="5222812217790122047">Adresse de courriel obligatoire</translation>
 <translation id="5230733896359313003">Adresse de livraison</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1380,6 +1385,7 @@
 <translation id="5333022057423422993">Chrome a trouvé le mot de passe que vous venez juste d'utiliser dans une violation de données. Afin de sécuriser vos comptes, nous vous recommandons de vérifier vos mots de passe enregistrés.</translation>
 <translation id="5334013548165032829">Journaux détaillés du système</translation>
 <translation id="5334145288572353250">Enregistrer l'adresse?</translation>
+<translation id="5335920952954443287">Cœur qui bat</translation>
 <translation id="5340250774223869109">L'application est bloquée</translation>
 <translation id="534295439873310000">Appareils CCP</translation>
 <translation id="5344579389779391559">L'accès à cette page peut engendrer des frais</translation>
@@ -1522,6 +1528,7 @@
 <translation id="5869522115854928033">Mots de passe enregistrés</translation>
 <translation id="5873013647450402046">Votre banque veut confirmer votre identité.</translation>
 <translation id="5887400589839399685">Carte enregistrée</translation>
+<translation id="5887687176710214216">Dernière visite : hier.</translation>
 <translation id="5895138241574237353">Redémarrer</translation>
 <translation id="5895187275912066135">Émis le :</translation>
 <translation id="5901630391730855834">Jaune</translation>
@@ -1715,6 +1722,7 @@
 <translation id="6529602333819889595">&amp;Rétablir la suppression</translation>
 <translation id="6545864417968258051">Recherche d'appareils Bluetooth</translation>
 <translation id="6547208576736763147">Double perforation à gauche</translation>
+<translation id="6554732001434021288">Dernière visite il y a <ph name="NUM_DAYS" /> jours</translation>
 <translation id="6556866813142980365">Rétablir</translation>
 <translation id="6569060085658103619">Vous consultez une page d'extension</translation>
 <translation id="6573200754375280815">Double perforation à droite</translation>
@@ -1877,6 +1885,7 @@
 <translation id="7118618213916969306">Rechercher l'URL du presse-papiers : <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Fermer les autres onglets ou programmes</translation>
 <translation id="7129409597930077180">Impossible d'effectuer une livraison à cette adresse. Sélectionnez une autre adresse.</translation>
+<translation id="7132939140423847331">Votre administrateur a interdit la copie de ces données.</translation>
 <translation id="7135130955892390533">Afficher l’état</translation>
 <translation id="7138472120740807366">Mode de livraison rapide</translation>
 <translation id="7139724024395191329">Émirat</translation>
@@ -2049,6 +2058,7 @@ Détails supplémentaires :
 <translation id="7654909834015434372">Lorsque vous modifiez des annotations, ce document s'affiche dans son orientation d'origine</translation>
 <translation id="765676359832457558">Masquer les paramètres avancés…</translation>
 <translation id="7658239707568436148">Annuler</translation>
+<translation id="7659878911471462949">Larmes de joie</translation>
 <translation id="7662298039739062396">Paramètre commandé par une extension</translation>
 <translation id="7663736086183791259">Certificat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Non autorisé en navigation privée</translation>
@@ -2149,7 +2159,6 @@ Détails supplémentaires :
 <translation id="7977894662897852582">EDP</translation>
 <translation id="798134797138789862">Les sites peuvent demander à utiliser des données et des appareils de réalité virtuelle</translation>
 <translation id="7984945080620862648">Vous ne pouvez pas consulter le site <ph name="SITE" /> pour le moment, car il a envoyé des identifiants brouillés qui ne peuvent être traités par Chrome. Les erreurs réseau et les attaques sont généralement temporaires. Vous devriez donc pouvoir accéder à cette page plus tard.</translation>
-<translation id="79859296434321399">Pour regarder du contenu de réalité augmentée, installez ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Reliure</translation>
 <translation id="7992044431894087211">Le partage d'écran avec <ph name="APPLICATION_TITLE" /> a repris</translation>
@@ -2253,6 +2262,7 @@ Détails supplémentaires :
 <translation id="830498451218851433">Plier en deux</translation>
 <translation id="8307358339886459768">Petite photo</translation>
 <translation id="8307888238279532626">Les applications installées et leur fréquence d'utilisation</translation>
+<translation id="8317207217658302555">Mettre à jour ARCore?</translation>
 <translation id="831997045666694187">Soirée</translation>
 <translation id="8321476692217554900">Notifications</translation>
 <translation id="8328484624016508118">Lorsque vous fermez tous les onglets de navigation privée, Chrome efface :
@@ -2323,7 +2333,6 @@ Détails supplémentaires :
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Réinitialiser l'autorisation}one{Réinitialiser l'autorisation}other{Réinitialiser les autorisations}}</translation>
 <translation id="8555010941760982128">Utiliser ce code lors du paiement</translation>
 <translation id="8557066899867184262">Le code de vérification de carte (CVC) se trouve au dos de votre carte</translation>
-<translation id="8558485628462305855">Pour regarder du contenu de réalité augmentée, mettez à jour ARCore</translation>
 <translation id="8559762987265718583">Impossible d'établir une connexion privée à <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, car la date et l'heure de votre appareil (<ph name="DATE_AND_TIME" />) sont incorrectes.</translation>
 <translation id="8564182942834072828">Documents séparés/Copies non assemblées</translation>
 <translation id="8564985650692024650">Chromium recommande de réinitialiser votre mot de passe <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> si vous l'avez réutilisé sur d'autres sites.</translation>
@@ -2435,6 +2444,7 @@ Détails supplémentaires :
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, appuyez sur la touche Tabulation, puis sur la touche Entrée pour afficher votre historique de navigation dans Chrome</translation>
 <translation id="8987927404178983737">Mois</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Vous recherchez la version du système? Consultez</translation>
 <translation id="899688752321268742"><ph name="URL" /> veut savoir si vous êtes en train d'utiliser cet appareil</translation>
 <translation id="8996941253935762404">Le site Web que vous allez ouvrir contient des logiciels malveillants</translation>
 <translation id="8997023839087525404">Le serveur a présenté un certificat qui n'a pas été divulgué publiquement par l'intermédiaire de la politique Certificate Transparency. Il s'agit d'une exigence pour certains certificats, afin d'assurer qu'ils sont dignes de confiance et qu'ils offrent une protection contre les attaques.</translation>

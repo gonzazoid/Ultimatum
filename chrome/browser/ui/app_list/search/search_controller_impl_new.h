@@ -16,6 +16,7 @@
 #include "base/observer_list.h"
 #include "chrome/browser/ui/app_list/search/mixer.h"
 #include "chrome/browser/ui/app_list/search/ranking/launch_data.h"
+#include "chrome/browser/ui/app_list/search/ranking/ranker_delegate.h"
 #include "chrome/browser/ui/app_list/search/search_controller.h"
 
 class AppListControllerDelegate;
@@ -32,7 +33,6 @@ namespace app_list {
 
 class SearchMetricsObserver;
 class SearchProvider;
-class RankerDelegate;
 enum class RankingItemType;
 
 // TODO(crbug.com/1199206): This is the new implementation of the search
@@ -53,7 +53,9 @@ class SearchControllerImplNew : public SearchController {
   SearchControllerImplNew& operator=(const SearchControllerImplNew&) = delete;
 
   // SearchController:
-  void Start(const std::u16string& query) override;
+  void StartSearch(const std::u16string& query) override;
+  void StartZeroState(base::OnceClosure on_done,
+                      base::TimeDelta timeout) override;
   void OpenResult(ChromeSearchResult* result, int event_flags) override;
   void InvokeResultAction(ChromeSearchResult* result,
                           ash::SearchResultActionType action) override;
@@ -80,7 +82,14 @@ class SearchControllerImplNew : public SearchController {
   std::u16string get_query() override;
   base::Time session_start() override;
 
+  void set_ranker_delegate_for_test(
+      std::unique_ptr<RankerDelegate> ranker_delegate) {
+    ranker_ = std::move(ranker_delegate);
+  }
+
  private:
+  void RankAndPublish(const ash::AppListSearchResultType provider_type);
+
   Profile* profile_;
 
   // The query associated with the most recent search.

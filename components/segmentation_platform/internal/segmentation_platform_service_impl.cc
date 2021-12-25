@@ -37,6 +37,7 @@
 #include "components/segmentation_platform/internal/signals/histogram_signal_handler.h"
 #include "components/segmentation_platform/internal/signals/signal_filter_processor.h"
 #include "components/segmentation_platform/internal/signals/user_action_signal_handler.h"
+#include "components/segmentation_platform/internal/stats.h"
 #include "components/segmentation_platform/public/config.h"
 
 using optimization_guide::proto::OptimizationTarget;
@@ -103,8 +104,7 @@ SegmentationPlatformServiceImpl::SegmentationPlatformServiceImpl(
       std::move(signal_storage_config_db), clock);
   segmentation_result_prefs_ =
       std::make_unique<SegmentationResultPrefs>(pref_service);
-  proxy_ =
-      std::make_unique<ServiceProxyImpl>(this, segment_info_database_.get());
+  proxy_ = std::make_unique<ServiceProxyImpl>(segment_info_database_.get());
 
   // Construct signal processors.
   user_action_signal_handler_ =
@@ -158,6 +158,13 @@ void SegmentationPlatformServiceImpl::GetSelectedSegment(
   selector->GetSelectedSegment(std::move(callback));
 }
 
+SegmentSelectionResult SegmentationPlatformServiceImpl::GetCachedSegmentResult(
+    const std::string& segmentation_key) {
+  CHECK(segment_selectors_.find(segmentation_key) != segment_selectors_.end());
+  auto& selector = segment_selectors_.at(segmentation_key);
+  return selector->GetCachedSegmentResult();
+}
+
 void SegmentationPlatformServiceImpl::EnableMetrics(
     bool signal_collection_allowed) {
   signal_filter_processor_->EnableMetrics(signal_collection_allowed);
@@ -201,8 +208,11 @@ void SegmentationPlatformServiceImpl::MaybeRunPostInitializationRoutines() {
                       signal_storage_config_initialized_;
 
   OnServiceStatusChanged();
-  if (!init_success)
+  if (!init_success) {
+    stats::RecordSegmentSelectionFailure(
+        stats::SegmentationSelectionFailureReason::kDBInitFailure);
     return;
+  }
 
   model_execution_manager_ = CreateModelExecutionManager(
       model_provider_, task_runner_, all_segment_ids_, clock_,

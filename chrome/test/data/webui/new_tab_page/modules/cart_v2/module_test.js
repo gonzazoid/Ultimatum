@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import {$$, ChromeCartProxy, chromeCartV2Descriptor} from 'chrome://new-tab-page/new_tab_page.js';
+import {$$, ChromeCartProxy, chromeCartV2Descriptor, ModuleHeight} from 'chrome://new-tab-page/new_tab_page.js';
 import {assert} from 'chrome://resources/js/assert.m.js';
 import {loadTimeData} from 'chrome://resources/js/load_time_data.m.js';
 import {assertEquals, assertFalse, assertTrue} from 'chrome://test/chai_assert.js';
@@ -38,7 +38,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
       loadTimeData.overrideValues({ruleBasedDiscountEnabled: false});
     });
 
-    test('creates no module if no cart item', async () => {
+    test('creates empty module if no cart item', async () => {
       // Arrange.
       handler.setResultFor('getMerchantCarts', Promise.resolve({carts: []}));
 
@@ -47,10 +47,10 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Assert.
       assertEquals(1, handler.getCallCount('getMerchantCarts'));
-      assertEquals(null, moduleElement);
+      assertTrue(!!moduleElement);
     });
 
-    test('creates module if cart item', async () => {
+    test('creates filled module if cart item', async () => {
       const carts = [
         {
           merchant: 'Amazon',
@@ -99,7 +99,6 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
       // Assert.
       const cartItems = moduleElement.shadowRoot.querySelectorAll('.cart-item');
       assertEquals(5, cartItems.length);
-      assertEquals(446, moduleElement.offsetHeight);
       assertEquals(1, metrics.count('NewTabPage.Carts.CartCount', 5));
 
       assertEquals('https://amazon.com/', cartItems[0].href);
@@ -157,77 +156,6 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
       assertEquals('https://image10.com', thumbnailList[0].autoSrc);
       assertEquals(null, cartItems[4].querySelector('.thumbnail-fallback'));
     });
-
-    test(
-        'Backend is notified when module is dismissed or restored',
-        async () => {
-          // Arrange.
-          const carts = [
-            {
-              merchant: 'Amazon',
-              cartUrl: {url: 'https://amazon.com'},
-              productImageUrls: [
-                {url: 'https://image1.com'}, {url: 'https://image2.com'},
-                {url: 'https://image3.com'}
-              ],
-            },
-          ];
-          handler.setResultFor('getMerchantCarts', Promise.resolve({carts}));
-          loadTimeData.overrideValues({
-            disableModuleToastMessage: 'hello $1',
-            modulesCartLowerYour: 'world',
-          });
-
-          // Arrange.
-          const moduleElement =
-              assert(await chromeCartV2Descriptor.initialize(0));
-          document.body.append(moduleElement);
-          $$(moduleElement, '#cartItemRepeat').render();
-
-          // Act.
-          const waitForDismissEvent =
-              eventToPromise('dismiss-module', moduleElement);
-          $$(moduleElement, 'ntp-module-header')
-              .dispatchEvent(
-                  new Event('dismiss-button-click', {bubbles: true}));
-          const hideEvent = await waitForDismissEvent;
-          const hideToastMessage = hideEvent.detail.message;
-          const hideRestoreCallback = hideEvent.detail.restoreCallback;
-
-          // Assert.
-          assertEquals(
-              loadTimeData.getString('modulesCartModuleMenuHideToastMessage'),
-              hideToastMessage);
-          assertEquals(1, handler.getCallCount('hideCartModule'));
-          assertEquals(1, metrics.count('NewTabPage.Carts.HideModule'));
-
-          // Act.
-          hideRestoreCallback();
-
-          // Assert.
-          assertEquals(1, handler.getCallCount('restoreHiddenCartModule'));
-          assertEquals(1, metrics.count('NewTabPage.Carts.UndoHideModule'));
-
-          // Act.
-          const waitForDisableEvent =
-              eventToPromise('disable-module', moduleElement);
-          $$(moduleElement, 'ntp-module-header')
-              .dispatchEvent(
-                  new Event('disable-button-click', {bubbles: true}));
-          const disableEvent = await waitForDisableEvent;
-          const disableToastMessage = disableEvent.detail.message;
-          const disableRestoreCallback = disableEvent.detail.restoreCallback;
-
-          // Assert.
-          assertEquals('hello world', disableToastMessage);
-          assertEquals(1, metrics.count('NewTabPage.Carts.RemoveModule'));
-
-          // Act.
-          disableRestoreCallback();
-
-          // Assert.
-          assertEquals(1, metrics.count('NewTabPage.Carts.UndoRemoveModule'));
-        });
 
     test('dismiss and undo single cart item in module', async () => {
       // Arrange.
@@ -399,6 +327,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Arrange.
       const moduleElement = assert(await chromeCartV2Descriptor.initialize(0));
+      moduleElement.style.height = `${ModuleHeight.TALL}px`;
       document.body.append(moduleElement);
       $$(moduleElement, '#cartItemRepeat').render();
       const cartCarousel =
@@ -494,6 +423,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Arrange.
       const moduleElement = assert(await chromeCartV2Descriptor.initialize(0));
+      moduleElement.style.height = `${ModuleHeight.TALL}px`;
       document.body.append(moduleElement);
       $$(moduleElement, '#cartItemRepeat').render();
       const cartCarousel =
@@ -561,6 +491,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Arrange.
       const moduleElement = assert(await chromeCartV2Descriptor.initialize(0));
+      moduleElement.style.height = `${ModuleHeight.TALL}px`;
       document.body.append(moduleElement);
       $$(moduleElement, '#cartItemRepeat').render();
       const cartCarousel =
@@ -757,6 +688,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Arrange.
       const moduleElement = assert(await chromeCartV2Descriptor.initialize(0));
+      moduleElement.style.height = `${ModuleHeight.TALL}px`;
       document.body.append(moduleElement);
       $$(moduleElement, '#cartItemRepeat').render();
       const cartCarousel =
@@ -781,7 +713,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Assert.
       checkScrollButtonDisabled(moduleElement, true, false);
-      checkVisibleRange(moduleElement, 0, 1);
+      checkVisibleRange(moduleElement, 0, 0);
 
       // Act.
       waitForLeftScrollEnableChange =
@@ -794,7 +726,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Assert.
       checkScrollButtonDisabled(moduleElement, false, false);
-      checkVisibleRange(moduleElement, 2, 4);
+      checkVisibleRange(moduleElement, 1, 3);
 
       // Act.
       waitForLeftScrollEnableChange =
@@ -806,7 +738,7 @@ suite('NewTabPageModulesChromeCartModuleTest', () => {
 
       // Assert.
       checkScrollButtonDisabled(moduleElement, true, false);
-      checkVisibleRange(moduleElement, 0, 1);
+      checkVisibleRange(moduleElement, 0, 0);
 
       // Remove the observer.
       cartCarousel.removeEventListener('scroll', onScroll);

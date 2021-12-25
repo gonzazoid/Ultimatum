@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">이용 가능한 혜택</translation>
 <translation id="1312803275555673949">어떤 근거가 있나요?</translation>
 <translation id="131405271941274527">NFC 기기에 휴대전화를 갖다 댈 때 <ph name="URL" />에서 정보를 보내고 받으려고 합니다.</translation>
+<translation id="1314311879718644478">증강 현실 콘텐츠 보기</translation>
 <translation id="1314509827145471431">오른쪽 바인드</translation>
 <translation id="1318023360584041678">탭 그룹에 저장됨</translation>
 <translation id="1319245136674974084">이 앱에 대해 다시 묻지 않음</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">자세히 보기</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">브라우저 버전을 찾는다면 다음으로 이동하세요.</translation>
 <translation id="1476595624592550506">비밀번호 변경</translation>
 <translation id="1483493594462132177">보내기</translation>
 <translation id="1484290072879560759">배송지 주소 선택</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">이 웹페이지를 표시하는 도중 문제가 발생했습니다.</translation>
 <translation id="1586541204584340881">내가 설치한 확장 프로그램</translation>
 <translation id="1588438908519853928">일반</translation>
+<translation id="1589050138437146318">ARCore를 설치하시겠습니까?</translation>
 <translation id="1592005682883173041">로컬 데이터 액세스</translation>
 <translation id="1594030484168838125">선택</translation>
 <translation id="160851722280695521">Chrome 공룡 게임 플레이</translation>
@@ -1252,6 +1255,7 @@
 <translation id="4968522289500246572">모바일용 앱이므로 크기가 제대로 조절되지 않을 수도 있습니다. 문제가 발생하거나 앱이 다시 시작될 수 있습니다.</translation>
 <translation id="4969341057194253438">녹음 파일 삭제</translation>
 <translation id="4973922308112707173">상단 2공 펀칭</translation>
+<translation id="4976702386844183910">최근 방문: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">마이크를 사용하시겠습니까?</translation>
 <translation id="4984339528288761049">Prc5(봉투)</translation>
 <translation id="4989163558385430922">모두 보기</translation>
@@ -1337,6 +1341,7 @@
 <translation id="5215116848420601511">Google Pay에 사용되는 결제 수단 및 주소</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">트레이 13</translation>
+<translation id="5216942107514965959">최근 방문: 오늘</translation>
 <translation id="5222812217790122047">이메일은 필수입니다.</translation>
 <translation id="5230733896359313003">배송지 주소</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1380,6 +1385,7 @@
 <translation id="5333022057423422993">방금 사용한 비밀번호가 정보 유출로 인해 노출된 것으로 확인됩니다. 계정을 보호하려면 저장된 비밀번호를 확인해 보시기 바랍니다.</translation>
 <translation id="5334013548165032829">세부 시스템 로그</translation>
 <translation id="5334145288572353250">주소를 저장하시겠습니까?</translation>
+<translation id="5335920952954443287">두근거리는 하트</translation>
 <translation id="5340250774223869109">애플리케이션이 차단됨</translation>
 <translation id="534295439873310000">NFC 기기</translation>
 <translation id="5344579389779391559">이 페이지에서 금액을 청구할 수 있습니다.</translation>
@@ -1522,6 +1528,7 @@
 <translation id="5869522115854928033">저장된 비밀번호</translation>
 <translation id="5873013647450402046">은행에서 본인 확인을 요청합니다.</translation>
 <translation id="5887400589839399685">저장된 카드</translation>
+<translation id="5887687176710214216">최근 방문: 어제</translation>
 <translation id="5895138241574237353">다시 시작</translation>
 <translation id="5895187275912066135">발급일:</translation>
 <translation id="5901630391730855834">노란색</translation>
@@ -1715,6 +1722,7 @@
 <translation id="6529602333819889595">삭제 다시 실행(&amp;R)</translation>
 <translation id="6545864417968258051">블루투스 검색</translation>
 <translation id="6547208576736763147">왼쪽 2공 펀칭</translation>
+<translation id="6554732001434021288">최근 방문: <ph name="NUM_DAYS" />일 전</translation>
 <translation id="6556866813142980365">다시실행</translation>
 <translation id="6569060085658103619">확장 프로그램 페이지를 보는 중</translation>
 <translation id="6573200754375280815">오른쪽 2공 펀칭</translation>
@@ -1877,6 +1885,7 @@
 <translation id="7118618213916969306">클립보드 URL <ph name="SHORT_URL" /> 검색</translation>
 <translation id="7119414471315195487">다른 탭 또는 프로그램 닫기</translation>
 <translation id="7129409597930077180">이 주소로 배송할 수 없습니다. 다른 주소를 선택하세요.</translation>
+<translation id="7132939140423847331">관리자가 복사를 금지한 데이터입니다.</translation>
 <translation id="7135130955892390533">상태 보기</translation>
 <translation id="7138472120740807366">배달 방법</translation>
 <translation id="7139724024395191329">에미레이트</translation>
@@ -2048,6 +2057,7 @@
 <translation id="7654909834015434372">주석을 수정하면 문서가 원래 방향으로 돌아갑니다.</translation>
 <translation id="765676359832457558">고급 설정 숨기기</translation>
 <translation id="7658239707568436148">취소</translation>
+<translation id="7659878911471462949">기쁨의 눈물</translation>
 <translation id="7662298039739062396">확장 프로그램에서 관리되는 설정</translation>
 <translation id="7663736086183791259">인증서: <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">시크릿 모드에서 허용되지 않음</translation>
@@ -2148,7 +2158,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">가상 현실 기기 및 데이터의 사용을 요청할 수 있음</translation>
 <translation id="7984945080620862648">현재 <ph name="SITE" />에서 Chrome이 처리할 수 없는 암호화된 자격증명 정보를 전송했기 때문에 방문할 수 없습니다. 네트워크 오류와 공격은 대부분 일시적이므로 잠시 후 페이지가 정상화될 것입니다.</translation>
-<translation id="79859296434321399">증강 현실 콘텐츠를 보려면 ARCore를 설치하세요.</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">바인드</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" />과(와)의 화면 공유가 재개되었습니다.</translation>
@@ -2252,6 +2261,7 @@
 <translation id="830498451218851433">폴드 하프</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">설치된 앱 및 앱의 사용 빈도</translation>
+<translation id="8317207217658302555">ARCore를 업데이트하시겠습니까?</translation>
 <translation id="831997045666694187">저녁</translation>
 <translation id="8321476692217554900">알림</translation>
 <translation id="8328484624016508118">모든 시크릿 탭을 종료하면 Chrome에서 다음 항목을 삭제합니다.
@@ -2322,7 +2332,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{권한 재설정}other{권한 재설정}}</translation>
 <translation id="8555010941760982128">결제 시 다음 코드를 사용하세요</translation>
 <translation id="8557066899867184262">CVC는 카드 뒷면에 있습니다.</translation>
-<translation id="8558485628462305855">증강 현실 콘텐츠를 보려면 ARCore를 업데이트하세요.</translation>
 <translation id="8559762987265718583">기기의 날짜와 시간(<ph name="DATE_AND_TIME" />)이 잘못되어 <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />에 대한 비공개 연결을 설정할 수 없습니다.</translation>
 <translation id="8564182942834072828">별도 문서/모으지 않은 사본</translation>
 <translation id="8564985650692024650">다른 사이트에서 비밀번호를 재사용했다면 <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> 비밀번호를 재설정하는 것이 좋습니다.</translation>
@@ -2434,6 +2443,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Tab을 누른 다음 Enter를 눌러 Chrome 방문 기록 보기</translation>
 <translation id="8987927404178983737">월</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">시스템 버전을 찾는다면 다음으로 이동하세요.</translation>
 <translation id="899688752321268742">사용자가 현재 기기를 사용 중인지 <ph name="URL" />에서 알고자 합니다.</translation>
 <translation id="8996941253935762404">방문하려는 사이트에 유해한 프로그램이 있습니다.</translation>
 <translation id="8997023839087525404">서버에서 인증서 투명성 정책을 사용하여 공개되지 않은 인증서를 제시했습니다. 인증서 투명성 정책은 인증서가 신뢰할 수 있으며 공격자로부터 사용자를 보호하고 있음을 보장하기 위한 것으로 일부 인증서의 경우 필수사항입니다.</translation>

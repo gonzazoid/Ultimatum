@@ -356,6 +356,10 @@ void RestrictedCookieManager::ComputeCookiePartitionKey() {
       net::CookiePartitionKeyCollection::FromOptional(cookie_partition_key_);
 }
 
+bool RestrictedCookieManager::IsPartitionedCookiesEnabled() const {
+  return cookie_partition_key_.has_value();
+}
+
 void RestrictedCookieManager::GetAllForUrl(
     const GURL& url,
     const net::SiteForCookies& site_for_cookies,

@@ -16,6 +16,7 @@
 #include "components/metrics/metrics_service_accessor.h"
 #include "ppapi/buildflags/buildflags.h"
 
+class BreadcrumbsStatus;
 class ChromeMetricsServiceClient;
 class ChromePasswordManagerClient;
 class HttpsFirstModeService;
@@ -33,7 +34,7 @@ class ChromeCameraAppUIDelegate;
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
 namespace autofill_assistant {
-class ClientAndroid;
+class AssistantFieldTrialUtilChrome;
 }  // namespace autofill_assistant
 
 namespace domain_reliability {
@@ -112,9 +113,10 @@ class ChromeMetricsServiceAccessor : public metrics::MetricsServiceAccessor {
   static void SetMetricsAndCrashReportingForTesting(const bool* value);
 
  private:
-  friend class autofill_assistant::ClientAndroid;
+  friend class autofill_assistant::AssistantFieldTrialUtilChrome;
   friend class ::CrashesDOMHandler;
   friend class ::FlashDOMHandler;
+  friend class BreadcrumbsStatus;
   friend class ChromeBrowserFieldTrials;
   // For ClangPGO.
   friend class ChromeBrowserMainExtraPartsMetrics;

@@ -25,7 +25,6 @@
 <translation id="1104084341931202936">צפייה בהגדרות הנגישות</translation>
 <translation id="1104621072296271835">ביחד, המכשירים שלך יוכלו לעבוד עוד יותר טוב</translation>
 <translation id="1111781754511998498">Projector</translation>
-<translation id="1119348796022671382">במצב 'צבעים מעוצבים' נעשה שימוש בצבעים שנשלפים מהטפט שלך להוספת קצת צבע לממשק.</translation>
 <translation id="112308213915226829">הסתרה אוטומטית של המדף</translation>
 <translation id="1142002900084379065">תמונות אחרונות</translation>
 <translation id="1148499908455722006">פתיחת תיבת דו-שיח עם מידע על <ph name="USER_NAME" /></translation>
@@ -35,6 +34,7 @@
 <translation id="1175572348579024023">גלילה</translation>
 <translation id="1178581264944972037">השהיה</translation>
 <translation id="1181037720776840403">הסרה</translation>
+<translation id="118437560755358292">כדי לשפר את רמת ההגנה, צריך להזין סיסמה או קוד אימות</translation>
 <translation id="118532027333893379">כדי לצלם את המסך המלא, יש להקיש במקום כלשהו</translation>
 <translation id="1190609913194133056">מרכז התראות</translation>
 <translation id="1190678134285018527">יש להחזיר את המכשיר לגרסה קודמת</translation>
@@ -113,7 +113,6 @@
 <translation id="1632985212731562677">ניתן להשבית את התכונה 'גישה באמצעות מתג' דרך 'הגדרות' &gt; 'נגישות'.</translation>
 <translation id="1637505162081889933"><ph name="NUM_DEVICES" /> מכשירים</translation>
 <translation id="1654477262762802994">הפעלה של שאילתה קולית</translation>
-<translation id="1667964833127753507">במצב 'צבעים ניטרליים' לא נעשה שימוש בצבעים שנשלפו מהטפט, אלא בערכת גוונים ניטרליים, בהירים וכהים.</translation>
 <translation id="1677472565718498478">זמן נותר - <ph name="TIME" /></translation>
 <translation id="1677507110654891115">התכונה <ph name="FEATURE_NAME" /> לא מחוברת.</translation>
 <translation id="1698080062160024910">טיימר של <ph name="TOTAL_TIME" /> · <ph name="LABEL" /></translation>
@@ -132,6 +131,7 @@
 <translation id="1768366657309696705">‏מקשי הקיצור <ph name="LAUNCHER_KEY_NAME" /> + נקודה השתנו. כדי להשתמש במקש Insert, יש להקיש על <ph name="LAUNCHER_KEY_NAME" /> + Shift + ‏Backspace.</translation>
 <translation id="1770726142253415363">הועברה אל שורה <ph name="ROW_NUMBER" />, עמודה <ph name="COLUMN_NUMBER" />.</translation>
 <translation id="1771761307086386028">גלילה ימינה</translation>
+<translation id="1774796056689732716">יומן, <ph name="CURRENT_MONTH_YEAR" />, התאריך שנבחר הוא <ph name="DATE" />.</translation>
 <translation id="1787955149152357925">כבוי</translation>
 <translation id="1804572139604454141">ההקלטה הסתיימה כי נפח האחסון בדיסק כמעט נגמר</translation>
 <translation id="181103072419391116">עוצמת האות: <ph name="SIGNAL_STRENGTH" />, הרשת מנוהלת על ידי מנהל המערכת שלך</translation>
@@ -191,6 +191,7 @@
 <translation id="2222841058024245321">שולחן עבודה וירטואלי 7</translation>
 <translation id="2224075387478458881">הקלטת המסך אסורה כשמוצג תוכן מוגן</translation>
 <translation id="225680501294068881">מתבצעת סריקה לאיתור מכשירים...</translation>
+<translation id="2257486738914982088">משהו השתבש במהלך ההורדה של <ph name="FILENAME" /></translation>
 <translation id="2268130516524549846">‏Bluetooth מושבת</translation>
 <translation id="2268813581635650749">הוצאת כולם</translation>
 <translation id="2269016722240250274">אפליקציה כלשהי משתמשת במיקרופון</translation>
@@ -338,6 +339,7 @@
 <translation id="3307642347673023554">עברת למצב מחשב נייד</translation>
 <translation id="3308453408813785101">ל-<ph name="USER_EMAIL_ADDRESS" /> תהיה עדיין אפשרות להיכנס לחשבון מאוחר יותר.</translation>
 <translation id="3321628682574733415">קוד הורה שגוי</translation>
+<translation id="3339826665088060472">צילום מסך, כלים ליצירת צילומי מסך והקלטות מסך</translation>
 <translation id="3341303451326249809">צילום המסך בוצע</translation>
 <translation id="334252345105450327">יצירת צילום מסך</translation>
 <translation id="3351879221545518001">מתבצעת עכשיו העברה של מסך.</translation>
@@ -394,6 +396,7 @@
 <translation id="3606978283550408104">צג ברייל מחובר</translation>
 <translation id="3615926715408477684">‏כשמפעילים את חבילת הגלישה, מופעל גם Bluetooth</translation>
 <translation id="3616883743181209306">התפריט הועבר לפינה השמאלית העליונה של המסך.</translation>
+<translation id="3619536907358025872">הגדרות של צילום מסך</translation>
 <translation id="3621202678540785336">קלט</translation>
 <translation id="3621712662352432595">הגדרות אודיו</translation>
 <translation id="3626281679859535460">בהירות</translation>
@@ -470,7 +473,6 @@
 <translation id="412298498316631026">חלון</translation>
 <translation id="4129129681837227511">להצגת הודעות במסך הנעילה, יש לבטל את הנעילה כדי לשנות את ההגדרה</translation>
 <translation id="4146833061457621061">השמעת מוזיקה</translation>
-<translation id="4157822100366708405">הגדרות של עיצוב כהה</translation>
 <translation id="4173958948577803258">ה</translation>
 <translation id="4177913004758410636">{0,plural, =1{עליך לעדכן את המכשיר בתוך יום אחד}two{עליך לעדכן את המכשיר תוך יומיים}many{עליך לעדכן את המכשיר תוך # ימים}other{עליך לעדכן את המכשיר תוך # ימים}}</translation>
 <translation id="4181841719683918333">שפות</translation>
@@ -492,6 +494,7 @@
 <translation id="4269883910223712419">מנהל המכשיר הזה יכול:</translation>
 <translation id="4274537685965975248">‏מקשי הקיצור Ctrl ‏+ ‏Alt + חץ למטה הוחלפו. כדי לדמות את הפעולה של המקש End, יש להקיש על <ph name="LAUNCHER_KEY_NAME" /> + החץ ימינה.</translation>
 <translation id="4279490309300973883">שיקוף</translation>
+<translation id="4283888303416325161">כדי לשפר את רמת ההגנה, צריך להזין סיסמה</translation>
 <translation id="4285498937028063278">ביטול הצמדה</translation>
 <translation id="429402653707266969">החלפת המצב של מיקום סרגל הכלים</translation>
 <translation id="4294319844246081198">בוקר טוב <ph name="GIVEN_NAME" />,</translation>
@@ -583,6 +586,7 @@
 <translation id="4831034276697007977">הקליקים האוטומטיים יושבתו. האם להמשיך?</translation>
 <translation id="4849058404725798627">הדגשה של האובייקט במיקוד המקלדת</translation>
 <translation id="485592688953820832">ללא פעולה (השהיה)</translation>
+<translation id="4860284199500934869">צריך לבדוק את החיבור לרשת כדי להוריד את <ph name="FILENAME" /></translation>
 <translation id="486056901304535126">‏יתבצע ניסיון הורדה מאוחר יותר. הדיבור יישלח אל Google לעיבוד עד שההורדה תושלם.</translation>
 <translation id="4868492592575313542">מופעלת</translation>
 <translation id="4872237917498892622">‏Alt + חיפוש או Shift</translation>
@@ -617,6 +621,8 @@
 <translation id="5075554201838155866">לפתיחת הכתוביות</translation>
 <translation id="5078796286268621944">‏PIN שגוי</translation>
 <translation id="5083553833479578423">‏אפשר להפעיל תכונות Assistant נוספות.</translation>
+<translation id="5090752371472782287">‏העברה (cast) למכשיר <ph name="MANAGER" /></translation>
+<translation id="5106223312672646208">התאמה אישית</translation>
 <translation id="5117590920725113268">הצגת החודש הבא</translation>
 <translation id="5136175204352732067">חוברה מקלדת אחרת</translation>
 <translation id="5147567197700016471">הנעילה בוטלה</translation>
@@ -625,6 +631,7 @@
 <translation id="5168181903108465623">מכשירי העברה זמינים</translation>
 <translation id="5170568018924773124">הצגה בתיקייה</translation>
 <translation id="5176318573511391780">הקלטה של מסך חלקי</translation>
+<translation id="5198413532174090167"><ph name="DATE" />, <ph name="NUMBER" /> אירועים</translation>
 <translation id="5198715732953550718">האפליקציה <ph name="MOVED_APP_NAME" /> משולבת ביחד עם האפליקציה <ph name="IN_PLACE_APP" /> ליצירת תיקייה חדשה.</translation>
 <translation id="5206028654245650022"><ph name="APP_NAME" />, <ph name="NOTIFICATION_TITLE" />: <ph name="MESSAGE" />, <ph name="PHONE_NAME" /></translation>
 <translation id="5206057955438543357">{NUM_NOTIFICATIONS,plural, =1{התראה אחת נוספת}two{# התראות נוספות}many{# התראות נוספות}other{# התראות נוספות}}</translation>
@@ -661,6 +668,7 @@
 <translation id="5426063383988017631">תפריט ההגדרות נסגר</translation>
 <translation id="5428899915242071344">אני רוצה להתחיל לבחור</translation>
 <translation id="5430931332414098647">שיתוף אינטרנט מיידי בין ניידים</translation>
+<translation id="5431318178759467895">צבע</translation>
 <translation id="5431825016875453137">OpenVPN / L2TP</translation>
 <translation id="5433020815079095860">קלט אודיו</translation>
 <translation id="544691375626129091">כל המשתמשים הזמינים כבר נוספו לפעילות זו באתר.</translation>
@@ -708,6 +716,7 @@
 <translation id="5769373120130404283">מסך פרטיות</translation>
 <translation id="5777841717266010279">להפסיק את שיתוף המסך?</translation>
 <translation id="5779721926447984944">קבצים מוצמדים</translation>
+<translation id="5788127256798019331">‏קובצי Play</translation>
 <translation id="5790085346892983794">הצלחה</translation>
 <translation id="5805809050170488595">יש ללחוץ כדי להפעיל את <ph name="NETWORK_NAME" /></translation>
 <translation id="5820394555380036790">‏מערכת ההפעלה של Chromium</translation>
@@ -760,6 +769,7 @@
 <translation id="607652042414456612">‏מכשירי Bluetooth קרובים יכולים לאתר את המחשב שלך, והוא יופיע כ-"<ph name="NAME" />" עם הכתובת <ph name="ADDRESS" /></translation>
 <translation id="6114505516289286752">הורדת קובצי הדיבור של <ph name="LANGUAGE" /> הסתיימה</translation>
 <translation id="6119360623251949462"><ph name="CHARGING_STATE" />. <ph name="BATTERY_SAVER_STATE" /></translation>
+<translation id="6121838516699723042">אישור ההורדה של <ph name="FILENAME" /></translation>
 <translation id="612734058257491180">‏Google Assistant לא זמינה בגלישה כאורח.</translation>
 <translation id="6134259848159370930">אפשר לחפש במכשיר, באפליקציות ובאינטרנט.</translation>
 <translation id="6137566720514957455">פתיחת תיבת דו-דיח להסרה של <ph name="USER_EMAIL_ADDRESS" /></translation>
@@ -795,9 +805,11 @@
 <translation id="643147933154517414">הפעולה הושלמה</translation>
 <translation id="6431865393913628856">הקלטת המסך</translation>
 <translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> במכשיר <ph name="RECEIVER_NAME" /></translation>
+<translation id="6447111710783417522"><ph name="DATE" />, אירוע (<ph name="NUMBER" />)</translation>
 <translation id="6452181791372256707">דחייה</translation>
 <translation id="6453179446719226835">שינוי השפה הסתיים</translation>
 <translation id="6459472438155181876">הרחבת המסך אל <ph name="DISPLAY_NAME" /> מתבצעת</translation>
+<translation id="6477681113376365978">לא ניתן להוריד את הקובץ</translation>
 <translation id="6482559668224714696">זכוכית מגדלת במסך מלא</translation>
 <translation id="6490471652906364588">‏מכשיר עם יציאת USB-C (יציאה ימנית)</translation>
 <translation id="6491071886865974820">בהתאם לדרישה של <ph name="MANAGER" />, עליך לעדכן את ה-<ph name="DEVICE_TYPE" /> לפני המועד האחרון</translation>
@@ -809,7 +821,10 @@
 <translation id="6528179044667508675">נא לא להפריע</translation>
 <translation id="65320610082834431">אמוג'י</translation>
 <translation id="6537924328260219877">עוצמת האות: <ph name="SIGNAL_STRENGTH" />, סוללת הטלפון: <ph name="BATTERY_STATUS" /></translation>
+<translation id="6539852571005954999">מתבצעת סריקה של קובץ ההורדה <ph name="FILENAME" /></translation>
 <translation id="6542521951477560771">ההעברה אל <ph name="RECEIVER_NAME" /> מתבצעת</translation>
+<translation id="655633303491376835"><ph name="APP_NAME" />
+התקנה חדשה</translation>
 <translation id="6559976592393364813">יש לבקש ממנהל המערכת</translation>
 <translation id="6565007273808762236">‏החיבור ל-eSIM לא זמין</translation>
 <translation id="6570831796530454248">{0,plural, =1{עליך לעדכן את המכשיר בתוך שעה אחת}two{עליך לעדכן את המכשיר בתוך שעתיים}many{עליך לעדכן את המכשיר בתוך # שעות}other{עליך לעדכן את המכשיר בתוך # שעות}}</translation>
@@ -841,6 +856,7 @@
 <translation id="6723839937902243910">חשמל</translation>
 <translation id="6727969043791803658">‏מחובר, ‎<ph name="BATTERY_PERCENTAGE" />%‎ סוללה</translation>
 <translation id="6732800389263199929">‎+<ph name="COUNT" /></translation>
+<translation id="6739144137573853180">מעבר להגדרות</translation>
 <translation id="6751052314767925245">התכונה הזו נאכפת על ידי מנהל המערכת</translation>
 <translation id="6751826523481687655">מעקב הביצועים פועל</translation>
 <translation id="6752912906630585008">שולחן העבודה <ph name="REMOVED_DESK" /> הוסר ושולב עם שולחן העבודה <ph name="RECEIVE_DESK" /></translation>
@@ -853,6 +869,7 @@
 <translation id="6811454077060061666">‏האפליקציה 'Google Drive לשולחן העבודה' לא זמינה</translation>
 <translation id="6818242057446442178">מילה אחת אחורה</translation>
 <translation id="6820676911989879663">הגיע הזמן להפסקה</translation>
+<translation id="6827049576281411231">סגירת חלונית האירועים</translation>
 <translation id="6836499262298959512">קובץ מסוכן</translation>
 <translation id="6837064795450991317">הסתרת הסרגל של שולחנות העבודה הווירטואליים</translation>
 <translation id="6852052252232534364">תופעל בלחיצה</translation>
@@ -860,6 +877,7 @@
 <translation id="685782768769951078">{NUM_DIGITS,plural, =1{נשארה ספרה אחת}two{נשארו # ספרות}many{נשארו # ספרות}other{נשארו # ספרות}}</translation>
 <translation id="6867938213751067702">ההורדה של <ph name="FILENAME" /> הושהתה</translation>
 <translation id="6878400149835617132">קיצור הדרך מושבת</translation>
+<translation id="6884665277231944629">חזרה להיום</translation>
 <translation id="6886172995547742638">‏ייתכן שהביצועים של <ph name="DEVICE_TYPE" /> יהיו נמוכים יותר. יש להשתמש במתאם מתח מאושר בהספק של <ph name="PREFERRED_MINIMUM_POWER" /> ואט לפחות, או מסוג USB-C.</translation>
 <translation id="688631446150864480">יש להקיש על מקש החץ למטה כדי לעבור בין חלונות</translation>
 <translation id="6896758677409633944">העתקה</translation>
@@ -946,6 +964,7 @@
 <translation id="7497767806359279797">בחירת שפה ומקלדת</translation>
 <translation id="7509246181739783082">אימות זהות</translation>
 <translation id="7513622367902644023">נבחר מצב של צילום מסך</translation>
+<translation id="7513922695575567867">יומן, השבוע של <ph name="DATE" />, התאריך שנבחר הוא <ph name="SELECTED_DATE" />.</translation>
 <translation id="7514365320538308">הורדה</translation>
 <translation id="7526573455193969409">ייתכן שהרשת מנוטרת</translation>
 <translation id="7536035074519304529">‏כתובת IP: <ph name="ADDRESS" /></translation>
@@ -957,6 +976,7 @@
 ייתכן שהודעות, חלונות ותיבות דו-שיח יתפצלו בהמשך בין שולחנות עבודה.</translation>
 <translation id="7569509451529460200">‏כתב ברייל ו-ChromeVox מופעלים</translation>
 <translation id="7569983096843329377">שחור</translation>
+<translation id="757941033127302446">מחובר</translation>
 <translation id="7579778809502851308">צילום מסך</translation>
 <translation id="7590883480672980941">הגדרות קלט</translation>
 <translation id="7593891976182323525">‏חיפוש או Shift</translation>
@@ -964,7 +984,6 @@
 <translation id="7600875258240007829">הצגת כל ההתראות</translation>
 <translation id="7607002721634913082">ההורדה בהשהיה</translation>
 <translation id="7610198039767537854">התמונות האחרונות מזיכרון המצלמה של הטלפון יוצגו ב-<ph name="DEVICE_TYPE" /></translation>
-<translation id="7618774594543487847">ניטרלי</translation>
 <translation id="7624117708979618027">‎<ph name="TEMPERATURE_F" />° F</translation>
 <translation id="7631906263969450674">עט סימון</translation>
 <translation id="7633755430369750696">הצגה של הרשאות שיתוף בקרבת מקום.</translation>
@@ -978,6 +997,7 @@
 <translation id="7662283695561029522">יש להקיש כדי להגדיר</translation>
 <translation id="7705524343798198388">VPN</translation>
 <translation id="7714767791242455379">הוספה של רשת סלולרית חדשה</translation>
+<translation id="7720410380936703141">ניסיון חוזר</translation>
 <translation id="7723389094756330927">{NUM_NOTIFICATIONS,plural, =1{הודעה אחת}two{2 הודעות}many{# הודעות}other{# הודעות}}</translation>
 <translation id="7724603315864178912">חיתוך</translation>
 <translation id="7745560842763881396">הצגת האפליקציות במדף</translation>
@@ -1030,6 +1050,7 @@
 <translation id="8035152190676905274">עט</translation>
 <translation id="8036504271468642248">המשפט הקודם</translation>
 <translation id="8042893070933512245">פתיחת התפריט של הגדרות הנגישות</translation>
+<translation id="8042925093898452104">סגירת המידע המפורט</translation>
 <translation id="8048123526339889627">‏הגדרות Bluetooth</translation>
 <translation id="8051716679295756675">קיימת כבר תבנית בשם <ph name="DESK_TEMPLATE_NAME" /></translation>
 <translation id="8052898407431791827">הועתק ללוח</translation>
@@ -1099,6 +1120,7 @@
 <translation id="8513108775083588393">סיבוב אוטומטי</translation>
 <translation id="851458219935658693">הצגת חלונות משולחן העבודה הווירטואלי הנוכחי, לחצן הבחירה נבחר</translation>
 <translation id="8517041960877371778">ייתכן שה-<ph name="DEVICE_TYPE" /> לא ייטען כשהוא פועל.</translation>
+<translation id="8551588720239073785">הגדרות תאריך ושעה</translation>
 <translation id="8553395910833293175">כבר מוקצה לכל שולחנות העבודה הווירטואליים.</translation>
 <translation id="856298576161209842">לפי ההמלצה של <ph name="MANAGER" />, כדאי לעדכן את ה-<ph name="DEVICE_TYPE" /></translation>
 <translation id="8563862697512465947">הגדרות התראה</translation>
@@ -1118,7 +1140,6 @@
 <translation id="8660331759611631213">השורש הריבועי של 71</translation>
 <translation id="8663756353922886599"><ph name="CONNECTION_STATUS" />, עוצמת האות: <ph name="SIGNAL_STRENGTH" /></translation>
 <translation id="8664753092453405566">צפייה ברשימת הרשתות. <ph name="STATE_TEXT" /></translation>
-<translation id="8668052347555487755">מצב הצבעים</translation>
 <translation id="8676770494376880701">חובר מטען בעל מתח נמוך</translation>
 <translation id="8683506306463609433">מעקב הביצועים פעיל</translation>
 <translation id="8685326675965865247">אפשר לחפש במכשיר, באפליקציות, בהגדרות ובאינטרנט. בעזרת מקשי החיצים ניתן לעבור בין האפליקציות.</translation>
@@ -1152,7 +1173,6 @@
 <translation id="8896630965521842259">התבנית <ph name="DESK_TEMPLATE_NAME" /> תימחק באופן סופי</translation>
 <translation id="890616557918890486">שינוי המקור</translation>
 <translation id="8909138438987180327">שיעור הטעינה של הסוללה הוא <ph name="PERCENTAGE" /> אחוזים.</translation>
-<translation id="8913384980486163186">מעוצב (ברירת מחדל)</translation>
 <translation id="8921554779039049422">+H</translation>
 <translation id="8921624153894383499">‏Google Assistant לא מדברת בשפה הזאת.</translation>
 <translation id="8926951137623668982">המדף תמיד מוסתר</translation>
@@ -1164,6 +1184,7 @@
 <translation id="8983038754672563810">HSPA</translation>
 <translation id="8990809378771970590">מקלדת בשימוש: <ph name="IME_NAME" /></translation>
 <translation id="899350903320462459">יש לבטל את נעילת המכשיר כ-<ph name="LOGIN_ID" /> על מנת לבצע את פעולת ההודעה</translation>
+<translation id="9000771174482730261">ניהול האחסון</translation>
 <translation id="9017320285115481645">‏יש להזין את קוד הגישה להורים עבור Family Link.</translation>
 <translation id="9024331582947483881">מסך מלא</translation>
 <translation id="9047624247355796468">פתיחת ההגדרות של <ph name="NETWORK_NAME" /></translation>
@@ -1211,6 +1232,7 @@
 <translation id="938963181863597773">אירועים קרובים ביומן שלי</translation>
 <translation id="945522503751344254"> שליחת משוב</translation>
 <translation id="951991426597076286">דחייה</translation>
+<translation id="954052413789300507">אין מספיק נפח אחסון פנוי בשביל <ph name="FILENAME" />. עליך לפנות מקום.</translation>
 <translation id="974545358917229949">מוצגות <ph name="RESULT_COUNT" /> תוצאות עבור השאילתה: <ph name="QUERY" /></translation>
 <translation id="98515147261107953">לרוחב</translation>
 <translation id="990277280839877440">החלון <ph name="WINDOW_TITILE" /> נסגר.</translation>

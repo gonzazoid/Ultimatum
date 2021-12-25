@@ -6,8 +6,12 @@
 
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/task_environment.h"
+#include "base/time/clock.h"
 #include "chromeos/services/bluetooth_config/fake_adapter_state_controller.h"
+#include "chromeos/services/bluetooth_config/fake_device_name_manager.h"
+#include "device/bluetooth/chromeos/bluetooth_utils.h"
 #include "device/bluetooth/test/mock_bluetooth_adapter.h"
 #include "device/bluetooth/test/mock_bluetooth_device.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -22,7 +26,8 @@ using NiceMockDevice =
 
 const uint32_t kTestBluetoothClass = 1337u;
 const char kTestBluetoothName[] = "testName";
-
+const char kTestBluetoothNickname[] = "testNickname";
+const base::TimeDelta kTestDuration = base::Milliseconds(1000);
 }  // namespace
 
 class DeviceOperationHandlerImplTest : public testing::Test {
@@ -48,11 +53,40 @@ class DeviceOperationHandlerImplTest : public testing::Test {
             this, &DeviceOperationHandlerImplTest::GetMockDevices));
 
     device_operation_handler_ = std::make_unique<DeviceOperationHandlerImpl>(
-        &fake_adapter_state_controller_, mock_adapter_);
+        &fake_adapter_state_controller_, mock_adapter_,
+        &fake_device_name_manager_);
   }
 
   void SetBluetoothSystemState(mojom::BluetoothSystemState system_state) {
     fake_adapter_state_controller_.SetSystemState(system_state);
+  }
+
+  void AssertHistogramMetrics(int success_count, int failure_count) {
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Result",
+        /*success=*/false, failure_count);
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Result",
+        /*success=*/true, success_count);
+  }
+
+  void AssertDurationHistogramMetrics(base::TimeDelta bucket,
+                                      int success_count,
+                                      int failure_count) {
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Success",
+        bucket.InMilliseconds(), success_count);
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Success."
+        "Classic",
+        bucket.InMilliseconds(), success_count);
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Failure",
+        bucket.InMilliseconds(), failure_count);
+    histogram_tester.ExpectBucketCount(
+        "Bluetooth.ChromeOS.UserInitiatedReconnectionAttempt.Duration.Failure."
+        "Classic",
+        bucket.InMilliseconds(), failure_count);
   }
 
   void AddDevice(std::string* id_out) {
@@ -91,6 +125,10 @@ class DeviceOperationHandlerImplTest : public testing::Test {
               forget_callbacks_ = std::make_pair(std::move(callback),
                                                  std::move(error_callback));
             }));
+    ON_CALL(*mock_device, GetType()).WillByDefault(testing::Invoke([]() {
+      return device::BluetoothTransport::BLUETOOTH_TRANSPORT_CLASSIC;
+    }));
+
     mock_devices_.push_back(std::move(mock_device));
   }
 
@@ -122,8 +160,12 @@ class DeviceOperationHandlerImplTest : public testing::Test {
     results_.emplace_back(device_id, operation, success);
   }
 
-  void FastForwardOperationTimeout() {
-    task_environment_.FastForwardBy(DeviceOperationHandler::kOperationTimeout);
+  base::TimeDelta GetOperationTimeout() {
+    return DeviceOperationHandler::kOperationTimeout;
+  }
+
+  void FastForwardOperation(base::TimeDelta time) {
+    task_environment_.FastForwardBy(time);
   }
 
   const std::vector<std::tuple<std::string, Operation, bool>>& results() {
@@ -169,6 +211,17 @@ class DeviceOperationHandlerImplTest : public testing::Test {
     forget_callbacks_.reset();
   }
 
+  void SetDeviceNickname(const std::string& device_id) {
+    fake_device_name_manager_.SetDeviceNickname(device_id,
+                                                kTestBluetoothNickname);
+  }
+
+  absl::optional<std::string> GetDeviceNickname(const std::string& device_id) {
+    return fake_device_name_manager_.GetDeviceNickname(device_id);
+  }
+
+  base::HistogramTester histogram_tester;
+
  private:
   std::vector<const device::BluetoothDevice*> GetMockDevices() {
     std::vector<const device::BluetoothDevice*> devices;
@@ -196,6 +249,7 @@ class DeviceOperationHandlerImplTest : public testing::Test {
 
   FakeAdapterStateController fake_adapter_state_controller_;
   scoped_refptr<testing::NiceMock<device::MockBluetoothAdapter>> mock_adapter_;
+  FakeDeviceNameManager fake_device_name_manager_;
 
   std::unique_ptr<DeviceOperationHandlerImpl> device_operation_handler_;
 };
@@ -207,29 +261,44 @@ TEST_F(DeviceOperationHandlerImplTest,
   // Connect should fail due to Bluetooth being disabled.
   SetBluetoothSystemState(mojom::BluetoothSystemState::kDisabled);
   ConnectDevice(device_id);
-  EXPECT_EQ(results()[0],
-            std::make_tuple(device_id, Operation::kConnect, /*success=*/false));
+  EXPECT_EQ(results()[0], std::make_tuple(device_id, Operation::kConnect,
+                                          /*success=*/false));
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/1);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/0,
+                                 /*failure_count=*/0);
 
   // Connect should fail due to device not being found.
   SetBluetoothSystemState(mojom::BluetoothSystemState::kEnabled);
   ConnectDevice(device_id);
   EXPECT_EQ(results()[1],
             std::make_tuple(device_id, Operation::kConnect, false));
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/2);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/0,
+                                 /*failure_count=*/0);
 
   // Add the device and simulate BluetoothDevice::Connect() failing.
   AddDevice(&device_id);
   ConnectDevice(device_id);
+  FastForwardOperation(kTestDuration);
   EXPECT_TRUE(HasPendingConnectCallback());
   InvokePendingConnectCallback(/*success=*/false);
-  EXPECT_EQ(results()[2],
-            std::make_tuple(device_id, Operation::kConnect, /*success=*/false));
+  EXPECT_EQ(results()[2], std::make_tuple(device_id, Operation::kConnect,
+                                          /*success=*/false));
+
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/3);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/0,
+                                 /*failure_count=*/1);
 
   // Simulate BluetoothDevice::Connect() succeeding.
   ConnectDevice(device_id);
   EXPECT_TRUE(HasPendingConnectCallback());
+  FastForwardOperation(kTestDuration);
   InvokePendingConnectCallback(/*success=*/true);
-  EXPECT_EQ(results()[3],
-            std::make_tuple(device_id, Operation::kConnect, /*success=*/true));
+  EXPECT_EQ(results()[3], std::make_tuple(device_id, Operation::kConnect,
+                                          /*success=*/true));
+  AssertHistogramMetrics(/*success_count=*/1, /*failure_count=*/3);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/1,
+                                 /*failure_count=*/1);
 }
 
 TEST_F(DeviceOperationHandlerImplTest, DisconnectNotFoundFailThenSucceed) {
@@ -256,13 +325,13 @@ TEST_F(DeviceOperationHandlerImplTest, DisconnectNotFoundFailThenSucceed) {
                                           /*success=*/true));
 }
 
-TEST_F(DeviceOperationHandlerImplTest, ForgetNotFoundFailThenSucceed) {
+TEST_F(DeviceOperationHandlerImplTest, ForgetNotFoundThenSucceed) {
   std::string device_id = "testid";
 
   // Forget should fail due to device not being found.
   ForgetDevice(device_id);
-  EXPECT_EQ(results()[0],
-            std::make_tuple(device_id, Operation::kForget, /*success=*/false));
+  EXPECT_EQ(results()[0], std::make_tuple(device_id, Operation::kForget,
+                                          /*success=*/false));
 
   // Add and forget the device.
   AddDevice(&device_id);
@@ -271,8 +340,23 @@ TEST_F(DeviceOperationHandlerImplTest, ForgetNotFoundFailThenSucceed) {
   // Forgetting a device will never fail, and the handler will immediately
   // notify that the operation finished successfully, so don't bother checking
   // for pending callbacks.
-  EXPECT_EQ(results()[1],
+  EXPECT_EQ(results()[1], std::make_tuple(device_id, Operation::kForget,
+                                          /*success=*/true));
+}
+
+TEST_F(DeviceOperationHandlerImplTest, ForgettingDeviceRemovesNickname) {
+  std::string device_id;
+  AddDevice(&device_id);
+
+  SetDeviceNickname(device_id);
+  absl::optional<std::string> nickname = GetDeviceNickname(device_id);
+  EXPECT_TRUE(nickname.has_value());
+  EXPECT_EQ(kTestBluetoothNickname, nickname.value());
+
+  ForgetDevice(device_id);
+  EXPECT_EQ(results()[0],
             std::make_tuple(device_id, Operation::kForget, /*success=*/true));
+  EXPECT_FALSE(GetDeviceNickname(device_id).has_value());
 }
 
 TEST_F(DeviceOperationHandlerImplTest, SimultaneousOperationsAreQueued) {
@@ -292,11 +376,15 @@ TEST_F(DeviceOperationHandlerImplTest, SimultaneousOperationsAreQueued) {
   // not be called yet.
   DisconnectDevice(device_id2);
   EXPECT_FALSE(HasPendingDisconnectCallback());
+  FastForwardOperation(kTestDuration);
 
   // Invoke the first connect callback.
   InvokePendingConnectCallback(/*success=*/false);
   EXPECT_EQ(results()[0], std::make_tuple(device_id1, Operation::kConnect,
                                           /*success=*/false));
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/1);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/0,
+                                 /*failure_count=*/1);
 
   // Now the second operation's BluetoothDevice::Disconnect() should have been
   // called.
@@ -314,8 +402,8 @@ TEST_F(DeviceOperationHandlerImplTest, SimultaneousOperationsAreQueued) {
                                           /*success=*/true));
 
   // The forget call should immediately fail due to Bluetooth being disabled.
-  EXPECT_EQ(results()[2],
-            std::make_tuple(device_id3, Operation::kForget, /*success=*/false));
+  EXPECT_EQ(results()[2], std::make_tuple(device_id3, Operation::kForget,
+                                          /*success=*/false));
 }
 
 TEST_F(DeviceOperationHandlerImplTest, OperationsTimeout) {
@@ -335,14 +423,17 @@ TEST_F(DeviceOperationHandlerImplTest, OperationsTimeout) {
 
   // Simulate connect timing out. The operation should finish with a failure
   // result and the disconnect started.
-  FastForwardOperationTimeout();
+  FastForwardOperation(GetOperationTimeout());
   EXPECT_EQ(results()[0], std::make_tuple(device_id1, Operation::kConnect,
                                           /*success=*/false));
   EXPECT_TRUE(HasPendingDisconnectCallback());
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/1);
+  AssertDurationHistogramMetrics(GetOperationTimeout(), /*success_count=*/0,
+                                 /*failure_count=*/1);
 
   // Simulate disconnect timing out. The operation should finish with a failure
   // result.
-  FastForwardOperationTimeout();
+  FastForwardOperation(GetOperationTimeout());
   EXPECT_EQ(results()[1], std::make_tuple(device_id2, Operation::kDisconnect,
                                           /*success=*/false));
 }
@@ -353,14 +444,18 @@ TEST_F(DeviceOperationHandlerImplTest, OperationCompletesBeforeTimeout) {
 
   // Connect to device.
   ConnectDevice(device_id);
+  FastForwardOperation(kTestDuration);
   EXPECT_TRUE(HasPendingConnectCallback());
   InvokePendingConnectCallback(/*success=*/true);
   EXPECT_EQ(results()[0], std::make_tuple(device_id, Operation::kConnect,
                                           /*success=*/true));
+  AssertHistogramMetrics(/*success_count=*/1, /*failure_count=*/0);
+  AssertDurationHistogramMetrics(kTestDuration, /*success_count=*/1,
+                                 /*failure_count=*/0);
 
   // Fast forward to where the timer would timeout if it was still running. This
   // will crash if the timer isn't cancelled after the operation finished.
-  FastForwardOperationTimeout();
+  FastForwardOperation(GetOperationTimeout());
 }
 
 TEST_F(DeviceOperationHandlerImplTest, OperationCompletesAfterTimeout) {
@@ -380,10 +475,13 @@ TEST_F(DeviceOperationHandlerImplTest, OperationCompletesAfterTimeout) {
 
   // Simulate connect timing out. The operation should finish with a failure
   // result and the disconnect started.
-  FastForwardOperationTimeout();
+  FastForwardOperation(GetOperationTimeout());
   EXPECT_EQ(results()[0], std::make_tuple(device_id1, Operation::kConnect,
                                           /*success=*/false));
   EXPECT_TRUE(HasPendingDisconnectCallback());
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/1);
+  AssertDurationHistogramMetrics(GetOperationTimeout(), /*success_count=*/0,
+                                 /*failure_count=*/1);
 
   // Simulate the connect call now finishing after the timeout. This should not
   // cause the current operation (disconnect) to finish with a result.
@@ -394,6 +492,9 @@ TEST_F(DeviceOperationHandlerImplTest, OperationCompletesAfterTimeout) {
   InvokePendingDisconnectCallback(/*success=*/true);
   EXPECT_EQ(results()[1], std::make_tuple(device_id2, Operation::kDisconnect,
                                           /*success=*/true));
+  AssertHistogramMetrics(/*success_count=*/0, /*failure_count=*/1);
+  AssertDurationHistogramMetrics(GetOperationTimeout(), /*success_count=*/0,
+                                 /*failure_count=*/1);
 }
 
 }  // namespace bluetooth_config

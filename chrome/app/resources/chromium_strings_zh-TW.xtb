@@ -34,6 +34,7 @@
 <translation id="2313870531055795960">可使用儲存在 Chromium 中的不安全網站清單檢查網址。如果有網站試圖竊取你的密碼，或當你下載有害檔案時，Chromium 可能也會將網址 (包括部分網頁內容) 傳送給安全瀏覽功能。</translation>
 <translation id="2343156876103232566">如要將號碼從這裡傳送到 Android 手機，請在這兩部裝置上登入 Chromium。</translation>
 <translation id="2347108572062610441">這個擴充功能已變更 Chromium 啟動時所顯示的網頁。</translation>
+<translation id="2359808026110333948">繼續</translation>
 <translation id="2396765026452590966">擴充功能「<ph name="EXTENSION_NAME" />」已變更 Chromium 啟動時所顯示的網頁。</translation>
 <translation id="2401032172288869980">Chromium 需要相機權限和麥克風權限，才能執行這個網站要求的功能</translation>
 <translation id="2483889755041906834">在 Chromium 中</translation>
@@ -108,20 +109,22 @@
 <translation id="4271805377592243930">前往 Chromium 說明頁面</translation>
 <translation id="4285930937574705105">不明錯誤導致安裝失敗。如果目前 Chromium 正在執行，請關閉 Chromium，然後再試一次。</translation>
 <translation id="4407044323746248786">確定要結束 Chromium 嗎？</translation>
+<translation id="4414390922528416758">自訂 Chromium 最重視的隱私權選項。這份指南並未涵蓋所有設定和選項。</translation>
 <translation id="4415566066719264597">讓 Chromium 在背景執行</translation>
 <translation id="4423735387467980091">自訂及控制 Chromium</translation>
+<translation id="4427306783828095590">強化防護功能可進一步封鎖網路詐騙和惡意軟體</translation>
 <translation id="452711251841752011">歡迎使用 Chromium；新的瀏覽器視窗已開啟</translation>
 <translation id="4544142686420020088">發生錯誤，Chromium 未能更新。<ph name="BEGIN_LINK" />請修正 Chromium 更新問題與更新失敗項目。<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">要繼續使用新的 Chromium 設定檔嗎？</translation>
 <translation id="4567424176335768812">你已使用 <ph name="USER_EMAIL_ADDRESS" /> 的身分登入，可以在所有登入的裝置上使用你的書籤、記錄和其他設定。</translation>
 <translation id="459535195905078186">Chromium 應用程式</translation>
+<translation id="4621240073146040695">即將更新為最新版本！重新啟動 Chromium 即可完成更新程序。</translation>
 <translation id="4665829708273112819">警告：Chromium 無法禁止擴充功能記錄你的瀏覽記錄。如要在無痕模式中停用這個擴充功能，請取消選取這個選項。</translation>
 <translation id="4677944499843243528">另一台電腦 (<ph name="HOST_NAME" />) 的 Chromium 處理程序 (<ph name="PROCESS_ID" />) 正在使用這個設定檔。Chromium 已鎖定此設定檔，確保其不致受損。如果你確定其他處理程序目前未使用此設定檔，請予以解除鎖定，然後重新啟動 Chromium。</translation>
 <translation id="469338717132742108">前往 Chromium 作業系統說明頁面</translation>
 <translation id="4708774505295300557">先前已有其他使用者使用 <ph name="ACCOUNT_EMAIL_LAST" /> 在這部電腦上登入 Chromium。請建立新的 Chromium 使用者，以便另行保存你的資訊。</translation>
 <translation id="4746050847053251315">確定要關閉 Chromium 嗎？</translation>
 <translation id="4748217263233248895">Chromium 剛才套用了特殊的安全性更新。請立即重新啟動，系統會恢復你原先開啟的分頁。</translation>
-<translation id="4750035648288509542">即將更新為最新版本！重新啟動 Chromium 即可完成更新程序。無痕式視窗不會重新開啟。</translation>
 <translation id="4788777615168560705">Chromium 無法檢查你的密碼，請於 24 小時後再試，或<ph name="BEGIN_LINK" />檢查 Google 帳戶中的密碼<ph name="END_LINK" />。</translation>
 <translation id="479167709087336770">這會使用與 Google 搜尋相同的拼字檢查工具。系統會將你在瀏覽器中輸入的文字傳送給 Google。你隨時可以在設定中變更這項行為。</translation>
 <translation id="4888717733111232871">允許 mDNS 流量的 Chromium 輸入規則。</translation>
@@ -234,6 +237,7 @@ Chromium 無法復原你的設定。</translation>
 <translation id="7561906087460245826">一併清除 Chromium 中的資料 (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">如果這個頁面上並未顯示你的設定，請檢查 <ph name="LINK_BEGIN" />
       Chromium 作業系統設定<ph name="LINK_END" /></translation>
+<translation id="7597596667193879455">你已開啟帳戶的安全瀏覽強化防護功能。現在請為 Chromium 開啟這項功能。</translation>
 <translation id="761356813943268536">Chromium 正在使用你的攝影機和麥克風。</translation>
 <translation id="7617377681829253106">Chromium 變得更進步了</translation>
 <translation id="7686590090926151193">Chromium 不是你的預設瀏覽器</translation>
@@ -293,5 +297,6 @@ Chromium 無法復原你的設定。</translation>
 <translation id="9214764063801632699">Chromium 作業系統</translation>
 <translation id="93478295209880648">Chromium 已不適用於 Windows XP 或 Windows Vista，因此可能無法正常運作</translation>
 <translation id="965162752251293939">誰在使用 Chromium？</translation>
+<translation id="967427899662692980">獲得 Chromium 最強大的安全防護</translation>
 <translation id="985602178874221306">The Chromium Authors</translation>
 </translationbundle>

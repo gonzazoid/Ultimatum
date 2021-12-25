@@ -31,6 +31,7 @@
 #include "components/exo/test/exo_test_base.h"
 #include "components/exo/test/exo_test_helper.h"
 #include "components/exo/test/shell_surface_builder.h"
+#include "components/exo/window_properties.h"
 #include "components/exo/wm_helper.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
@@ -252,6 +253,44 @@ TEST_F(ShellSurfaceTest, CannotMaximizeNonResizableWindow) {
   EXPECT_FALSE(shell_surface->CanMaximize());
 }
 
+TEST_F(ShellSurfaceTest, MaximizeFromFullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+  // Act: Maximize after fullscreen
+  shell_surface->root_surface()->Commit();
+  shell_surface->SetFullscreen(true);
+  shell_surface->root_surface()->Commit();
+  shell_surface->Maximize();
+  shell_surface->root_surface()->Commit();
+
+  // Assert: Window should stay fullscreen.
+  EXPECT_TRUE(shell_surface->GetWidget()->IsFullscreen());
+}
+
+TEST_F(ShellSurfaceTest, MaximizeExitsFullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+
+  // Act: Set window property kRestoreOrMaximizeExitsFullscreen
+  // then maximize after fullscreen
+  shell_surface->root_surface()->Commit();
+  shell_surface->GetWidget()->GetNativeWindow()->SetProperty(
+      kRestoreOrMaximizeExitsFullscreen, true);
+  shell_surface->SetFullscreen(true);
+  shell_surface->root_surface()->Commit();
+  shell_surface->Maximize();
+  shell_surface->root_surface()->Commit();
+
+  // Assert: Window should exit fullscreen and be maximized.
+  EXPECT_TRUE(shell_surface->GetWidget()->GetNativeWindow()->GetProperty(
+      kRestoreOrMaximizeExitsFullscreen));
+  EXPECT_TRUE(shell_surface->GetWidget()->IsMaximized());
+}
+
 TEST_F(ShellSurfaceTest, Minimize) {
   gfx::Size buffer_size(256, 256);
   std::unique_ptr<Buffer> buffer(
@@ -305,6 +344,44 @@ TEST_F(ShellSurfaceTest, Restore) {
       shell_surface->GetWidget()->GetWindowBoundsInScreen().size().ToString());
 }
 
+TEST_F(ShellSurfaceTest, RestoreFromFullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+
+  // Act: Restore after fullscreen
+  shell_surface->SetFullscreen(true);
+  shell_surface->root_surface()->Commit();
+  shell_surface->Restore();
+  shell_surface->root_surface()->Commit();
+
+  // Assert: Window should stay fullscreen.
+  EXPECT_TRUE(shell_surface->GetWidget()->IsFullscreen());
+}
+
+TEST_F(ShellSurfaceTest, RestoreExitsFullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+
+  // Act: Set window property kRestoreOrMaximizeExitsFullscreen
+  // then restore after fullscreen
+  shell_surface->root_surface()->Commit();
+  shell_surface->GetWidget()->GetNativeWindow()->SetProperty(
+      kRestoreOrMaximizeExitsFullscreen, true);
+  shell_surface->SetFullscreen(true);
+  shell_surface->Restore();
+  shell_surface->root_surface()->Commit();
+
+  // Assert: Window should exit fullscreen and be restored.
+  EXPECT_TRUE(shell_surface->GetWidget()->GetNativeWindow()->GetProperty(
+      kRestoreOrMaximizeExitsFullscreen));
+  EXPECT_EQ(gfx::Size(256, 256),
+            shell_surface->GetWidget()->GetWindowBoundsInScreen().size());
+}
+
 TEST_F(ShellSurfaceTest, HostWindowBoundsUpdatedAfterCommitWidget) {
   gfx::Size buffer_size(256, 256);
   std::unique_ptr<Buffer> buffer(
@@ -343,6 +420,33 @@ TEST_F(ShellSurfaceTest, SetFullscreen) {
   EXPECT_FALSE(HasBackdrop());
   EXPECT_NE(GetContext()->bounds().ToString(),
             shell_surface->GetWidget()->GetWindowBoundsInScreen().ToString());
+}
+
+TEST_F(ShellSurfaceTest, PreWidgetUnfullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetNoCommit()
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+  shell_surface->Maximize();
+  shell_surface->SetFullscreen(false);
+  EXPECT_EQ(shell_surface->GetWidget(), nullptr);
+  shell_surface->root_surface()->Commit();
+  EXPECT_TRUE(shell_surface->GetWidget()->IsMaximized());
+}
+
+TEST_F(ShellSurfaceTest, PreWidgetMaximizeFromFullscreen) {
+  std::unique_ptr<ShellSurface> shell_surface =
+      test::ShellSurfaceBuilder({256, 256})
+          .SetNoCommit()
+          .SetMaximumSize(gfx::Size(10, 10))
+          .BuildShellSurface();
+  // Fullscreen -> Maximize for non Lacros surfaces should stay fullscreen
+  shell_surface->SetFullscreen(true);
+  shell_surface->Maximize();
+  EXPECT_EQ(shell_surface->GetWidget(), nullptr);
+  shell_surface->root_surface()->Commit();
+  EXPECT_TRUE(shell_surface->GetWidget()->IsFullscreen());
 }
 
 TEST_F(ShellSurfaceTest, SetTitle) {
@@ -1828,6 +1932,58 @@ TEST_F(ShellSurfaceTest, NotifyOnWindowCreation) {
   shell_surface->surface_for_testing()->Commit();
 
   EXPECT_EQ(1u, observer.observed_windows().size());
+}
+
+TEST_F(ShellSurfaceTest, Reparent) {
+  auto shell_surface1 = test::ShellSurfaceBuilder({20, 20}).BuildShellSurface();
+  views::Widget* widget1 = shell_surface1->GetWidget();
+
+  // Create a second window.
+  auto shell_surface2 = test::ShellSurfaceBuilder({20, 20}).BuildShellSurface();
+  views::Widget* widget2 = shell_surface2->GetWidget();
+
+  auto child_shell_surface =
+      test::ShellSurfaceBuilder({20, 20}).BuildShellSurface();
+  child_shell_surface->SetParent(shell_surface1.get());
+  views::Widget* child_widget = child_shell_surface->GetWidget();
+  // By default, a child widget is not activatable. Explicitly make it
+  // activatable so that calling child_surface->RequestActivation() is
+  // possible.
+  child_widget->widget_delegate()->SetCanActivate(true);
+
+  GrantPermissionToActivateIndefinitely(widget1->GetNativeWindow());
+  GrantPermissionToActivateIndefinitely(widget2->GetNativeWindow());
+  GrantPermissionToActivateIndefinitely(child_widget->GetNativeWindow());
+
+  shell_surface2->Activate();
+  EXPECT_FALSE(child_widget->ShouldPaintAsActive());
+  EXPECT_FALSE(widget1->ShouldPaintAsActive());
+  EXPECT_TRUE(widget2->ShouldPaintAsActive());
+
+  child_shell_surface->Activate();
+  // A widget should have the same paint-as-active state with its parent.
+  EXPECT_TRUE(child_widget->ShouldPaintAsActive());
+  EXPECT_TRUE(widget1->ShouldPaintAsActive());
+  EXPECT_FALSE(widget2->ShouldPaintAsActive());
+
+  // Reparent child to widget2.
+  child_shell_surface->SetParent(shell_surface2.get());
+  EXPECT_TRUE(child_widget->ShouldPaintAsActive());
+  EXPECT_TRUE(widget2->ShouldPaintAsActive());
+  EXPECT_FALSE(widget1->ShouldPaintAsActive());
+
+  shell_surface1->Activate();
+  EXPECT_FALSE(child_widget->ShouldPaintAsActive());
+  EXPECT_FALSE(widget2->ShouldPaintAsActive());
+  EXPECT_TRUE(widget1->ShouldPaintAsActive());
+
+  // Delete widget1 (i.e. the non-parent widget) shouldn't crash.
+  widget1->Close();
+  shell_surface1.reset();
+
+  child_shell_surface->Activate();
+  EXPECT_TRUE(child_widget->ShouldPaintAsActive());
+  EXPECT_TRUE(widget2->ShouldPaintAsActive());
 }
 
 }  // namespace exo

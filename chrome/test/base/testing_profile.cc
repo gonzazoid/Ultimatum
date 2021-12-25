@@ -13,7 +13,6 @@
 #include "base/containers/contains.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
-#include "base/no_destructor.h"
 #include "base/path_service.h"
 #include "base/run_loop.h"
 #include "base/strings/string_number_conversions.h"
@@ -751,6 +750,7 @@ void TestingProfile::CreatePrefServiceForSupervisedUser() {
   testing_prefs_ = new sync_preferences::TestingPrefServiceSyncable(
       /*managed_prefs=*/new TestingPrefStore, supervised_user_pref_store_,
       /*extension_prefs=*/new TestingPrefStore,
+      /*standalone_browser_prefs=*/new TestingPrefStore,
       /*user_prefs=*/new TestingPrefStore,
       /*recommended_prefs=*/new TestingPrefStore,
       new user_prefs::PrefRegistrySyncable, new PrefNotifierImpl);

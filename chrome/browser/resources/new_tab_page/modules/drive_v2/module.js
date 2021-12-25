@@ -10,7 +10,7 @@ import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v
 import {I18nBehavior, loadTimeData} from '../../i18n_setup.js';
 import {DriveProxy} from '../drive/drive_module_proxy.js';
 import {InfoDialogElement} from '../info_dialog.js';
-import {ModuleDescriptor} from '../module_descriptor.js';
+import {ModuleDescriptorV2, ModuleHeight} from '../module_descriptor.js';
 
 /**
  * The Drive module, which serves as an inside look in to recent activity within
@@ -58,21 +58,6 @@ class DriveModuleElement extends mixinBehaviors
     this.dispatchEvent(disableEvent);
   }
 
-  /** @private */
-  onDismissButtonClick_() {
-    DriveProxy.getHandler().dismissModule();
-    const dismissEvent = new CustomEvent('dismiss-module', {
-      composed: true,
-      detail: {
-        message: loadTimeData.getStringF(
-            'dismissModuleToastMessage',
-            loadTimeData.getString('modulesDriveFilesSentence')),
-        restoreCallback: () => DriveProxy.getHandler().restoreModule(),
-      },
-    });
-    this.dispatchEvent(dismissEvent);
-  }
-
   /**
    * @param {!Event} e
    * @private
@@ -93,19 +78,16 @@ class DriveModuleElement extends mixinBehaviors
 
 customElements.define(DriveModuleElement.is, DriveModuleElement);
 
-/** @return {!Promise<DriveModuleElement>} */
+/** @return {!Promise<!DriveModuleElement>} */
 async function createDriveElement() {
   const {files} = await DriveProxy.getHandler().getFiles();
-  if (files.length === 0) {
-    return null;
-  }
   const element = new DriveModuleElement();
-  element.files = files;
+  element.files = files.slice(0, 2);
   return element;
 }
 
-/** @type {!ModuleDescriptor} */
-export const driveDescriptor = new ModuleDescriptor(
+/** @type {!ModuleDescriptorV2} */
+export const driveDescriptor = new ModuleDescriptorV2(
     /*id*/ 'drive',
     /*name*/ loadTimeData.getString('modulesDriveSentence'),
-    createDriveElement);
+    /*height*/ ModuleHeight.SHORT, createDriveElement);

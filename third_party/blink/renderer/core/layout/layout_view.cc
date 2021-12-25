@@ -51,7 +51,6 @@
 #include "third_party/blink/renderer/core/page/named_pages_mapper.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/page/scrolling/root_scroller_controller.h"
-#include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/paint/view_painter.h"
@@ -98,13 +97,10 @@ class HitTestLatencyRecorder {
 
 }  // namespace
 
-LayoutView::LayoutView(Document* document)
+LayoutView::LayoutView(ContainerNode* document)
     : LayoutBlockFlow(document),
-      frame_view_(document->View()),
+      frame_view_(To<Document>(document)->View()),
       layout_state_(nullptr),
-      compositor_(RuntimeEnabledFeatures::CompositeAfterPaintEnabled()
-                      ? nullptr
-                      : MakeGarbageCollected<PaintLayerCompositor>(*this)),
       layout_quote_head_(nullptr),
       layout_counter_count_(0),
       hit_test_count_(0),
@@ -132,7 +128,6 @@ LayoutView::~LayoutView() = default;
 void LayoutView::Trace(Visitor* visitor) const {
   visitor->Trace(frame_view_);
   visitor->Trace(fragmentation_context_);
-  visitor->Trace(compositor_);
   visitor->Trace(layout_quote_head_);
   visitor->Trace(hit_test_cache_);
   LayoutBlockFlow::Trace(visitor);
@@ -463,6 +458,11 @@ void LayoutView::MapAncestorToLocal(const LayoutBoxModelObject* ancestor,
     transform_state.Move(OffsetForFixedPosition());
 }
 
+LogicalSize LayoutView::InitialContainingBlockSize() const {
+  return LogicalSize(LayoutUnit(ViewLogicalWidthForBoxSizing()),
+                     LayoutUnit(ViewLogicalHeightForBoxSizing()));
+}
+
 void LayoutView::Paint(const PaintInfo& paint_info) const {
   NOT_DESTROYED();
   ViewPainter(*this).Paint(paint_info);
@@ -501,7 +501,7 @@ bool LayoutView::MapToVisualRectInAncestorSpace(
     return intersects;
 
   TransformState transform_state(TransformState::kApplyTransformDirection,
-                                 FloatQuad(FloatRect(rect)));
+                                 FloatQuad(gfx::RectF(rect)));
   intersects = MapToVisualRectInAncestorSpaceInternal(ancestor, transform_state,
                                                       mode, visual_rect_flags);
   transform_state.Flatten();
@@ -545,7 +545,7 @@ bool LayoutView::MapToVisualRectInAncestorSpaceInternal(
         transform_state.LastPlanarQuad().BoundingBox());
     bool retval = GetFrameView()->MapToVisualRectInRemoteRootFrame(
         rect, !(visual_rect_flags & kDontApplyMainFrameOverflowClip));
-    transform_state.SetQuad(FloatQuad(FloatRect(rect)));
+    transform_state.SetQuad(FloatQuad(gfx::RectF(rect)));
     return retval;
   }
 
@@ -555,7 +555,7 @@ bool LayoutView::MapToVisualRectInAncestorSpaceInternal(
     PhysicalRect view_rectangle = ViewRect();
     if (visual_rect_flags & kEdgeInclusive) {
       if (!rect.InclusiveIntersect(view_rectangle)) {
-        transform_state.SetQuad(FloatQuad(FloatRect(rect)));
+        transform_state.SetQuad(FloatQuad(gfx::RectF(rect)));
         return false;
       }
     } else {
@@ -570,14 +570,14 @@ bool LayoutView::MapToVisualRectInAncestorSpaceInternal(
 
     // Adjust for frame border.
     rect.Move(obj->PhysicalContentBoxOffset());
-    transform_state.SetQuad(FloatQuad(FloatRect(rect)));
+    transform_state.SetQuad(FloatQuad(gfx::RectF(rect)));
 
     return obj->MapToVisualRectInAncestorSpaceInternal(
         ancestor, transform_state, visual_rect_flags);
   }
 
   // This can happen, e.g., if the iframe element has display:none.
-  transform_state.SetQuad(FloatQuad(FloatRect()));
+  transform_state.SetQuad(FloatQuad(gfx::RectF()));
   return false;
 }
 
@@ -606,11 +606,13 @@ void LayoutView::CommitPendingSelection() {
   frame_view_->GetFrame().Selection().CommitAppearanceIfNeeded();
 }
 
-bool LayoutView::ShouldUsePrintingLayout() const {
-  NOT_DESTROYED();
-  if (!GetDocument().Printing() || !frame_view_)
+bool LayoutView::ShouldUsePrintingLayout(const Document& document) {
+  if (!document.Printing())
     return false;
-  return frame_view_->GetFrame().ShouldUsePrintingLayout();
+  const LocalFrameView* frame_view = document.View();
+  if (!frame_view)
+    return false;
+  return frame_view->GetFrame().ShouldUsePrintingLayout();
 }
 
 PhysicalRect LayoutView::ViewRect() const {
@@ -839,17 +841,6 @@ void LayoutView::UpdateHitTestResult(HitTestResult& result,
   }
 }
 
-PaintLayerCompositor* LayoutView::Compositor() {
-  NOT_DESTROYED();
-  return compositor_;
-}
-
-void LayoutView::CleanUpCompositor() {
-  NOT_DESTROYED();
-  DCHECK(compositor_);
-  compositor_->CleanUp();
-}
-
 IntervalArena* LayoutView::GetIntervalArena() {
   NOT_DESTROYED();
   if (!interval_arena_)
@@ -864,10 +855,10 @@ bool LayoutView::BackgroundIsKnownToBeOpaqueInRect(const PhysicalRect&) const {
          !frame_view_->BaseBackgroundColor().HasAlpha();
 }
 
-FloatSize LayoutView::ViewportSizeForViewportUnits() const {
+gfx::SizeF LayoutView::ViewportSizeForViewportUnits() const {
   NOT_DESTROYED();
   return GetFrameView() ? GetFrameView()->ViewportSizeForViewportUnits()
-                        : FloatSize();
+                        : gfx::SizeF();
 }
 
 void LayoutView::WillBeDestroyed() {
@@ -877,7 +868,6 @@ void LayoutView::WillBeDestroyed() {
   if (PaintLayer* layer = Layer())
     layer->SetNeedsRepaint();
   LayoutBlockFlow::WillBeDestroyed();
-  compositor_.Clear();
 }
 
 void LayoutView::UpdateFromStyle() {

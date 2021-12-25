@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">العرض متاح</translation>
 <translation id="1312803275555673949">ما الدليل الذي يؤيد ذلك؟</translation>
 <translation id="131405271941274527">‏يريد <ph name="URL" /> إرسال المعلومات وتلقّيها عند النقر على جهاز NFC الظاهر على هاتفك.</translation>
+<translation id="1314311879718644478">يمكنك عرض محتوى الواقع المعزّز.</translation>
 <translation id="1314509827145471431">التجليد من الناحية اليمنى</translation>
 <translation id="1318023360584041678">تم حفظ نتيجة البحث في مجموعة علامات تبويب</translation>
 <translation id="1319245136674974084">عدم السؤال مرة أخرى عند استخدام هذا التطبيق</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">عرض المزيد</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">هل تبحث عن إصدار المتصفِّح؟ انتقِل إلى</translation>
 <translation id="1476595624592550506">عليك تغيير كلمة مرورك</translation>
 <translation id="1483493594462132177">إرسال</translation>
 <translation id="1484290072879560759">اختيار عنوان الشحن</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">حدث خطأ ما أثناء عرض صفحة الويب هذه.</translation>
 <translation id="1586541204584340881">الإضافات التي ثبّتها</translation>
 <translation id="1588438908519853928">عادي</translation>
+<translation id="1589050138437146318">‏هل تريد تثبيت ARCore؟</translation>
 <translation id="1592005682883173041">الوصول إلى البيانات المحلية</translation>
 <translation id="1594030484168838125">اختيار</translation>
 <translation id="160851722280695521">‏تشغيل لعبة الديناصور في Chrome</translation>
@@ -970,7 +973,7 @@
 <translation id="4110652170750985508">مراجعة الدفعة</translation>
 <translation id="4112140312785995938">الانتقال إلى الخلف</translation>
 <translation id="4114146879518089587">المتابعة إلى الموقع الإلكتروني</translation>
-<translation id="4116663294526079822">إلغاء الحظر دومًا على هذا الموقع</translation>
+<translation id="4116663294526079822">إلغاء الحظر دومًا على هذا الموقع الإلكتروني</translation>
 <translation id="4116701314593212016">JIS B7</translation>
 <translation id="4117700440116928470">نطاق السياسة غير متوافق.</translation>
 <translation id="4121428309786185360">تاريخ انتهاء الصلاحية</translation>
@@ -1261,6 +1264,7 @@
 <translation id="4968522289500246572">هذا التطبيق مصمّم للعمل مع الأجهزة الجوّالة وقد يتعذّر تغيير حجمه بشكل مناسب. من الممكن أن يواجه التطبيق بعض المشاكل أو يتعرّض لإعادة التشغيل.</translation>
 <translation id="4969341057194253438">حذف التسجيل</translation>
 <translation id="4973922308112707173">عمل ثقبَين بالأعلى</translation>
+<translation id="4976702386844183910">تاريخ آخر زيارة للموقع الإلكتروني: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">هل تريد استخدام الميكروفون؟</translation>
 <translation id="4984339528288761049">‏Prc5 (مغلف)</translation>
 <translation id="4989163558385430922">عرض الكل</translation>
@@ -1346,6 +1350,7 @@
 <translation id="5215116848420601511">‏طرق الدفع والعناوين باستخدام Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">الدُرج 13</translation>
+<translation id="5216942107514965959">تمّت زيارة الموقع الإلكتروني آخر مرّة اليوم.</translation>
 <translation id="5222812217790122047">البريد الإلكتروني مطلوب</translation>
 <translation id="5230733896359313003">عنوان الشحن</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@
 <translation id="5333022057423422993">‏لقد عثر Chrome في عمليّة اختراق للبيانات على كلمة المرور التي استخدمتها للتو. لحماية حساباتك، ننصحك بالتحقّق من كلمات مرورك المحفوظة.</translation>
 <translation id="5334013548165032829">سجلّات النظام التفصيلية</translation>
 <translation id="5334145288572353250">هل تريد حفظ العنوان؟</translation>
+<translation id="5335920952954443287">قلب يخفق</translation>
 <translation id="5340250774223869109">التطبيق محظور</translation>
 <translation id="534295439873310000">‏أجهزة NFC</translation>
 <translation id="5344579389779391559">قد تُحاول هذه الصفحة تحصيل رسوم منك</translation>
@@ -1531,6 +1537,7 @@
 <translation id="5869522115854928033">كلمات المرور المحفوظة</translation>
 <translation id="5873013647450402046">يجب تأكيد هويتك للمصرف.</translation>
 <translation id="5887400589839399685">تم حفظ البطاقة</translation>
+<translation id="5887687176710214216">تمّت زيارة الموقع الإلكتروني آخر مرة أمس.</translation>
 <translation id="5895138241574237353">إعادة التشغيل</translation>
 <translation id="5895187275912066135">تاريخ الإصدار</translation>
 <translation id="5901630391730855834">أصفر</translation>
@@ -1724,6 +1731,7 @@
 <translation id="6529602333819889595">إعادة الح&amp;ذف</translation>
 <translation id="6545864417968258051">البحث عن بلوتوث</translation>
 <translation id="6547208576736763147">عمل ثقبَين يسارًا</translation>
+<translation id="6554732001434021288">تمّت زيارة الموقع الإلكتروني آخر مرّة قبل <ph name="NUM_DAYS" /> يوم.</translation>
 <translation id="6556866813142980365">إعادة</translation>
 <translation id="6569060085658103619">أنت تعرض صفحة إضافة</translation>
 <translation id="6573200754375280815">عمل ثقبَين يمينًا</translation>
@@ -1886,6 +1894,7 @@
 <translation id="7118618213916969306">‏البحث عن عنوان URL للحافظة، <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">إغلاق علامات التبويب أو البرامج الأخرى</translation>
 <translation id="7129409597930077180">لا يمكن الشحن على هذا العنوان. اختَر عنوانًا آخر.</translation>
+<translation id="7132939140423847331">حظر المشرف نسخ هذه البيانات.</translation>
 <translation id="7135130955892390533">عرض الحالة</translation>
 <translation id="7138472120740807366">طريقة التسليم</translation>
 <translation id="7139724024395191329">إمارة</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">عند تعديل التعليقات التوضيحية، سيعود هذا المستند إلى اتجاه تدويره الأصلي.</translation>
 <translation id="765676359832457558">إخفاء الإعدادات المتقدمة...</translation>
 <translation id="7658239707568436148">إلغاء</translation>
+<translation id="7659878911471462949">دموع الفرح</translation>
 <translation id="7662298039739062396">يتم التحكّم في الإعداد بواسطة إحدى الإضافات</translation>
 <translation id="7663736086183791259">شهادة <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">غير مسموح بالإذن في وضع التصفّح المتخفي</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">السماح للموقع الإلكتروني بطلب استخدام أجهزة الواقع الافتراضي وبياناتها</translation>
 <translation id="7984945080620862648">‏لا يمكنك زيارة <ph name="SITE" /> الآن لأن الموقع الإلكتروني أرسل بيانات اعتماد مختلطة يتعذر على Chrome معالجتها. أخطاء الشبكة والهجمات عليها عادةً ما تكون مؤقتة، لذا ستعمل هذه الصفحة لاحقًا على الأرجح.</translation>
-<translation id="79859296434321399">‏لعرض محتوى الواقع المُعزَّز، يُرجى تثبيت ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">التجليد</translation>
 <translation id="7992044431894087211">تم استئناف "مشاركة الشاشة" مع <ph name="APPLICATION_TITLE" />.</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">الطي إلى نصفَين</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">التطبيقات المثبَّتة وعدد مرات استخدامها</translation>
+<translation id="8317207217658302555">‏هل تريد تحديث ARCore؟</translation>
 <translation id="831997045666694187">مساءً</translation>
 <translation id="8321476692217554900">الإشعارات</translation>
 <translation id="8328484624016508118">‏بعد إغلاق جميع علامات التبويب في وضع التصفُّح المتخفي، يمحو Chrome:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{إعادة ضبط الإذن}zero{إعادة ضبط الأذونات}two{إعادة ضبط الإذنَين}few{إعادة ضبط الأذونات}many{إعادة ضبط الأذونات}other{إعادة ضبط الأذونات}}</translation>
 <translation id="8555010941760982128">استخدام هذا الرمز عند الدفع</translation>
 <translation id="8557066899867184262">‏رمز التحقق من البطاقة (CVC) موجود خلف بطاقتك.</translation>
-<translation id="8558485628462305855">‏لعرض محتوى الواقع المُعزَّز، يُرجى تحديث ARCore</translation>
 <translation id="8559762987265718583">تعذر إنشاء اتصال خاص بـ <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> نظرًا لأن التاريخ والوقت للجهاز (<ph name="DATE_AND_TIME" />) غير صحيحين.</translation>
 <translation id="8564182942834072828">مستندات مفصولة/نُسخ مفصولة</translation>
 <translation id="8564985650692024650">‏يُوصي Chromium بإعادة تحديد كلمة المرور <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> في حال إعادة استخدامها في مواقع إلكترونية أخرى.</translation>
@@ -2445,6 +2454,7 @@
 <translation id="8987245424886630962">‏<ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />، اضغط على مفتاح Tab ثم مفتاح Enter لعرض سجلّ التصفُّح في Chrome.</translation>
 <translation id="8987927404178983737">شهر</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" />‏ [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">هل تبحث عن إصدار النظام؟ انتقِل إلى</translation>
 <translation id="899688752321268742">يريد الموقع الإلكتروني <ph name="URL" /> رصد استخدامك النشط لهذا الجهاز.</translation>
 <translation id="8996941253935762404">تحتوي مقدمة الموقع على برامج ضارة</translation>
 <translation id="8997023839087525404">قدم الخادم شهادة لم يتم الكشف عنها علنًا باستخدام سياسة شهادة الشفافية. وهذا ضروري لبعض الشهادات، لضمان أنها جديرة بالثقة ومحمية من المهاجمين.</translation>

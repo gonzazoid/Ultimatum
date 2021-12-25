@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "ash/constants/ash_features.h"
 #include "ash/constants/ash_pref_names.h"
 #include "base/bind.h"
 #include "base/callback.h"
@@ -432,7 +433,6 @@ void TerminalPrivateOpenTerminalProcessFunction::RespondOnUIThread(
   }
   auto* contents = GetSenderWebContents();
   if (!contents) {
-    LOG(WARNING) << "content is closed before returning opened process";
     chromeos::ProcessProxyRegistry::GetTaskRunner()->PostTask(
         FROM_HERE,
         base::BindOnce(
@@ -443,6 +443,9 @@ void TerminalPrivateOpenTerminalProcessFunction::RespondOnUIThread(
               }
             },
             terminal_id));
+    const std::string msg = "Web contents closed during OpenProcess";
+    LOG(WARNING) << msg;
+    Respond(Error(msg));
     return;
   }
 
@@ -635,6 +638,16 @@ TerminalPrivateOpenOptionsPageFunction::Run() {
   return RespondNow(NoArguments());
 }
 
+TerminalPrivateGetOSInfoFunction::~TerminalPrivateGetOSInfoFunction() = default;
+
+ExtensionFunction::ResponseAction TerminalPrivateGetOSInfoFunction::Run() {
+  base::DictionaryValue info;
+  info.SetBoolKey("tmux_integration",
+                  base::FeatureList::IsEnabled(
+                      chromeos::features::kTerminalTmuxIntegration));
+  return RespondNow(OneArgument(std::move(info)));
+}
+
 TerminalPrivateGetSettingsFunction::~TerminalPrivateGetSettingsFunction() =
     default;
 
@@ -643,7 +656,7 @@ ExtensionFunction::ResponseAction TerminalPrivateGetSettingsFunction::Run() {
       Profile::FromBrowserContext(browser_context()));
   PrefService* service =
       Profile::FromBrowserContext(browser_context())->GetPrefs();
-  const base::DictionaryValue* value =
+  const base::Value* value =
       service->GetDictionary(crostini::prefs::kCrostiniTerminalSettings);
   return RespondNow(OneArgument(value->Clone()));
 }

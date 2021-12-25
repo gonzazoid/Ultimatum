@@ -174,14 +174,11 @@ syncer::UpdateResponseData CreateUpdateResponseData(
       CreateTombstoneResponseData(guid, version);
 
   response_data.entity.originator_client_item_id = guid.AsLowercaseString();
-  response_data.entity.parent_id = GetFakeServerIdFromGUID(parent_guid);
 
-  // Note that proto field |parent_guid| is not currently populated here
-  // because the code doesn't actually need it, and besides legacy data coming
-  // from the server may not include it.
   sync_pb::BookmarkSpecifics* bookmark_specifics =
       response_data.entity.specifics.mutable_bookmark();
   bookmark_specifics->set_guid(guid.AsLowercaseString());
+  bookmark_specifics->set_parent_guid(parent_guid.AsLowercaseString());
   bookmark_specifics->set_legacy_canonicalized_title(title);
   bookmark_specifics->set_full_title(title);
   bookmark_specifics->set_type(sync_pb::BookmarkSpecifics::FOLDER);
@@ -431,6 +428,51 @@ TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
   ASSERT_THAT(grandchild->children().size(), Eq(1u));
   EXPECT_THAT(grandchild->children().front()->guid(), Eq(kGuid2));
   EXPECT_THAT(grandchild->children().front()->children().size(), Eq(0u));
+}
+
+TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
+       ShouldLogFreshnessToUma) {
+  const base::GUID kGuid = base::GUID::GenerateRandomV4();
+
+  syncer::UpdateResponseDataList updates;
+  updates.push_back(CreateUpdateResponseData(/*guid=*/kGuid,
+                                             /*parent_guid=*/kBookmarkBarGuid));
+
+  base::HistogramTester histogram_tester;
+  updates_handler()->Process(updates,
+                             /*got_new_encryption_requirements=*/false);
+  histogram_tester.ExpectTotalCount(
+      "Sync.NonReflectionUpdateFreshnessPossiblySkewed2.BOOKMARK", 1);
+
+  // Process the same update again, which should be ignored because the version
+  // hasn't increased.
+  updates_handler()->Process(updates,
+                             /*got_new_encryption_requirements=*/false);
+  histogram_tester.ExpectTotalCount(
+      "Sync.NonReflectionUpdateFreshnessPossiblySkewed2.BOOKMARK", 1);
+
+  // Increase version and process again; should log freshness.
+  ++updates[0].response_version;
+  updates_handler()->Process(updates,
+                             /*got_new_encryption_requirements=*/false);
+  histogram_tester.ExpectTotalCount(
+      "Sync.NonReflectionUpdateFreshnessPossiblySkewed2.BOOKMARK", 2);
+
+  // Process remote deletion; should log freshness.
+  updates[0] =
+      CreateTombstoneResponseData(/*guid=*/kGuid,
+                                  /*version=*/updates[0].response_version + 1);
+  updates_handler()->Process(updates,
+                             /*got_new_encryption_requirements=*/false);
+  histogram_tester.ExpectTotalCount(
+      "Sync.NonReflectionUpdateFreshnessPossiblySkewed2.BOOKMARK", 3);
+
+  // Process another (redundant) deletion for the same entity; should not log.
+  ++updates[0].response_version;
+  updates_handler()->Process(updates,
+                             /*got_new_encryption_requirements=*/false);
+  histogram_tester.ExpectTotalCount(
+      "Sync.NonReflectionUpdateFreshnessPossiblySkewed2.BOOKMARK", 3);
 }
 
 TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
@@ -931,10 +973,11 @@ TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
   syncer::UpdateResponseDataList updates;
   syncer::EntityData data;
   data.id = GetFakeServerIdFromGUID(kParentGuid);
-  data.parent_id = kBookmarkBarId;
   sync_pb::BookmarkSpecifics* bookmark_specifics =
       data.specifics.mutable_bookmark();
   bookmark_specifics->set_guid(kParentGuid.AsLowercaseString());
+  bookmark_specifics->set_parent_guid(
+      bookmarks::BookmarkNode::kBookmarkBarNodeGuid);
   bookmark_specifics->set_legacy_canonicalized_title(kTitle);
   bookmark_specifics->set_url(kUrl.spec());
   bookmark_specifics->set_type(sync_pb::BookmarkSpecifics::URL);
@@ -981,11 +1024,12 @@ TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
   syncer::UpdateResponseDataList updates;
   syncer::EntityData data;
   data.id = "server_id";
-  data.parent_id = kBookmarkBarId;
   sync_pb::BookmarkSpecifics* bookmark_specifics =
       data.specifics.mutable_bookmark();
   bookmark_specifics->set_guid(
       base::GUID::GenerateRandomV4().AsLowercaseString());
+  bookmark_specifics->set_parent_guid(
+      bookmarks::BookmarkNode::kBookmarkBarNodeGuid);
   // Use the server id as the title for simplicity.
   bookmark_specifics->set_legacy_canonicalized_title(kTitle);
   bookmark_specifics->set_url(kUrl.spec());
@@ -1024,11 +1068,12 @@ TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
   syncer::UpdateResponseDataList updates;
   syncer::EntityData data;
   data.id = "server_id";
-  data.parent_id = kBookmarkBarId;
   sync_pb::BookmarkSpecifics* bookmark_specifics =
       data.specifics.mutable_bookmark();
   bookmark_specifics->set_guid(
       base::GUID::GenerateRandomV4().AsLowercaseString());
+  bookmark_specifics->set_parent_guid(
+      bookmarks::BookmarkNode::kBookmarkBarNodeGuid);
   // Use the server id as the title for simplicity.
   bookmark_specifics->set_legacy_canonicalized_title(kTitle);
   bookmark_specifics->set_url(kUrl.spec());
@@ -1072,6 +1117,8 @@ TEST_F(BookmarkRemoteUpdatesHandlerWithInitialMergeTest,
   sync_pb::BookmarkSpecifics* bookmark_specifics = specifics.mutable_bookmark();
   bookmark_specifics->set_guid(
       base::GUID::GenerateRandomV4().AsLowercaseString());
+  bookmark_specifics->set_parent_guid(
+      bookmarks::BookmarkNode::kBookmarkBarNodeGuid);
   bookmark_specifics->set_legacy_canonicalized_title("Title");
   bookmark_specifics->set_type(sync_pb::BookmarkSpecifics::FOLDER);
   *bookmark_specifics->mutable_unique_position() =
@@ -1143,6 +1190,8 @@ TEST_F(
   sync_pb::EntitySpecifics specifics;
   sync_pb::BookmarkSpecifics* bookmark_specifics = specifics.mutable_bookmark();
   bookmark_specifics->set_guid(kBookmarkGuid.AsLowercaseString());
+  bookmark_specifics->set_parent_guid(
+      bookmarks::BookmarkNode::kBookmarkBarNodeGuid);
   bookmark_specifics->set_legacy_canonicalized_title("Title");
   bookmark_specifics->set_type(sync_pb::BookmarkSpecifics::FOLDER);
   *bookmark_specifics->mutable_unique_position() =

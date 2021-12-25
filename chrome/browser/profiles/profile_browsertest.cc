@@ -37,12 +37,12 @@
 #include "chrome/browser/browser_features.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/profiles/chrome_version_service.h"
+#include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
+#include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile_destroyer.h"
 #include "chrome/browser/profiles/profile_impl.h"
-#include "chrome/browser/profiles/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_observer.h"
-#include "chrome/browser/profiles/scoped_profile_keep_alive.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -413,7 +413,13 @@ IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, CreateOldProfileSynchronous) {
 
 // Test OnProfileCreate is called with is_new_profile set to true when
 // creating a new profile asynchronously.
-IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, CreateNewProfileAsynchronous) {
+// TODO(crbug.com/1280223): Flaky on ChromeOS-Ash.
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#define MAYBE_CreateNewProfileAsynchronous DISABLED_CreateNewProfileAsynchronous
+#else
+#define MAYBE_CreateNewProfileAsynchronous CreateNewProfileAsynchronous
+#endif
+IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, MAYBE_CreateNewProfileAsynchronous) {
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());
@@ -438,13 +444,7 @@ IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, CreateNewProfileAsynchronous) {
 
 // Test OnProfileCreate is called with is_new_profile set to false when
 // creating a profile asynchronously with an existing prefs file.
-// TODO(1232030): Flakily crashes on ChromeOS.
-#if defined(OS_CHROMEOS)
-#define MAYBE_CreateOldProfileAsynchronous DISABLED_CreateOldProfileAsynchronous
-#else
-#define MAYBE_CreateOldProfileAsynchronous CreateOldProfileAsynchronous
-#endif
-IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, MAYBE_CreateOldProfileAsynchronous) {
+IN_PROC_BROWSER_TEST_F(ProfileBrowserTest, CreateOldProfileAsynchronous) {
   base::ScopedAllowBlockingForTesting allow_blocking;
   base::ScopedTempDir temp_dir;
   ASSERT_TRUE(temp_dir.CreateUniqueTempDir());

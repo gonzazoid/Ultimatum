@@ -93,10 +93,19 @@ source_set("platform") {
       "fuchsia/accessibility_bridge_fuchsia.h",
       "fuchsia/accessibility_bridge_fuchsia_registry.cc",
       "fuchsia/accessibility_bridge_fuchsia_registry.h",
+      "fuchsia/ax_platform_node_fuchsia.cc",
+      "fuchsia/ax_platform_node_fuchsia.h",
+      "fuchsia/semantic_provider.cc",
+      "fuchsia/semantic_provider.h",
     ]
 
-    public_deps +=
-        [ "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.accessibility.semantics" ]
+    public_deps += [
+      "//base",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.accessibility.semantics",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.accessibility.semantics",
+      "//third_party/fuchsia-sdk/sdk/fidl/fuchsia.math",
+      "//third_party/fuchsia-sdk/sdk/pkg/sys_cpp",
+    ]
   }
 
   if (has_native_accessibility) {
@@ -153,6 +162,8 @@ source_set("platform") {
         "ax_private_roles_mac.h",
         "ax_private_webkit_constants_mac.h",
         "ax_private_webkit_constants_mac.mm",
+        "ax_utils_mac.h",
+        "ax_utils_mac.mm",
         "inspect/ax_inspect_utils_mac.h",
         "inspect/ax_inspect_utils_mac.mm",
         "inspect/ax_transform_mac.h",

@@ -18,7 +18,7 @@ import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.TabState;
 import org.chromium.chrome.browser.tab.TabUserAgent;
 import org.chromium.chrome.browser.tab.WebContentsState;
-import org.chromium.chrome.browser.version.ChromeVersionInfo;
+import org.chromium.components.version_info.VersionInfo;
 
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -57,6 +57,8 @@ public class TabStateFileManager {
      * @return TabState that has been restored, or null if it failed.
      */
     public static TabState restoreTabState(File stateFolder, int id) {
+        // Confirm we entered this method and log the tab id.
+        Log.i(TAG, "Starting restoreTabState with id " + id);
         // First try finding an unencrypted file.
         boolean encrypted = false;
         File file = getTabStateFile(stateFolder, id, encrypted);
@@ -71,12 +73,16 @@ public class TabStateFileManager {
         if (!file.exists()) return null;
 
         // If one of them passed, open the file input stream and read the state contents.
+        // Confirm we find the TabStateFile and log if encrypted.
+        Log.i(TAG, "restoreTabState with id " + id + " and encrypted is " + encrypted);
         long startTime = SystemClock.elapsedRealtime();
         TabState tabState = restoreTabState(file, encrypted);
         if (tabState != null) {
             RecordHistogram.recordTimesHistogram(
                     "Tabs.TabState.LoadTime", SystemClock.elapsedRealtime() - startTime);
         }
+        // Confirm we get the tabState and log if it is null.
+        Log.i(TAG, "restoreTabState with id " + id + " and tabState is " + tabState);
         return tabState;
     }
 
@@ -348,7 +354,7 @@ public class TabStateFileManager {
     /** @return Whether a Stable channel build of Chrome is being used. */
     private static boolean isStableChannelBuild() {
         if ("stable".equals(sChannelNameOverrideForTest)) return true;
-        return ChromeVersionInfo.isStableBuild();
+        return VersionInfo.isStableBuild();
     }
 
     /**

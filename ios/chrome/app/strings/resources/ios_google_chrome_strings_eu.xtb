@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Hasi saioa webgune honetan eta Chrome-n. Geroago aktiba dezakezu sinkronizazioa.</translation>
 <translation id="424864128008805179">Chrome-ko saioa amaitu nahi duzu?</translation>
 <translation id="4249068189593983585">Chrome-ri buruzko aholkua: fitxetako aukera gehiago ikusteko, eduki sakatuta tresna-barrako Erakutsi fitxak botoia. Pantailaren goiko edo beheko aldean aurkituko duzu.</translation>
-<translation id="4267862249323750454"><ph name="BEGIN_LINK" />Google-ren Pasahitz-kudeatzailea<ph name="END_LINK" /> atalean gordetzen dira pasahitzak, edozein gailutan erabili ahal izan ditzazun.</translation>
 <translation id="4523886039239821078">Gehigarri batzuek Chrome huts egitea eragiten dute. Desinstala itzazu.</translation>
 <translation id="4633328489441962921">Chrome-k ezin ditu bilatu eguneratzeak</translation>
 <translation id="4698415050768537821">Chrome-k ezin izan ditu egiaztatu pasahitz guztiak. Saiatu berriro bihar edo <ph name="BEGIN_LINK" />egiaztatu pasahitzak Google-ko kontuan<ph name="END_LINK" />.</translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Egon babestuta Google Chrome-rekin</translation>
 <translation id="8772179140489533211">Chrome-n saioa hasteko onarpen-mezuak erakusten ditu.</translation>
+<translation id="8788269841521769222">Ez duzu pasahitza gogoratu beharko. <ph name="EMAIL" /> kontuko Google-ren Pasahitz-kudeatzailea atalean gordeko da.</translation>
 <translation id="9112744793181547300">Arakatzaile lehenetsi gisa ezarri nahi duzu Chrome?</translation>
 </translationbundle>

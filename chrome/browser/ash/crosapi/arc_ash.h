@@ -40,6 +40,8 @@ class ArcAsh : public mojom::Arc, public arc::ArcIntentHelperObserver {
                             RequestActivityIconsCallback callback) override;
   void RequestUrlHandlerList(const std::string& url,
                              RequestUrlHandlerListCallback callback) override;
+  void HandleUrl(const std::string& url,
+                 const std::string& package_name) override;
 
   // arc::ArcLacrosObserver:
   void OnIconInvalidated(const std::string& package_name) override;
@@ -49,6 +51,10 @@ class ArcAsh : public mojom::Arc, public arc::ArcIntentHelperObserver {
   // Called when activity icons are sent.
   void ConvertActivityIcons(RequestActivityIconsCallback callback,
                             std::vector<arc::mojom::ActivityIconPtr> icons);
+  // Called when intent handler list is sent.
+  void ConvertIntentHandlerInfo(
+      RequestUrlHandlerListCallback callback,
+      std::vector<arc::mojom::IntentHandlerInfoPtr> handlers);
 
   // This class supports any number of connections.
   mojo::ReceiverSet<mojom::Arc> receivers_;

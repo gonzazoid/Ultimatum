@@ -13,7 +13,6 @@
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
-#include "build/chromeos_buildflags.h"
 #include "chrome/browser/media/webrtc/fake_desktop_media_picker_factory.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
@@ -30,8 +29,8 @@
 #include "base/mac/mac_util.h"
 #endif
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
-#include "chrome/browser/ash/policy/dlp/mock_dlp_content_manager.h"
+#if defined(OS_CHROMEOS)
+#include "chrome/browser/chromeos/policy/dlp/mock_dlp_content_manager.h"
 #endif
 
 class DisplayMediaAccessHandlerTest : public ChromeRenderViewHostTestHarness {
@@ -75,7 +74,8 @@ class DisplayMediaAccessHandlerTest : public ChromeRenderViewHostTestHarness {
                       : blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
-        /*request_pan_tilt_zoom_permission=*/false);
+        /*request_pan_tilt_zoom_permission=*/false,
+        /*region_capture_capable=*/false);
   }
 
   content::MediaStreamRequest MakeMediaDeviceUpdateRequest(bool request_audio) {
@@ -251,14 +251,14 @@ TEST_F(DisplayMediaAccessHandlerTest, PermissionDenied) {
   EXPECT_EQ(0u, devices.size());
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if defined(OS_CHROMEOS)
 TEST_F(DisplayMediaAccessHandlerTest, DlpRestricted) {
   const content::DesktopMediaID media_id(content::DesktopMediaID::TYPE_SCREEN,
                                          content::DesktopMediaID::kFakeId);
 
   // Setup Data Leak Prevention restriction.
   policy::MockDlpContentManager mock_dlp_content_manager;
-  policy::ScopedDlpContentManagerForTesting scoped_dlp_content_manager(
+  policy::ScopedDlpContentObserverForTesting scoped_dlp_content_observer(
       &mock_dlp_content_manager);
   EXPECT_CALL(mock_dlp_content_manager, CheckScreenShareRestriction)
       .WillOnce([](const content::DesktopMediaID& media_id,
@@ -294,7 +294,8 @@ TEST_F(DisplayMediaAccessHandlerTest, UpdateMediaRequestStateWithClosing) {
       render_process_id, render_frame_id, page_request_id,
       GURL("http://origin/"), false, blink::MEDIA_GENERATE_STREAM,
       std::string(), std::string(), audio_stream_type, video_stream_type,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   access_handler_->HandleRequest(web_contents(), request, std::move(callback),
                                  nullptr /* extension */);
@@ -332,7 +333,8 @@ TEST_F(DisplayMediaAccessHandlerTest, CorrectHostAsksForPermissions) {
       render_process_id, render_frame_id, page_request_id,
       GURL("http://origin/"), false, blink::MEDIA_GENERATE_STREAM,
       std::string(), std::string(), audio_stream_type, video_stream_type,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   content::WebContents* test_web_contents = web_contents();
   std::unique_ptr<content::NavigationSimulator> navigation =
@@ -366,7 +368,8 @@ TEST_F(DisplayMediaAccessHandlerTest, CorrectHostAsksForPermissionsNormalURLs) {
       render_process_id, render_frame_id, page_request_id,
       GURL("http://origin/"), false, blink::MEDIA_GENERATE_STREAM,
       std::string(), std::string(), audio_stream_type, video_stream_type,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   content::WebContents* test_web_contents = web_contents();
   std::unique_ptr<content::NavigationSimulator> navigation =
@@ -393,7 +396,8 @@ TEST_F(DisplayMediaAccessHandlerTest, WebContentsDestroyed) {
       false, blink::MEDIA_GENERATE_STREAM, std::string(), std::string(),
       blink::mojom::MediaStreamType::NO_SERVICE,
       blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE,
-      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false);
+      /*disable_local_echo=*/false, /*request_pan_tilt_zoom_permission=*/false,
+      /*region_capture_capable=*/false);
   content::MediaResponseCallback callback;
   access_handler_->HandleRequest(web_contents(), request, std::move(callback),
                                  nullptr /* extension */);
@@ -434,7 +438,8 @@ TEST_F(DisplayMediaAccessHandlerTest, MultipleRequests) {
         std::string(), std::string(), blink::mojom::MediaStreamType::NO_SERVICE,
         blink::mojom::MediaStreamType::DISPLAY_VIDEO_CAPTURE,
         /*disable_local_echo=*/false,
-        /*request_pan_tilt_zoom_permission=*/false);
+        /*request_pan_tilt_zoom_permission=*/false,
+        /*region_capture_capable=*/false);
     content::MediaResponseCallback callback = base::BindOnce(
         [](base::RunLoop* wait_loop,
            blink::mojom::MediaStreamRequestResult* request_result,
@@ -500,7 +505,7 @@ TEST_F(DisplayMediaAccessHandlerTest,
       /*expected_number_of_devices=*/2u);
 }
 
-#if BUILDFLAG(IS_CHROMEOS_ASH)
+#if defined(OS_CHROMEOS)
 TEST_F(DisplayMediaAccessHandlerTest, ChangeSourceDlpRestricted) {
   const content::DesktopMediaID media_id(
       content::DesktopMediaID::TYPE_WEB_CONTENTS,
@@ -508,7 +513,7 @@ TEST_F(DisplayMediaAccessHandlerTest, ChangeSourceDlpRestricted) {
 
   // Setup Data Leak Prevention restriction.
   policy::MockDlpContentManager mock_dlp_content_manager;
-  policy::ScopedDlpContentManagerForTesting scoped_dlp_content_manager_(
+  policy::ScopedDlpContentObserverForTesting scoped_dlp_content_observer(
       &mock_dlp_content_manager);
   EXPECT_CALL(mock_dlp_content_manager, CheckScreenShareRestriction)
       .WillOnce([](const content::DesktopMediaID& media_id,

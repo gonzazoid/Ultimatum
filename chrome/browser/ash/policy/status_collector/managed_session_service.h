@@ -5,6 +5,7 @@
 #ifndef CHROME_BROWSER_ASH_POLICY_STATUS_COLLECTOR_MANAGED_SESSION_SERVICE_H_
 #define CHROME_BROWSER_ASH_POLICY_STATUS_COLLECTOR_MANAGED_SESSION_SERVICE_H_
 
+#include "ash/components/login/auth/auth_status_consumer.h"
 #include "ash/components/login/session/session_termination_manager.h"
 #include "base/observer_list.h"
 #include "base/observer_list_types.h"
@@ -16,7 +17,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "chromeos/dbus/power/power_manager_client.h"
-#include "chromeos/login/auth/auth_status_consumer.h"
 #include "components/account_id/account_id.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/session_manager/core/session_manager_observer.h"
@@ -27,7 +27,7 @@ namespace policy {
 class ManagedSessionService : public session_manager::SessionManagerObserver,
                               public ProfileObserver,
                               public chromeos::PowerManagerClient::Observer,
-                              public chromeos::AuthStatusConsumer,
+                              public ash::AuthStatusConsumer,
                               public ash::UserAuthenticatorObserver,
                               public ash::SessionTerminationManager::Observer,
                               public user_manager::UserManager::Observer {
@@ -35,7 +35,7 @@ class ManagedSessionService : public session_manager::SessionManagerObserver,
   class Observer : public base::CheckedObserver {
    public:
     // Occurs when a user's login attempt fails.
-    virtual void OnLoginFailure(const chromeos::AuthFailure& error) {}
+    virtual void OnLoginFailure(const ash::AuthFailure& error) {}
 
     // Occurs when a user has logged in.
     virtual void OnLogin(Profile* profile) {}
@@ -94,7 +94,7 @@ class ManagedSessionService : public session_manager::SessionManagerObserver,
 
   void OnAuthSuccess(const ash::UserContext& user_context) override {}
 
-  void OnAuthFailure(const chromeos::AuthFailure& error) override;
+  void OnAuthFailure(const ash::AuthFailure& error) override;
 
   void OnAuthAttemptStarted() override;
 

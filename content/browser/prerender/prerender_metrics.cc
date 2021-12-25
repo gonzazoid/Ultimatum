@@ -7,6 +7,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/metrics_hashes.h"
 #include "content/browser/renderer_host/render_frame_host_impl.h"
+#include "content/public/browser/prerender_trigger_type.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
 
@@ -27,6 +28,20 @@ PrerenderCancelledInterface GetCancelledInterfaceType(
 
 int32_t InterfaceNameHasher(const std::string& interface_name) {
   return static_cast<int32_t>(base::HashMetricNameAs32Bits(interface_name));
+}
+
+std::string GenerateHistogramName(const std::string& histogram_base_name,
+                                  PrerenderTriggerType trigger_type,
+                                  const std::string& embedder_suffix) {
+  switch (trigger_type) {
+    case PrerenderTriggerType::kSpeculationRule:
+      DCHECK(embedder_suffix.empty());
+      return std::string(histogram_base_name) + ".SpeculationRule";
+    case PrerenderTriggerType::kEmbedder:
+      DCHECK(!embedder_suffix.empty());
+      return std::string(histogram_base_name) + ".Embedder_" + embedder_suffix;
+  }
+  NOTREACHED();
 }
 
 }  // namespace
@@ -57,20 +72,56 @@ void RecordPrerenderActivationTime(
     base::TimeDelta delta,
     PrerenderTriggerType trigger_type,
     const std::string& embedder_histogram_suffix) {
-  switch (trigger_type) {
-    case PrerenderTriggerType::kSpeculationRule:
-      DCHECK(embedder_histogram_suffix.empty());
-      base::UmaHistogramTimes(
-          "Navigation.TimeToActivatePrerender.SpeculationRule", delta);
-      return;
-    case PrerenderTriggerType::kEmbedder:
-      DCHECK(!embedder_histogram_suffix.empty());
-      base::UmaHistogramTimes("Navigation.TimeToActivatePrerender.Embedder" +
-                                  embedder_histogram_suffix,
-                              delta);
-      return;
-  }
-  NOTREACHED();
+  base::UmaHistogramTimes(
+      GenerateHistogramName("Navigation.TimeToActivatePrerender", trigger_type,
+                            embedder_histogram_suffix),
+      delta);
+}
+
+void RecordPrerenderHostFinalStatus(
+    PrerenderHost::FinalStatus status,
+    PrerenderTriggerType trigger_type,
+    const std::string& embedder_histogram_suffix) {
+  base::UmaHistogramEnumeration(
+      GenerateHistogramName("Prerender.Experimental.PrerenderHostFinalStatus",
+                            trigger_type, embedder_histogram_suffix),
+      status);
+}
+
+void RecordPrerenderRedirectionMismatchType(
+    PrerenderCrossOriginRedirectionMismatch mismatch_type,
+    PrerenderTriggerType trigger_type,
+    const std::string& embedder_histogram_suffix) {
+  DCHECK_EQ(trigger_type, PrerenderTriggerType::kEmbedder);
+  base::UmaHistogramEnumeration(
+      GenerateHistogramName(
+          "Prerender.Experimental.PrerenderCrossOriginRedirectionMismatch",
+          trigger_type, embedder_histogram_suffix),
+      mismatch_type);
+}
+
+void RecordPrerenderRedirectionProtocolChange(
+    PrerenderCrossOriginRedirectionProtocolChange change_type,
+    PrerenderTriggerType trigger_type,
+    const std::string& embedder_histogram_suffix) {
+  DCHECK_EQ(trigger_type, PrerenderTriggerType::kEmbedder);
+  base::UmaHistogramEnumeration(
+      GenerateHistogramName(
+          "Prerender.Experimental.CrossOriginRedirectionProtocolChange",
+          trigger_type, embedder_histogram_suffix),
+      change_type);
+}
+
+void RecordPrerenderRedirectionDomain(
+    PrerenderCrossOriginRedirectionDomain domain_type,
+    PrerenderTriggerType trigger_type,
+    const std::string& embedder_histogram_suffix) {
+  DCHECK_EQ(trigger_type, PrerenderTriggerType::kEmbedder);
+  base::UmaHistogramEnumeration(
+      GenerateHistogramName(
+          "Prerender.Experimental.CrossOriginRedirectionDomain", trigger_type,
+          embedder_histogram_suffix),
+      domain_type);
 }
 
 }  // namespace content

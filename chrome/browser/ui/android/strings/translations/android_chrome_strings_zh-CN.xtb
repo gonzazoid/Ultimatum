@@ -83,6 +83,7 @@
 <translation id="1414981605391750300">正在连接到 Google，请稍等片刻…</translation>
 <translation id="1416550906796893042">应用版本</translation>
 <translation id="1430915738399379752">打印</translation>
+<translation id="1436784010935106834">已删除</translation>
 <translation id="1448440926884431741">在“书签”页面中整理您跟踪的商品</translation>
 <translation id="1450753235335490080">无法分享<ph name="CONTENT_TYPE" /></translation>
 <translation id="1466383950273130737">选择要让 Chrome 采用的语言</translation>
@@ -104,6 +105,7 @@
 <translation id="1571304935088121812">复制用户名</translation>
 <translation id="1592864538817356322">标准保护：</translation>
 <translation id="1628019612362412531">{NUM_SELECTED,plural, =1{移除 1 个所选项}other{移除 # 个所选项}}</translation>
+<translation id="1633659023549081553">在 Chrome 主页上发现新内容</translation>
 <translation id="1641113438599504367">安全浏览</translation>
 <translation id="164269334534774161">您目前浏览的是此网页的离线副本（创建时间：<ph name="CREATION_TIME" />）</translation>
 <translation id="1644574205037202324">历史记录</translation>
@@ -202,7 +204,6 @@
 <translation id="2172905120685242547">关闭窗口？</translation>
 <translation id="2175927920773552910">二维码</translation>
 <translation id="218608176142494674">共享</translation>
-<translation id="2195339740518523951">获享 Chrome 的最强安全保护</translation>
 <translation id="2200113223741723867">对使用情况数据的共享进行管理</translation>
 <translation id="2218567645332692482">将导航路径升级到 HTTPS，并在加载不支持 HTTPS 的网站之前向您发出警告</translation>
 <translation id="2227444325776770048">以“<ph name="USER_FULL_NAME" />”的身份继续</translation>
@@ -220,6 +221,7 @@
 <translation id="2321958826496381788">拖动该滑块，将文字调整到适合您阅读的大小。点按两次某段落后，显示的文字至少应是这么大。</translation>
 <translation id="2323763861024343754">网站存储数据</translation>
 <translation id="2328985652426384049">无法登录</translation>
+<translation id="2342601525305963189">Chrome 提示：</translation>
 <translation id="234265804618409743">无法打开您的摄像头。出了点问题。</translation>
 <translation id="2345671828921229300">若要执行搜索，请轻触并按住某个字词</translation>
 <translation id="2349710944427398404">Chrome 所使用的数据总量，包括帐号、书签和已保存的设置</translation>
@@ -263,6 +265,7 @@
 <translation id="2534582914273493287">您访问过的网址会被发送给 Google</translation>
 <translation id="2536728043171574184">正在查看此网页的离线副本</translation>
 <translation id="2546283357679194313">Cookie 和网站数据</translation>
+<translation id="2558692642259318568">若要浏览网页但不将活动记录保存到您的设备，请试试无痕模式</translation>
 <translation id="2561519700418191927">视频预览</translation>
 <translation id="2567385386134582609">图片</translation>
 <translation id="2567545343356994513">针对危险网站、下载内容和扩展程序提供更快速的主动保护</translation>
@@ -274,6 +277,7 @@
 <translation id="2612676031748830579">卡号</translation>
 <translation id="2625189173221582860">已复制密码</translation>
 <translation id="2631006050119455616">已节省</translation>
+<translation id="2634905176438867146">了解如何将 Chrome 设为默认浏览器</translation>
 <translation id="2645657967708199252">您的 <ph name="CONNECTION_TYPE" /> 连接可能会拖慢您的下载速度</translation>
 <translation id="2647434099613338025">添加语言</translation>
 <translation id="2649068648233607930">您的浏览器由 <ph name="DOMAIN" /> 管理</translation>
@@ -358,6 +362,7 @@
 <translation id="3037177537145227281">正在跟踪价格</translation>
 <translation id="3037517125981011456">显示意在引导用户登录 Chrome 的提示</translation>
 <translation id="3046945242843292318">下次可更快速地转到此网站</translation>
+<translation id="3055259925215945098">已移动书签</translation>
 <translation id="305593374596241526">位置信息功能现处于关闭状态；请在 <ph name="BEGIN_LINK" />Android 设置<ph name="END_LINK" />中开启此项功能。</translation>
 <translation id="3060635849835183725">{BOOKMARKS_COUNT,plural, =1{<ph name="BOOKMARKS_COUNT_ONE" /> 个书签}other{<ph name="BOOKMARKS_COUNT_MANY" /> 个书签}}</translation>
 <translation id="3062802207422175757">Chrome 可提供您感兴趣的报道</translation>
@@ -386,6 +391,7 @@
 <translation id="3234978181857588512">保存到设备</translation>
 <translation id="3236059992281584593">还剩 1 分钟</translation>
 <translation id="3237087289225714896">标准预加载：</translation>
+<translation id="3237433641417325993">向下滚动即可查看推荐的文章</translation>
 <translation id="3244271242291266297">MM</translation>
 <translation id="3245429137663807393">如果您还共享了 Chrome 使用情况报告，这些报告会包含您访问过的网址</translation>
 <translation id="3250563604907490871">当您连接到 Wi-Fi 后，“图片说明”功能将会恢复运作</translation>
@@ -537,7 +543,6 @@
 <translation id="4170011742729630528">此服务目前无法使用，请稍后再试。</translation>
 <translation id="4179980317383591987">已使用 <ph name="AMOUNT" /></translation>
 <translation id="4181841719683918333">语言</translation>
-<translation id="4183868528246477015">使用 Google 智能镜头进行搜索<ph name="BEGIN_NEW" />新功能<ph name="END_NEW" /></translation>
 <translation id="4195643157523330669">在新标签页中打开</translation>
 <translation id="4196597275619698563">创建卡片</translation>
 <translation id="4198423547019359126">没有可用的下载内容保存位置</translation>
@@ -571,7 +576,6 @@
 <translation id="4411535500181276704">精简模式</translation>
 <translation id="4415276339145661267">管理您的 Google 帐号</translation>
 <translation id="4425140285732600465">正在跟踪价格。当任一网站上的商品降价时，您会收到提醒。</translation>
-<translation id="4427306783828095590">“增强型保护”选项在防范网上诱骗和恶意软件方面更高一筹</translation>
 <translation id="4450672886426705087">来自 Google 的搜索结果。</translation>
 <translation id="4452411734226507615">关闭“<ph name="TAB_TITLE" />”标签页</translation>
 <translation id="4452548195519783679">已将书签添加到“<ph name="FOLDER_NAME" />”</translation>
@@ -651,6 +655,7 @@
 <translation id="4835385943915508971">Chrome 无权访问请求的资源。</translation>
 <translation id="4837753911714442426">打开选项以打印网页</translation>
 <translation id="4842092870884894799">目前显示的是密码生成弹出式窗口</translation>
+<translation id="4842515939542199281">若要使用语音进行搜索，请点按麦克风图标</translation>
 <translation id="4850886885716139402">视图</translation>
 <translation id="4860895144060829044">拨打</translation>
 <translation id="4864369630010738180">正在登录…</translation>
@@ -697,6 +702,7 @@
 <translation id="5091249083535528968">扩展的使用情况数据</translation>
 <translation id="509429900233858213">出现错误。</translation>
 <translation id="510275257476243843">还剩 1 小时</translation>
+<translation id="5115811374190515607">已移至<ph name="PRODUCT_NAME" /></translation>
 <translation id="5118713593561876160">兴趣</translation>
 <translation id="5123685120097942451">无痕式标签页</translation>
 <translation id="5126510351761255129">验证您的银行卡</translation>
@@ -801,6 +807,7 @@
 <translation id="5749068826913805084">Chrome 需要具备存储空间使用权限，才能下载文件。</translation>
 <translation id="5749237766298580851">已关闭 <ph name="SEPARATOR" /> 不推荐</translation>
 <translation id="5752232708629533680">仅分享 GIF 图片</translation>
+<translation id="5753139477036638699">您可在 Chrome 中使用语音进行搜索</translation>
 <translation id="5754350196967618083">无法刷新“探索”</translation>
 <translation id="5763382633136178763">无痕模式标签页</translation>
 <translation id="5763514718066511291">点按即可复制该应用的网址</translation>
@@ -826,6 +833,7 @@
 <translation id="5854512288214985237">系统不会向 Google 发送任何统计信息或崩溃报告</translation>
 <translation id="5855546874025048181">修正为：<ph name="REFINE_TEXT" /></translation>
 <translation id="5857447844686706637">出了点问题。无法更新“跟踪价格”设置。</translation>
+<translation id="5859968346865909126">您可在“设置”中开启或关闭此模式</translation>
 <translation id="5860033963881614850">关闭</translation>
 <translation id="5860491529813859533">启用</translation>
 <translation id="5862731021271217234">要访问您在其他设备上打开的标签页，请开启同步功能</translation>
@@ -1011,6 +1019,7 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="6813446258015311409">登录 Chrome，已打开。</translation>
 <translation id="6814033694018386318">您要与 Google 分享哪些信息</translation>
 <translation id="6817747507826986771">快速分享此页面。若要修改此快捷方式，请轻触并按住这里。</translation>
+<translation id="6819199143469632133">如需跨设备获取您的 Google 信息，请登录</translation>
 <translation id="6820686453637990663">CVC</translation>
 <translation id="6824899148643461612">已选择标签页“<ph name="TAB_TITLE" />”</translation>
 <translation id="6828070228333235514">停止跟踪价格</translation>
@@ -1049,6 +1058,7 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="7027549951530753705">“<ph name="ITEM_TITLE" />”已恢复</translation>
 <translation id="7029390216614421513">请将此框对准二维码/条形码。</translation>
 <translation id="7029809446516969842">密码</translation>
+<translation id="7037830628447527439">使用您的 Google 帐号登录 Chrome</translation>
 <translation id="7038956721828960940">chrome_image_<ph name="CURRENT_TIMESTAMP_MS" /></translation>
 <translation id="7054588988317389591">获取图片说明？</translation>
 <translation id="7055152154916055070">已禁止重定向：</translation>
@@ -1070,6 +1080,7 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="7177466738963138057">以后，您可以在“设置”中更改此设置。</translation>
 <translation id="7177873915659574692">无法创建二维码。网址长度超出了 <ph name="CHARACTER_LIMIT" /> 个字符（上限）。</translation>
 <translation id="7180611975245234373">刷新</translation>
+<translation id="718226107353899806">您最多只能添加 <ph name="MAX_NUM_REACTIONS" /> 个表情符号</translation>
 <translation id="7187993566681480880">会保护您在 Chrome 中免受安全威胁；如果您是处于已登录状态，还可让您更安全地使用其他 Google 应用。</translation>
 <translation id="718926126787620637">书签文件夹列表已全屏打开</translation>
 <translation id="7191430249889272776">标签页已在后台打开。</translation>
@@ -1100,6 +1111,7 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="7359002509206457351">查询付款方式</translation>
 <translation id="7375125077091615385">类型：</translation>
 <translation id="7376560087009844242">如果选择纳入相应页面上的更多文字，您便可能会在使用“轻触搜索”功能时看到相关性更高的结果。您随时可访问<ph name="BEGIN_LINK" />设置<ph name="END_LINK" />以更改此设置。</translation>
+<translation id="7379900596734708416">可为网站启用深色主题</translation>
 <translation id="7386842512861524348">您与此类网站之间的连接是安全的，除非 Chrome 另行通知。</translation>
 <translation id="7396940094317457632"><ph name="FILE_NAME" />。</translation>
 <translation id="7400418766976504921">网址</translation>
@@ -1232,7 +1244,6 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="8035133914807600019">新建文件夹…</translation>
 <translation id="8037750541064988519">还剩 <ph name="DAYS" /> 天</translation>
 <translation id="8037801708772278989">刚刚检查过</translation>
-<translation id="8040831032425909005">供快速操作的搜索微件图标</translation>
 <translation id="804335162455518893">找不到 SD 卡</translation>
 <translation id="8048533522416101084">{TAB_COUNT,plural, =1{<ph name="TAB_COUNT_ONE" /> 个无痕式标签页}other{<ph name="TAB_COUNT_NORMAL" /> 个无痕式标签页}}</translation>
 <translation id="8051695050440594747"><ph name="MEGABYTES" /> MB 可用</translation>
@@ -1402,6 +1413,7 @@ Privacy Sandbox 试用版功能尚处于积极开发阶段，目前只能在部�
 <translation id="8945143127965743188"><ph name="LANG" /> - 无法下载此语言。请稍后再试。</translation>
 <translation id="8951232171465285730">Chrome 已为您保存的数据量：<ph name="MEGABYTES" /> MB</translation>
 <translation id="8955719471735800169">返回页首</translation>
+<translation id="8964479563882643397">若要打开一个新的无痕式标签页，请先打开菜单</translation>
 <translation id="8965591936373831584">待下载</translation>
 <translation id="8967427617812342790">添加到阅读清单</translation>
 <translation id="8968085728801125376">{TAB_COUNT,plural, =1{系统将会关闭 <ph name="INCOGNITO_TAB_COUNT" /> 个无痕式标签页以及另外 <ph name="TAB_COUNT_ONE" /> 个标签页}other{系统将会关闭 <ph name="INCOGNITO_TAB_COUNT" /> 个无痕式标签页以及另外 <ph name="TAB_COUNT_MANY" /> 个标签页}}</translation>

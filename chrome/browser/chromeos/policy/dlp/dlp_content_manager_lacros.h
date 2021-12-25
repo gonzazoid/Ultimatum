@@ -7,8 +7,9 @@
 
 #include "base/containers/flat_map.h"
 #include "base/containers/flat_set.h"
-#include "chrome/browser/chromeos/policy/dlp/dlp_content_observer.h"
+#include "chrome/browser/chromeos/policy/dlp/dlp_content_manager.h"
 #include "chrome/browser/chromeos/policy/dlp/dlp_content_restriction_set.h"
+#include "content/public/browser/desktop_media_id.h"
 #include "ui/aura/window_observer.h"
 
 namespace aura {
@@ -23,12 +24,21 @@ namespace policy {
 
 // LaCros-wide class that tracks the set of currently known confidential
 // WebContents and whether any of them are currently visible.
-class DlpContentManagerLacros : public DlpContentObserver,
+class DlpContentManagerLacros : public DlpContentManager,
                                 public aura::WindowObserver {
  public:
   // Creates the instance if not yet created.
   // There will always be a single instance created on the first access.
   static DlpContentManagerLacros* Get();
+
+  // Checks whether screen sharing of content from the |media_id| source with
+  // application |application_name| is restricted or not advised. Depending on
+  // the result, calls |callback| and passes an indicator whether to proceed or
+  // not.
+  void CheckScreenShareRestriction(
+      const content::DesktopMediaID& media_id,
+      const std::u16string& application_title,
+      OnDlpRestrictionCheckedCallback callback) override;
 
  private:
   DlpContentManagerLacros();
@@ -51,10 +61,6 @@ class DlpContentManagerLacros : public DlpContentObserver,
   // Tracks set of known confidential WebContents* for each Window*.
   base::flat_map<aura::Window*, base::flat_set<content::WebContents*>>
       window_webcontents_;
-
-  // Tracks current restrictions applied to WebContents*.
-  base::flat_map<content::WebContents*, DlpContentRestrictionSet>
-      confidential_web_contents_;
 
   // Tracks current restrictions applied to Window* based on visible
   // WebContents* belonging to Window*.

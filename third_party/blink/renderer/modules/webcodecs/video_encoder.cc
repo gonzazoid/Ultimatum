@@ -69,6 +69,10 @@
 #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
 #include "third_party/blink/renderer/platform/wtf/cross_thread_functional.h"
 
+#if BUILDFLAG(ENABLE_LIBAOM)
+#include "media/video/av1_video_encoder.h"
+#endif
+
 #if BUILDFLAG(ENABLE_OPENH264)
 #include "media/video/openh264_video_encoder.h"
 #endif
@@ -80,8 +84,8 @@
 namespace WTF {
 
 template <>
-struct CrossThreadCopier<media::Status>
-    : public CrossThreadCopierPassThrough<media::Status> {
+struct CrossThreadCopier<media::EncoderStatus>
+    : public CrossThreadCopierPassThrough<media::EncoderStatus> {
   STATIC_ONLY(CrossThreadCopier);
 };
 
@@ -287,9 +291,41 @@ VideoEncoderTraits::ParsedConfig* ParseConfigStatic(
   return result;
 }
 
+const base::Feature kWebCodecsAv1Encoding{"WebCodecsAv1Encoding",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
+
 bool VerifyCodecSupportStatic(VideoEncoderTraits::ParsedConfig* config,
                               ExceptionState* exception_state) {
   switch (config->codec) {
+    case media::VideoCodec::kAV1:
+      if (!base::FeatureList::IsEnabled(kWebCodecsAv1Encoding)) {
+        if (exception_state) {
+          exception_state->ThrowDOMException(
+              DOMExceptionCode::kNotSupportedError,
+              "AV1 encoding is not supported yet.");
+        }
+        return false;
+      }
+
+      if (config->options.scalability_mode.has_value()) {
+        if (exception_state) {
+          exception_state->ThrowDOMException(
+              DOMExceptionCode::kNotSupportedError,
+              "SVC encoding is not supported for AV1 yet.");
+        }
+        return false;
+      }
+      if (config->profile !=
+          media::VideoCodecProfile::AV1PROFILE_PROFILE_MAIN) {
+        if (exception_state) {
+          exception_state->ThrowDOMException(
+              DOMExceptionCode::kNotSupportedError, "Unsupported av1 profile.");
+        }
+        return false;
+      }
+      // TODO(crbug.com/1208280): Check for supported AV1 levels
+      break;
+
     case media::VideoCodec::kVP8:
       break;
 
@@ -392,11 +428,6 @@ bool CanUseGpuMemoryBufferReadback(media::VideoPixelFormat format,
 }  // namespace
 
 // static
-const char* VideoEncoderTraits::GetNameForDevTools() {
-  return "VideoEncoder(WebCodecs)";
-}
-
-// static
 const char* VideoEncoderTraits::GetName() {
   return "VideoEncoder";
 }
@@ -455,6 +486,14 @@ VideoEncoder::CreateAcceleratedVideoEncoder(
                                                              callback_runner_));
 }
 
+std::unique_ptr<media::VideoEncoder> CreateAv1VideoEncoder() {
+#if BUILDFLAG(ENABLE_LIBAOM)
+  return std::make_unique<media::Av1VideoEncoder>();
+#else
+  return nullptr;
+#endif  // BUILDFLAG(ENABLE_LIBAOM)
+}
+
 std::unique_ptr<media::VideoEncoder> CreateVpxVideoEncoder() {
 #if BUILDFLAG(ENABLE_LIBVPX)
   return std::make_unique<media::VpxVideoEncoder>();
@@ -480,6 +519,10 @@ std::unique_ptr<media::VideoEncoder> VideoEncoder::CreateSoftwareVideoEncoder(
     return nullptr;
   std::unique_ptr<media::VideoEncoder> result;
   switch (codec) {
+    case media::VideoCodec::kAV1:
+      result = CreateAv1VideoEncoder();
+      self->UpdateEncoderLog("Av1VideoEncoder", false);
+      break;
     case media::VideoCodec::kVP8:
     case media::VideoCodec::kVP9:
       result = CreateVpxVideoEncoder();
@@ -539,9 +582,10 @@ void VideoEncoder::ContinueConfigureWithGpuFactories(
   if (!media_encoder_) {
     HandleError(logger_->MakeException(
         "Encoder creation error.",
-        media::Status(media::StatusCode::kEncoderInitializationError,
-                      "Unable to create encoder (most likely unsupported "
-                      "codec/acceleration requirement combination)")));
+        media::EncoderStatus(
+            media::EncoderStatus::Codes::kEncoderInitializationError,
+            "Unable to create encoder (most likely unsupported "
+            "codec/acceleration requirement combination)")));
     request->EndTracing();
     return;
   }
@@ -553,7 +597,8 @@ void VideoEncoder::ContinueConfigureWithGpuFactories(
       WrapCrossThreadPersistent(active_config_.Get()), reset_count_));
 
   auto done_callback = [](VideoEncoder* self, Request* req,
-                          media::VideoCodec codec, media::Status status) {
+                          media::VideoCodec codec,
+                          media::EncoderStatus status) {
     if (!self || self->reset_count_ != req->reset_count) {
       req->EndTracing(/*aborted=*/true);
       return;
@@ -563,7 +608,7 @@ void VideoEncoder::ContinueConfigureWithGpuFactories(
 
     if (!status.is_ok()) {
       self->HandleError(self->logger_->MakeException(
-          "Encoder initialization error.", status));
+          "Encoder initialization error.", std::move(status)));
     } else {
       UMA_HISTOGRAM_ENUMERATION("Blink.WebCodecs.VideoEncoder.Codec", codec,
                                 media::VideoCodec::kMaxValue);
@@ -615,7 +660,7 @@ void VideoEncoder::ProcessEncode(Request* request) {
   request->StartTracingVideoEncode(keyframe);
 
   auto done_callback = [](VideoEncoder* self, Request* req,
-                          media::Status status) {
+                          media::EncoderStatus status) {
     if (!self || self->reset_count_ != req->reset_count) {
       req->EndTracing(/*aborted=*/true);
       return;
@@ -625,7 +670,7 @@ void VideoEncoder::ProcessEncode(Request* request) {
     self->active_encodes_--;
     if (!status.is_ok()) {
       self->HandleError(
-          self->logger_->MakeException("Encoding error.", status));
+          self->logger_->MakeException("Encoding error.", std::move(status)));
     }
     req->EndTracing();
     self->ProcessRequests();
@@ -652,27 +697,27 @@ void VideoEncoder::ProcessEncode(Request* request) {
       // This will execute shortly after CopyRGBATextureToVideoFrame()
       // completes. |blocking_request_in_progress_| = true will ensure that
       // HasPendingActivity() keeps the VideoEncoder alive long enough.
-      auto blit_done_callback = [](VideoEncoder* self, bool keyframe,
-                                   uint32_t reset_count,
-                                   base::TimeDelta timestamp,
-                                   media::VideoFrameMetadata metadata,
-                                   media::VideoEncoder::StatusCB done_callback,
-                                   scoped_refptr<media::VideoFrame> frame) {
-        if (!self || self->reset_count_ != reset_count || !frame)
-          return;
+      auto blit_done_callback =
+          [](VideoEncoder* self, bool keyframe, uint32_t reset_count,
+             base::TimeDelta timestamp, media::VideoFrameMetadata metadata,
+             media::VideoEncoder::EncoderStatusCB done_callback,
+             scoped_refptr<media::VideoFrame> frame) {
+            if (!self || self->reset_count_ != reset_count || !frame)
+              return;
 
-        // CopyRGBATextureToVideoFrame() operates on mailboxes and not frames,
-        // so we must manually copy over properties relevant to the encoder.
-        frame->set_timestamp(timestamp);
-        frame->set_metadata(metadata);
+            // CopyRGBATextureToVideoFrame() operates on mailboxes and not
+            // frames, so we must manually copy over properties relevant to the
+            // encoder.
+            frame->set_timestamp(timestamp);
+            frame->set_metadata(metadata);
 
-        DCHECK_CALLED_ON_VALID_SEQUENCE(self->sequence_checker_);
-        --self->requested_encodes_;
-        self->blocking_request_in_progress_ = false;
-        self->media_encoder_->Encode(std::move(frame), keyframe,
-                                     std::move(done_callback));
-        self->ProcessRequests();
-      };
+            DCHECK_CALLED_ON_VALID_SEQUENCE(self->sequence_checker_);
+            --self->requested_encodes_;
+            self->blocking_request_in_progress_ = false;
+            self->media_encoder_->Encode(std::move(frame), keyframe,
+                                         std::move(done_callback));
+            self->ProcessRequests();
+          };
 
       auto origin = frame->metadata().texture_origin_is_top_left
                         ? kTopLeft_GrSurfaceOrigin
@@ -735,12 +780,13 @@ void VideoEncoder::ProcessEncode(Request* request) {
   }
 
   if (!frame) {
-    auto status = media::Status(media::StatusCode::kEncoderFailedEncode,
-                                "Can't readback frame textures.");
     callback_runner_->PostTask(
         FROM_HERE, ConvertToBaseOnceCallback(CrossThreadBindOnce(
                        done_callback, WrapCrossThreadWeakPersistent(this),
-                       WrapCrossThreadPersistent(request), std::move(status))));
+                       WrapCrossThreadPersistent(request),
+                       media::EncoderStatus(
+                           media::EncoderStatus::Codes::kEncoderFailedEncode,
+                           "Can't readback frame textures."))));
     return;
   }
 
@@ -792,7 +838,7 @@ void VideoEncoder::ProcessReconfigure(Request* request) {
   request->StartTracing();
 
   auto reconf_done_callback = [](VideoEncoder* self, Request* req,
-                                 media::Status status) {
+                                 media::EncoderStatus status) {
     if (!self || self->reset_count_ != req->reset_count) {
       req->EndTracing(/*aborted=*/true);
       return;
@@ -816,7 +862,7 @@ void VideoEncoder::ProcessReconfigure(Request* request) {
 
   auto flush_done_callback = [](VideoEncoder* self, Request* req,
                                 decltype(reconf_done_callback) reconf_callback,
-                                media::Status status) {
+                                media::EncoderStatus status) {
     if (!self || self->reset_count_ != req->reset_count) {
       req->EndTracing(/*aborted=*/true);
       return;
@@ -824,7 +870,7 @@ void VideoEncoder::ProcessReconfigure(Request* request) {
     DCHECK_CALLED_ON_VALID_SEQUENCE(self->sequence_checker_);
     if (!status.is_ok()) {
       self->HandleError(self->logger_->MakeException(
-          "Encoder initialization error.", status));
+          "Encoder initialization error.", std::move(status)));
       self->blocking_request_in_progress_ = false;
       req->EndTracing();
       return;
@@ -878,7 +924,10 @@ void VideoEncoder::CallOutputCallback(
     auto* svc_metadata = SvcOutputMetadata::Create();
     svc_metadata->setTemporalLayerId(output.temporal_id);
     metadata->setSvc(svc_metadata);
-    metadata->setTemporalLayerId(output.temporal_id);
+
+    // TODO(https://crbug.com/1275024): Remove these lines after deprecating.
+    if (!base::FeatureList::IsEnabled(kRemoveWebCodecsSpecViolations))
+      metadata->setTemporalLayerId(output.temporal_id);
   }
 
   // TODO(https://crbug.com/1241448): All encoders should output color space.
@@ -964,7 +1013,8 @@ static void isConfigSupportedWithSoftwareOnly(
 
   auto done_callback = [](std::unique_ptr<media::VideoEncoder> sw_encoder,
                           ScriptPromiseResolver* resolver,
-                          VideoEncoderSupport* support, media::Status status) {
+                          VideoEncoderSupport* support,
+                          media::EncoderStatus status) {
     support->setSupported(status.is_ok());
     resolver->Resolve(support);
     DeleteLater(resolver->GetScriptState(), std::move(sw_encoder));

@@ -109,10 +109,39 @@ class BaseWptScriptAdapter(common.BaseIsolatedScriptArgsAdapter):
             os.path.join(layout_test_results, 'results.html'))
 
         if self.wptreport:
-            self.fs.copyfile(
-                self.wptreport,
-                os.path.join(layout_test_results,
-                             os.path.basename(self.wptreport)))
+            self._process_wpt_report(self.wptreport)
+
+    def get_wpt_revision(self):
+        checkout_script = os.path.join(
+            common.SRC_DIR, "third_party", "wpt_tools", "checkout.sh")
+        with open(checkout_script) as f:
+            for line in f.readlines():
+                if line.startswith("WPT_HEAD"):
+                    rev = line.rstrip()[len("WPT_HEAD")+1:]
+                    return rev
+        return None
+
+    def _process_wpt_report(self, wptreport):
+        layout_test_results = os.path.join(os.path.dirname(self.wpt_output),
+                                           self.layout_test_results_subdir)
+        dst = os.path.join(layout_test_results,
+                           os.path.basename(wptreport))
+        with open(wptreport) as f_src, open(dst, "w") as f_dst:
+            data = json.load(f_src)
+            # update revision to use upstream revision
+            rev = self.get_wpt_revision()
+            if rev:
+                data["run_info"]["revision"] = rev
+            # dump the result to layout-test-results
+            json.dump(data, f_dst)
+
+        # upload the report to ResultDB
+        artifact = {
+            os.path.basename(wptreport): {
+                'filePath': dst
+            }
+        }
+        self.sink.report_invocation_level_artifacts(artifact)
 
     def process_wptrunner_output(self,
                                  full_results_json,
@@ -293,6 +322,8 @@ class BaseWptScriptAdapter(common.BaseIsolatedScriptArgsAdapter):
         unexpected = result_node['actual'] not in result_node['expected']
 
         for artifact_name, paths in result_node.get('artifacts', {}).items():
+            if artifact_name in ["wpt_actual_status", "wpt_subtest_failure"]:
+                continue
             for path in paths:
                 artifacts.AddArtifact(artifact_name, path)
 
@@ -313,7 +344,7 @@ class BaseWptScriptAdapter(common.BaseIsolatedScriptArgsAdapter):
         test_path = test_name[:index] if index != -1 else test_name
 
         self.sink.report_individual_test_result(
-            test_name, result, self.layout_test_results_subdir,
+            test_name, result, os.path.dirname(self.wpt_output),
             None, os.path.join(WEB_TESTS_DIR, test_path))
 
     def _maybe_write_expected_output(self, results_dir, test_name):

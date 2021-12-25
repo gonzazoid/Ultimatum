@@ -55,6 +55,7 @@
 #include "chrome/browser/federated_learning/floc_eligibility_observer.h"
 #include "chrome/browser/federated_learning/floc_id_provider.h"
 #include "chrome/browser/federated_learning/floc_id_provider_factory.h"
+#include "chrome/browser/first_party_sets/first_party_sets_pref_names.h"
 #include "chrome/browser/font_access/chrome_font_access_delegate.h"
 #include "chrome/browser/font_family_cache.h"
 #include "chrome/browser/gpu/chrome_browser_main_extra_parts_gpu.h"
@@ -84,6 +85,7 @@
 #include "chrome/browser/prefetch/no_state_prefetch/chrome_no_state_prefetch_contents_delegate.h"
 #include "chrome/browser/prefetch/no_state_prefetch/no_state_prefetch_manager_factory.h"
 #include "chrome/browser/prefetch/no_state_prefetch/no_state_prefetch_navigation_throttle.h"
+#include "chrome/browser/prefetch/prefetch_prefs.h"
 #include "chrome/browser/prefetch/prefetch_proxy/chrome_speculation_host_delegate.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetch_proxy_features.h"
 #include "chrome/browser/prefetch/prefetch_proxy/prefetch_proxy_service.h"
@@ -267,6 +269,7 @@
 #include "content/public/browser/tts_platform.h"
 #include "content/public/browser/url_loader_request_interceptor.h"
 #include "content/public/browser/vpn_service_proxy.h"
+#include "content/public/browser/weak_document_ptr.h"
 #include "content/public/browser/web_contents.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_ui_url_loader_factory.h"
@@ -284,6 +287,7 @@
 #include "media/media_buildflags.h"
 #include "media/mojo/buildflags.h"
 #include "mojo/public/cpp/bindings/remote.h"
+#include "net/base/features.h"
 #include "net/cookies/site_for_cookies.h"
 #include "net/ssl/client_cert_store.h"
 #include "net/ssl/ssl_cert_request_info.h"
@@ -806,7 +810,7 @@ bool IsAutoplayAllowedByPolicy(content::WebContents* contents,
     return false;
 
   // Check if the current URL matches a URL pattern on the allowlist.
-  const base::ListValue* autoplay_allowlist =
+  const base::Value* autoplay_allowlist =
       prefs->GetList(prefs::kAutoplayWhitelist);
   return autoplay_allowlist &&
          prefs->IsManagedPreference(prefs::kAutoplayWhitelist) &&
@@ -1064,7 +1068,8 @@ void LaunchURL(base::WeakPtr<ChromeContentBrowserClient> client,
                bool is_main_frame,
                network::mojom::WebSandboxFlags sandbox_flags,
                bool has_user_gesture,
-               const absl::optional<url::Origin>& initiating_origin) {
+               const absl::optional<url::Origin>& initiating_origin,
+               content::WeakDocumentPtr initiator_document) {
   // If there is no longer a WebContents, the request may have raced with tab
   // closing. Don't fire the external request. (It may have been a prerender.)
   content::WebContents* web_contents = web_contents_getter.Run();
@@ -1150,11 +1155,12 @@ void LaunchURL(base::WeakPtr<ChromeContentBrowserClient> client,
   // without any additional security checks. Since the URL is allowlisted,
   // we assume it can be executed.
   if (is_allowlisted) {
-    ExternalProtocolHandler::LaunchUrlWithoutSecurityCheck(url, web_contents);
+    ExternalProtocolHandler::LaunchUrlWithoutSecurityCheck(
+        url, web_contents, std::move(initiator_document));
   } else {
-    ExternalProtocolHandler::LaunchUrl(url, std::move(web_contents_getter),
-                                       page_transition, has_user_gesture,
-                                       initiating_origin);
+    ExternalProtocolHandler::LaunchUrl(
+        url, std::move(web_contents_getter), page_transition, has_user_gesture,
+        initiating_origin, std::move(initiator_document));
   }
 }
 
@@ -1689,18 +1695,6 @@ bool ChromeContentBrowserClient::DoesSiteRequireDedicatedProcess(
   return false;
 }
 
-bool ChromeContentBrowserClient::ShouldLockProcessToSite(
-    content::BrowserContext* browser_context,
-    const GURL& effective_site_url) {
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  if (!ChromeContentBrowserClientExtensionsPart::ShouldLockProcessToSite(
-          browser_context, effective_site_url)) {
-    return false;
-  }
-#endif
-  return true;
-}
-
 bool ChromeContentBrowserClient::DoesWebUISchemeRequireProcessLock(
     base::StringPiece scheme) {
   // Note: This method can be called from multiple threads. It is not safe to
@@ -1943,22 +1937,12 @@ size_t ChromeContentBrowserClient::GetProcessCountToIgnoreForLimit() {
 bool ChromeContentBrowserClient::ShouldTryToUseExistingProcessHost(
     content::BrowserContext* browser_context,
     const GURL& url) {
-  // It has to be a valid URL for us to check for an extension.
-  if (!url.is_valid())
-    return false;
-
   // Top Chrome WebUI should try to share a RenderProcessHost with other
   // existing Top Chrome WebUI.
   if (IsTopChromeWebUIURL(url))
     return true;
 
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  Profile* profile = Profile::FromBrowserContext(browser_context);
-  return ChromeContentBrowserClientExtensionsPart::
-      ShouldTryToUseExistingProcessHost(profile, url);
-#else
   return false;
-#endif
 }
 
 bool ChromeContentBrowserClient::ShouldSubframesTryToReuseExistingProcess(
@@ -2421,7 +2405,6 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
       switches::kEnableNaCl,
 #if BUILDFLAG(ENABLE_NACL)
       switches::kEnableNaClDebug,
-      switches::kEnableNaClNonSfiMode,
 #endif
       switches::kEnableNetBenchmarking,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
@@ -2462,9 +2445,7 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
 #if BUILDFLAG(ENABLE_NACL)
     static const char* const kSwitchNames[] = {
         switches::kEnableNaClDebug,
-        switches::kEnableNaClNonSfiMode,
         switches::kForcePNaClSubzero,
-        switches::kNaClDangerousNoSandboxNonSfi,
     };
 
     command_line->CopySwitchesFrom(browser_command_line, kSwitchNames,
@@ -3920,6 +3901,7 @@ std::wstring ChromeContentBrowserClient::GetAppContainerSidForSandboxType(
     case sandbox::mojom::Sandbox::kSpeechRecognition:
     case sandbox::mojom::Sandbox::kPdfConversion:
     case sandbox::mojom::Sandbox::kService:
+    case sandbox::mojom::Sandbox::kServiceWithJit:
     case sandbox::mojom::Sandbox::kIconReader:
     case sandbox::mojom::Sandbox::kMediaFoundationCdm:
     case sandbox::mojom::Sandbox::kWindowsSystemProxyResolver:
@@ -3971,6 +3953,9 @@ bool ChromeContentBrowserClient::PreSpawnChild(
     case sandbox::mojom::Sandbox::kNetwork:
       enforce_code_integrity =
           base::FeatureList::IsEnabled(kNetworkServiceCodeIntegrity);
+      break;
+    case sandbox::mojom::Sandbox::kServiceWithJit:
+      enforce_code_integrity = true;
       break;
     case sandbox::mojom::Sandbox::kUtility:
     case sandbox::mojom::Sandbox::kGpu:
@@ -5525,6 +5510,7 @@ bool ChromeContentBrowserClient::HandleExternalProtocol(
     ui::PageTransition page_transition,
     bool has_user_gesture,
     const absl::optional<url::Origin>& initiating_origin,
+    content::RenderFrameHost* initiator_document,
     mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory) {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   // External protocols are disabled for guests. An exception is made for the
@@ -5547,11 +5533,16 @@ bool ChromeContentBrowserClient::HandleExternalProtocol(
     return false;
 #endif  // defined(ANDROID)
 
+  auto weak_initiator_document = initiator_document
+                                     ? initiator_document->GetWeakDocumentPtr()
+                                     : content::WeakDocumentPtr();
+
   content::GetUIThreadTaskRunner({})->PostTask(
-      FROM_HERE, base::BindOnce(&LaunchURL, weak_factory_.GetWeakPtr(), url,
-                                std::move(web_contents_getter), page_transition,
-                                is_main_frame, sandbox_flags, has_user_gesture,
-                                initiating_origin));
+      FROM_HERE,
+      base::BindOnce(&LaunchURL, weak_factory_.GetWeakPtr(), url,
+                     std::move(web_contents_getter), page_transition,
+                     is_main_frame, sandbox_flags, has_user_gesture,
+                     initiating_origin, std::move(weak_initiator_document)));
   return true;
 }
 
@@ -5760,8 +5751,7 @@ bool ChromeContentBrowserClient::CanAcceptUntrustedExchangesIfNeeded() {
 }
 
 void ChromeContentBrowserClient::OnNetworkServiceDataUseUpdate(
-    int process_id,
-    int routing_id,
+    content::GlobalRenderFrameHostId render_frame_host_id,
     int32_t network_traffic_annotation_id_hash,
     int64_t recv_bytes,
     int64_t sent_bytes) {
@@ -5772,7 +5762,7 @@ void ChromeContentBrowserClient::OnNetworkServiceDataUseUpdate(
   }
 #if !defined(OS_ANDROID)
   task_manager::TaskManagerInterface::UpdateAccumulatedStatsNetworkForRoute(
-      process_id, routing_id, recv_bytes, sent_bytes);
+      render_frame_host_id, recv_bytes, sent_bytes);
 #endif
 }
 
@@ -6186,10 +6176,8 @@ ukm::UkmService* ChromeContentBrowserClient::GetUkmService() {
 void ChromeContentBrowserClient::OnKeepaliveRequestStarted(
     content::BrowserContext* context) {
 #if !defined(OS_ANDROID)
-  // TODO(crbug.com/1161996): Remove this entry once the investigation is
-  // done.
-  VLOG(1) << "OnKeepaliveRequestStarted: " << num_keepalive_requests_ << " ==> "
-          << num_keepalive_requests_ + 1;
+  DVLOG(1) << "OnKeepaliveRequestStarted: " << num_keepalive_requests_
+           << " ==> " << num_keepalive_requests_ + 1;
   ++num_keepalive_requests_;
   DCHECK_GT(num_keepalive_requests_, 0u);
 
@@ -6203,10 +6191,8 @@ void ChromeContentBrowserClient::OnKeepaliveRequestStarted(
   const auto timeout = GetKeepaliveTimerTimeout(context);
   keepalive_deadline_ = std::max(keepalive_deadline_, now + timeout);
   if (keepalive_deadline_ > now && !keepalive_timer_.IsRunning()) {
-    // TODO(crbug.com/1161996): Remove this entry once the investigation is
-    // done.
-    VLOG(1) << "Starting a keepalive timer(" << timeout.InSecondsF()
-            << " seconds)";
+    DVLOG(1) << "Starting a keepalive timer(" << timeout.InSecondsF()
+             << " seconds)";
     keepalive_timer_.Start(
         FROM_HERE, keepalive_deadline_ - now,
         base::BindOnce(
@@ -6221,15 +6207,11 @@ void ChromeContentBrowserClient::OnKeepaliveRequestStarted(
 void ChromeContentBrowserClient::OnKeepaliveRequestFinished() {
 #if !defined(OS_ANDROID)
   DCHECK_GT(num_keepalive_requests_, 0u);
-  // TODO(crbug.com/1161996): Remove this entry once the investigation is
-  // done.
-  VLOG(1) << "OnKeepaliveRequestFinished: " << num_keepalive_requests_
-          << " ==> " << num_keepalive_requests_ - 1;
+  DVLOG(1) << "OnKeepaliveRequestFinished: " << num_keepalive_requests_
+           << " ==> " << num_keepalive_requests_ - 1;
   --num_keepalive_requests_;
   if (num_keepalive_requests_ == 0) {
-    // TODO(crbug.com/1161996): Remove this entry once the investigation is
-    // done.
-    VLOG(1) << "Stopping the keepalive timer";
+    DVLOG(1) << "Stopping the keepalive timer";
     keepalive_timer_.Stop();
     // This deletes the keep alive handle attached to the timer function and
     // unblock the shutdown sequence.
@@ -6336,14 +6318,9 @@ base::TimeDelta ChromeContentBrowserClient::GetKeepaliveTimerTimeout(
 
 void ChromeContentBrowserClient::OnKeepaliveTimerFired(
     std::unique_ptr<ScopedKeepAlive> keep_alive_handle) {
-  // TODO(crbug.com/1161996): Remove this entry once the investigation is done.
-  VLOG(1) << "OnKeepaliveTimerFired";
   const auto now = base::TimeTicks::Now();
   const auto then = keepalive_deadline_;
   if (now < then) {
-    // TODO(crbug.com/1161996): Remove this entry once the investigation is
-    // done.
-    VLOG(1) << "Extending keepalive timer";
     keepalive_timer_.Start(
         FROM_HERE, then - now,
         base::BindOnce(&ChromeContentBrowserClient::OnKeepaliveTimerFired,
@@ -6366,6 +6343,21 @@ void ChromeContentBrowserClient::FlushBackgroundAttributions(
   background_attribution_flusher_->FlushPreNativeAttributions(
       std::move(callback));
 #endif
+}
+
+bool ChromeContentBrowserClient::ShouldPreconnectNavigation(
+    content::BrowserContext* browser_context) {
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  // An extension could be blocking connections for privacy reasons, so skip
+  // optimization if there are any extensions with WebRequest permissions.
+  const auto* web_request_api =
+      extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
+          browser_context);
+  if (web_request_api->MayHaveProxies())
+    return false;
+#endif
+  return prefetch::IsSomePreloadingEnabled(
+      *Profile::FromBrowserContext(browser_context)->GetPrefs());
 }
 
 ChromeContentBrowserClient::UserAgentReductionEnterprisePolicyState
@@ -6394,4 +6386,25 @@ bool ChromeContentBrowserClient::ShouldDisableOriginAgentClusterDefault(
   return !Profile::FromBrowserContext(browser_context)
               ->GetPrefs()
               ->GetBoolean(prefs::kOriginAgentClusterDefaultEnabled);
+}
+
+bool ChromeContentBrowserClient::IsFirstPartySetsEnabled() {
+  // TODO(https://crbug.com/1269360): move this logic into
+  // FirstPartySetsUtil::IsFirstPartySetsEnabled
+  if (!base::FeatureList::IsEnabled(net::features::kFirstPartySets)) {
+    return false;
+  }
+
+  PrefService* local_state;
+  if (g_browser_process) {
+    local_state = g_browser_process->local_state();
+  } else {
+    local_state = startup_data_.chrome_feature_list_creator()->local_state();
+  }
+
+  if (!local_state ||
+      !local_state->HasPrefPath(first_party_sets::kFirstPartySetsEnabled)) {
+    return true;
+  }
+  return local_state->GetBoolean(first_party_sets::kFirstPartySetsEnabled);
 }

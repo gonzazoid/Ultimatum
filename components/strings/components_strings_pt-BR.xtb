@@ -112,6 +112,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="1308113895091915999">Oferta disponível</translation>
 <translation id="1312803275555673949">Quais são as evidências?</translation>
 <translation id="131405271941274527"><ph name="URL" /> quer enviar e receber informações quando você encostar seu smartphone em um dispositivo NFC</translation>
+<translation id="1314311879718644478">Ver conteúdo de realidade aumentada</translation>
 <translation id="1314509827145471431">Encadernação do lado direito</translation>
 <translation id="1318023360584041678">Salvo no grupo de guias</translation>
 <translation id="1319245136674974084">Não perguntar novamente para este app</translation>
@@ -176,6 +177,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="1472675084647422956">Mostrar mais</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Procurando a versão do navegador? Acesse</translation>
 <translation id="1476595624592550506">Mude sua senha</translation>
 <translation id="1483493594462132177">Enviar</translation>
 <translation id="1484290072879560759">Escolher endereço de entrega</translation>
@@ -214,6 +216,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="1583429793053364125">Algo deu errado ao exibir esta página da Web.</translation>
 <translation id="1586541204584340881">quais extensões você instalou;</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">Instalar o ARCore?</translation>
 <translation id="1592005682883173041">Acesso a dados locais</translation>
 <translation id="1594030484168838125">Escolher</translation>
 <translation id="160851722280695521">Iniciar o jogo do Dinossauro do Chrome</translation>
@@ -1252,6 +1255,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="4968522289500246572">Este app foi criado para dispositivos móveis e pode não ser redimensionado corretamente. Pode haver erros ou talvez o app seja reiniciado.</translation>
 <translation id="4969341057194253438">Excluir gravação</translation>
 <translation id="4973922308112707173">Perfuração dupla na parte superior</translation>
+<translation id="4976702386844183910">Última visita: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Usar o microfone?</translation>
 <translation id="4984339528288761049">Prc5 (Envelope)</translation>
 <translation id="4989163558385430922">Ver tudo</translation>
@@ -1337,6 +1341,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="5215116848420601511">Formas de pagamento e endereços que usam o Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Bandeja 13</translation>
+<translation id="5216942107514965959">Última visita: hoje</translation>
 <translation id="5222812217790122047">E-mail obrigatório</translation>
 <translation id="5230733896359313003">Endereço de entrega</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1380,6 +1385,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="5333022057423422993">A senha que você acabou de usar foi encontrada pelo Chrome em uma violação de dados. Para proteger suas contas, recomendamos verificar as senhas salvas.</translation>
 <translation id="5334013548165032829">Registros detalhados do sistema</translation>
 <translation id="5334145288572353250">Salvar endereço?</translation>
+<translation id="5335920952954443287">Coração batendo</translation>
 <translation id="5340250774223869109">O aplicativo foi bloqueado</translation>
 <translation id="534295439873310000">Dispositivos NFC</translation>
 <translation id="5344579389779391559">Esta página pode tentar cobrar pagamento em dinheiro</translation>
@@ -1522,6 +1528,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="5869522115854928033">Senhas salvas</translation>
 <translation id="5873013647450402046">O banco precisa confirmar sua identidade.</translation>
 <translation id="5887400589839399685">Cartão salvo</translation>
+<translation id="5887687176710214216">Última visita: ontem</translation>
 <translation id="5895138241574237353">Reiniciar</translation>
 <translation id="5895187275912066135">Emitido em</translation>
 <translation id="5901630391730855834">Amarelo</translation>
@@ -1715,6 +1722,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="6529602333819889595">&amp;Refazer excluir</translation>
 <translation id="6545864417968258051">Verificação de Bluetooth</translation>
 <translation id="6547208576736763147">Perfuração dupla no lado esquerdo</translation>
+<translation id="6554732001434021288">Última visita: <ph name="NUM_DAYS" /> dias atrás</translation>
 <translation id="6556866813142980365">Refazer</translation>
 <translation id="6569060085658103619">Você está vendo uma página de extensões</translation>
 <translation id="6573200754375280815">Perfuração dupla no lado direito</translation>
@@ -1877,6 +1885,7 @@ Se não fizer isso, a permissão será bloqueada pelas configurações de privac
 <translation id="7118618213916969306">Pesquisa o URL da área de transferência, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Fechar outras guias ou programas</translation>
 <translation id="7129409597930077180">Não é possível enviar para esse endereço. Selecione um endereço diferente.</translation>
+<translation id="7132939140423847331">O administrador bloqueou a cópia destes dados.</translation>
 <translation id="7135130955892390533">Mostrar status</translation>
 <translation id="7138472120740807366">Método de entrega</translation>
 <translation id="7139724024395191329">Emirado</translation>
@@ -2049,6 +2058,7 @@ Mais detalhes:
 <translation id="7654909834015434372">Quando você editar as anotações, este documento voltará à rotação original</translation>
 <translation id="765676359832457558">Ocultar configurações avançadas...</translation>
 <translation id="7658239707568436148">Cancelar</translation>
+<translation id="7659878911471462949">Lágrimas de alegria</translation>
 <translation id="7662298039739062396">Configuração controlada por uma extensão</translation>
 <translation id="7663736086183791259">Certificado <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Sem permissão na navegação anônima</translation>
@@ -2149,7 +2159,6 @@ Mais detalhes:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Pode pedir para usar dispositivos e dados de realidade virtual</translation>
 <translation id="7984945080620862648">Não é possível acessar <ph name="SITE" /> no momento, porque o website enviou credenciais codificadas que o Google Chrome não pode processar. Ataques e erros de rede geralmente são temporários. Portanto, essa página provavelmente funcionará mais tarde.</translation>
-<translation id="79859296434321399">Para ver conteúdo de realidade aumentada, instale o ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Encadernar</translation>
 <translation id="7992044431894087211">O compartilhamento de tela com <ph name="APPLICATION_TITLE" /> foi retomado</translation>
@@ -2253,6 +2262,7 @@ Mais detalhes:
 <translation id="830498451218851433">Dobra simples</translation>
 <translation id="8307358339886459768">Small photo</translation>
 <translation id="8307888238279532626">Os apps instalados e a frequência de uso deles</translation>
+<translation id="8317207217658302555">Atualizar o ARCore?</translation>
 <translation id="831997045666694187">Noite</translation>
 <translation id="8321476692217554900">notificações</translation>
 <translation id="8328484624016508118">Após o fechamento de todas as guias anônimas, o Chrome apaga:
@@ -2323,7 +2333,6 @@ Mais detalhes:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Redefinir permissão}one{Redefinir permissão}other{Redefinir permissões}}</translation>
 <translation id="8555010941760982128">Use este código ao finalizar a compra</translation>
 <translation id="8557066899867184262">O CVC está localizado atrás do seu cartão.</translation>
-<translation id="8558485628462305855">Para ver conteúdo de realidade aumentada, atualize o ARCore</translation>
 <translation id="8559762987265718583">Não é possível estabelecer uma conexão privada com <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, porque a data e a hora do seu dispositivo (<ph name="DATE_AND_TIME" />) estão incorretas.</translation>
 <translation id="8564182942834072828">Documentos separados/Cópias não reunidas</translation>
 <translation id="8564985650692024650">O Chromium recomenda redefinir sua senha de <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> se você a reutilizou em outros sites.</translation>
@@ -2436,6 +2445,7 @@ Mais detalhes:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />. Pressione Tab e depois Enter para ver seu histórico de navegação no Chrome</translation>
 <translation id="8987927404178983737">Mês</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Procurando a versão do sistema? Acesse</translation>
 <translation id="899688752321268742"><ph name="URL" /> quer saber quando você está usando este dispositivo</translation>
 <translation id="8996941253935762404">O site a seguir contém programas prejudiciais</translation>
 <translation id="8997023839087525404">O servidor apresentou um certificado que não foi divulgado publicamente usando a política de Transparência dos certificados. Esse é um requisito para alguns certificados, a fim de garantir que eles sejam confiáveis e protejam você contra invasores.</translation>

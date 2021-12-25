@@ -64,8 +64,26 @@ crosapi::mojom::DlpRestrictionSetPtr ConvertRestrictionSetToMojo(
 DlpContentManagerLacros* DlpContentManagerLacros::Get() {
   if (!g_dlp_content_manager) {
     g_dlp_content_manager = new DlpContentManagerLacros();
+    g_dlp_content_manager->Init();
   }
   return g_dlp_content_manager;
+}
+
+void DlpContentManagerLacros::CheckScreenShareRestriction(
+    const content::DesktopMediaID& media_id,
+    const std::u16string& application_title,
+    OnDlpRestrictionCheckedCallback callback) {
+  if (media_id.type == content::DesktopMediaID::Type::TYPE_WEB_CONTENTS) {
+    ProcessScreenShareRestriction(
+        application_title,
+        GetScreenShareConfidentialContentsInfoForWebContents(
+            media_id.web_contents_id),
+        std::move(callback));
+  } else {
+    // No restrictions apply.
+    // TODO(crbug.com/1278814): Pass the check to Ash to process there.
+    std::move(callback).Run(true);
+  }
 }
 
 DlpContentManagerLacros::DlpContentManagerLacros() = default;
@@ -74,7 +92,7 @@ DlpContentManagerLacros::~DlpContentManagerLacros() = default;
 void DlpContentManagerLacros::OnConfidentialityChanged(
     content::WebContents* web_contents,
     const DlpContentRestrictionSet& restriction_set) {
-  confidential_web_contents_[web_contents] = restriction_set;
+  DlpContentManager::OnConfidentialityChanged(web_contents, restriction_set);
   aura::Window* window = web_contents->GetNativeView();
   if (!window_webcontents_.contains(window)) {
     window_webcontents_[window] = {};
@@ -86,7 +104,7 @@ void DlpContentManagerLacros::OnConfidentialityChanged(
 
 void DlpContentManagerLacros::OnWebContentsDestroyed(
     content::WebContents* web_contents) {
-  confidential_web_contents_.erase(web_contents);
+  DlpContentManager::OnWebContentsDestroyed(web_contents);
   aura::Window* window = web_contents->GetNativeView();
   if (window_webcontents_.contains(window)) {
     window_webcontents_[window].erase(web_contents);

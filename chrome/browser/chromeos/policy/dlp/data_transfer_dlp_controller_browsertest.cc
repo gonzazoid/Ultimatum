@@ -672,8 +672,7 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBlinkBrowserTest, MAYBE_ProceedOnWarn) {
   EXPECT_EQ(events.size(), 2u);
   EXPECT_THAT(events[1],
               IsDlpPolicyEvent(CreateDlpPolicyWarningProceededEvent(
-                  kMailUrl, "*", DlpRulesManager::Restriction::kClipboard,
-                  DlpRulesManager::Level::kNotSet)));
+                  kMailUrl, "*", DlpRulesManager::Restriction::kClipboard)));
 
   testing::Mock::VerifyAndClearExpectations(&dlp_controller_);
 }
@@ -845,20 +844,15 @@ IN_PROC_BROWSER_TEST_F(DataTransferDlpBlinkBrowserTest,
   EXPECT_EQ(events.size(), 1u);
   EXPECT_THAT(events[0],
               IsDlpPolicyEvent(CreateDlpPolicyWarningProceededEvent(
-                  kMailUrl, "*", DlpRulesManager::Restriction::kClipboard,
-                  DlpRulesManager::Level::kNotSet)));
+                  kMailUrl, "*", DlpRulesManager::Restriction::kClipboard)));
 
   testing::Mock::VerifyAndClearExpectations(&dlp_controller_);
 }
 
 // Test case for crbug.com/1213143
 // Flaky on MSan bots: crbug.com/1230617
-#if defined(MEMORY_SANITIZER)
-#define MAYBE_Reporting DISABLED_Reporting
-#else
-#define MAYBE_Reporting Reporting
-#endif
-IN_PROC_BROWSER_TEST_F(DataTransferDlpBlinkBrowserTest, MAYBE_Reporting) {
+// Also flaky on linux-chromeos-dbg: crbug.com/1281659
+IN_PROC_BROWSER_TEST_F(DataTransferDlpBlinkBrowserTest, DISABLED_Reporting) {
   base::HistogramTester histogram_tester;
 
   ASSERT_TRUE(embedded_test_server()->Start());

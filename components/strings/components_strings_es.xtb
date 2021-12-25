@@ -112,6 +112,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="1308113895091915999">Oferta disponible</translation>
 <translation id="1312803275555673949">¿Qué pruebas la respaldan?</translation>
 <translation id="131405271941274527"><ph name="URL" /> quiere enviar y recibir información cuando tu teléfono toque un dispositivo NFC</translation>
+<translation id="1314311879718644478">Visualizar contenido de realidad aumentada</translation>
 <translation id="1314509827145471431">Encuadernar por la derecha</translation>
 <translation id="1318023360584041678">Guardado en un grupo de pestañas</translation>
 <translation id="1319245136674974084">No volver a preguntar para esta aplicación</translation>
@@ -176,6 +177,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="1472675084647422956">Mostrar más</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">¿Buscas la versión del navegador? Visita</translation>
 <translation id="1476595624592550506">Cambia la contraseña</translation>
 <translation id="1483493594462132177">Enviar</translation>
 <translation id="1484290072879560759">Seleccionar dirección de envío</translation>
@@ -214,6 +216,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="1583429793053364125">Se ha producido un error al mostrar esta página web.</translation>
 <translation id="1586541204584340881">Qué extensiones tienes instaladas</translation>
 <translation id="1588438908519853928">Modo normal</translation>
+<translation id="1589050138437146318">¿Instalar ARCore?</translation>
 <translation id="1592005682883173041">Acceso a datos locales</translation>
 <translation id="1594030484168838125">Seleccionar</translation>
 <translation id="160851722280695521">Juega al juego del dinosaurio de Chrome</translation>
@@ -1261,6 +1264,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="4968522289500246572">Esta aplicación se ha diseñado para móviles y es posible que su tamaño no se cambie correctamente. Puede que la aplicación dé problemas o se reinicie.</translation>
 <translation id="4969341057194253438">Eliminar grabación</translation>
 <translation id="4973922308112707173">Perforado doble en la parte superior</translation>
+<translation id="4976702386844183910">Última visita: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">¿Usar micrófono?</translation>
 <translation id="4984339528288761049">Prc5 (sobre)</translation>
 <translation id="4989163558385430922">Ver todo</translation>
@@ -1346,6 +1350,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="5215116848420601511">Métodos de pago y direcciones con Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Bandeja 13</translation>
+<translation id="5216942107514965959">Última visita: hoy</translation>
 <translation id="5222812217790122047">Correo electrónico obligatorio</translation>
 <translation id="5230733896359313003">Dirección de envío</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1389,6 +1394,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="5333022057423422993">Chrome ha detectado que la contraseña que acabas de usar se ha visto expuesta en una quiebra de seguridad de datos. Para proteger tus cuentas, te recomendamos que compruebes las contraseñas que tengas guardadas.</translation>
 <translation id="5334013548165032829">Registros detallados del sistema</translation>
 <translation id="5334145288572353250">¿Guardar dirección?</translation>
+<translation id="5335920952954443287">Corazón palpitando</translation>
 <translation id="5340250774223869109">Se ha bloqueado la aplicación</translation>
 <translation id="534295439873310000">Dispositivos NFC</translation>
 <translation id="5344579389779391559">Es posible que esta página intente aplicar algún cargo</translation>
@@ -1531,6 +1537,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="5869522115854928033">Contraseñas guardadas</translation>
 <translation id="5873013647450402046">Tu banco quiere confirmar tu identidad.</translation>
 <translation id="5887400589839399685">Tarjeta guardada</translation>
+<translation id="5887687176710214216">Última visita: ayer</translation>
 <translation id="5895138241574237353">Reiniciar</translation>
 <translation id="5895187275912066135">Emitido el</translation>
 <translation id="5901630391730855834">Amarillo</translation>
@@ -1724,6 +1731,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="6529602333819889595">&amp;Rehacer eliminación</translation>
 <translation id="6545864417968258051">Búsqueda de dispositivos Bluetooth</translation>
 <translation id="6547208576736763147">Perforado doble en la parte izquierda</translation>
+<translation id="6554732001434021288">Última visita: hace <ph name="NUM_DAYS" /> días</translation>
 <translation id="6556866813142980365">Rehacer</translation>
 <translation id="6569060085658103619">Estas viendo la página de una extensión</translation>
 <translation id="6573200754375280815">Perforado doble en la parte derecha</translation>
@@ -1886,6 +1894,7 @@ De lo contrario, lo impedirá tu configuración de privacidad. Permitirá que el
 <translation id="7118618213916969306">Buscar la URL <ph name="SHORT_URL" /> del portapapeles</translation>
 <translation id="7119414471315195487">Cierra otros programas o pestañas</translation>
 <translation id="7129409597930077180">Los pedidos no se pueden enviar a esta dirección. Selecciona otra.</translation>
+<translation id="7132939140423847331">Tu administrador ha prohibido que se copien estos datos.</translation>
 <translation id="7135130955892390533">Mostrar estado</translation>
 <translation id="7138472120740807366">Método de entrega</translation>
 <translation id="7139724024395191329">Emirato</translation>
@@ -2058,6 +2067,7 @@ Más información:
 <translation id="7654909834015434372">Si editas anotaciones, este documento volverá a su rotación original</translation>
 <translation id="765676359832457558">Ocultar configuración avanzada...</translation>
 <translation id="7658239707568436148">Cancelar</translation>
+<translation id="7659878911471462949">Lágrimas de alegría</translation>
 <translation id="7662298039739062396">Opción controlada por una extensión</translation>
 <translation id="7663736086183791259">Certificado <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">No permitido en incógnito</translation>
@@ -2158,7 +2168,6 @@ Más información:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Puede solicitar permiso para utilizar dispositivos y datos de realidad virtual</translation>
 <translation id="7984945080620862648">No puedes acceder a <ph name="SITE" /> en este momento porque el sitio web ha enviado credenciales codificadas que Chrome no puede procesar. Los ataques y los errores de red suelen ser temporales, por lo que es probable que esta página funcione más tarde.</translation>
-<translation id="79859296434321399">Instala ARCore para visualizar contenido de realidad aumentada</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Encuadernar</translation>
 <translation id="7992044431894087211">Se ha reanudado la pantalla compartida con <ph name="APPLICATION_TITLE" /></translation>
@@ -2262,6 +2271,7 @@ Más información:
 <translation id="830498451218851433">Plegado al medio</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Las aplicaciones instaladas y la frecuencia con la que se usan</translation>
+<translation id="8317207217658302555">¿Actualizar ARCore?</translation>
 <translation id="831997045666694187">Tarde</translation>
 <translation id="8321476692217554900">notificaciones</translation>
 <translation id="8328484624016508118">Al cerrar todas las pestañas de incógnito, Chrome borra lo siguiente:
@@ -2332,7 +2342,6 @@ Más información:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Restablecer permiso}other{Restablecer permisos}}</translation>
 <translation id="8555010941760982128">Usa este código al tramitar la compra</translation>
 <translation id="8557066899867184262">Puedes encontrar el CVC en el reverso de la tarjeta.</translation>
-<translation id="8558485628462305855">Actualiza ARCore para visualizar contenido de realidad aumentada</translation>
 <translation id="8559762987265718583">No se puede establecer una conexión privada con <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> porque la fecha y la hora de tu dispositivo (<ph name="DATE_AND_TIME" />) no son correctas.</translation>
 <translation id="8564182942834072828">Separar documentos/Copias sin intercalar</translation>
 <translation id="8564985650692024650">Chromium te recomienda que cambies tu contraseña de <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> si la has vuelto a utilizar en otros sitios.</translation>
@@ -2444,6 +2453,7 @@ Más información:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, pulsa Tabulador y luego Intro para ver tu historial de navegación en Chrome</translation>
 <translation id="8987927404178983737">Mes</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">¿Buscas la versión del sistema? Visita</translation>
 <translation id="899688752321268742"><ph name="URL" /> quiere detectar cuándo usas activamente este dispositivo</translation>
 <translation id="8996941253935762404">El sitio web al que vas a acceder contiene programas dañinos</translation>
 <translation id="8997023839087525404">El servidor ha mostrado un certificado que no se ha hecho público mediante la Política de Transparencia en los Certificados. Este requisito se aplica a algunos certificados para garantizar que son de confianza y ofrecer protección contra los atacantes.</translation>

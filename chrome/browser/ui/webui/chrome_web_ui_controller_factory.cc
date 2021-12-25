@@ -57,7 +57,6 @@
 #include "chrome/browser/ui/webui/quota_internals/quota_internals_ui.h"
 #include "chrome/browser/ui/webui/segmentation_internals/segmentation_internals_ui.h"
 #include "chrome/browser/ui/webui/signin_internals_ui.h"
-#include "chrome/browser/ui/webui/support_tool_ui.h"
 #include "chrome/browser/ui/webui/sync_internals/sync_internals_ui.h"
 #include "chrome/browser/ui/webui/translate_internals/translate_internals_ui.h"
 #include "chrome/browser/ui/webui/usb_internals/usb_internals_ui.h"
@@ -144,6 +143,7 @@
 #include "chrome/browser/ui/webui/settings/settings_ui.h"
 #include "chrome/browser/ui/webui/settings/settings_utils.h"
 #include "chrome/browser/ui/webui/signin/sync_confirmation_ui.h"
+#include "chrome/browser/ui/webui/support_tool/support_tool_ui.h"
 #include "chrome/browser/ui/webui/sync_file_system_internals/sync_file_system_internals_ui.h"
 #include "chrome/browser/ui/webui/system_info_ui.h"
 #include "chrome/browser/ui/webui/tab_search/tab_search_ui.h"
@@ -185,6 +185,8 @@
 #include "ash/webui/shimless_rma/url_constants.h"
 #include "ash/webui/shortcut_customization_ui/shortcut_customization_app_ui.h"
 #include "ash/webui/shortcut_customization_ui/url_constants.h"
+#include "ash/webui/system_extensions_internals_ui/system_extensions_internals_ui.h"
+#include "ash/webui/system_extensions_internals_ui/url_constants.h"
 #include "base/system/sys_info.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
 #include "chrome/browser/ash/arc/arc_util.h"
@@ -692,9 +694,6 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
     return &NewWebUI<SignInInternalsUI>;
   if (url.host_piece() == chrome::kChromeUISupervisedUserPassphrasePageHost)
     return &NewWebUI<ConstrainedWebDialogUI>;
-  if (base::FeatureList::IsEnabled(features::kSupportTool) &&
-      url.host_piece() == chrome::kChromeUISupportToolHost)
-    return &NewWebUI<SupportToolUI>;
   if (url.host_piece() == chrome::kChromeUISyncInternalsHost)
     return &NewWebUI<SyncInternalsUI>;
   if (url.host_piece() == chrome::kChromeUITranslateInternalsHost)
@@ -772,6 +771,9 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
     if (url.host_piece() == chrome::kChromeUIAccessCodeCastHost)
       return &NewWebUI<AccessCodeCastUI>;
   }
+  if (base::FeatureList::IsEnabled(features::kSupportTool) &&
+      url.host_piece() == chrome::kChromeUISupportToolHost)
+    return &NewWebUI<SupportToolUI>;
 #endif  // !defined(OS_ANDROID)
 #if defined(OS_WIN)
   if (url.host_piece() == chrome::kChromeUIConflictsHost)
@@ -960,6 +962,10 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
       chromeos::features::IsWallpaperWebUIEnabled()) {
     return &NewComponentUI<ash::PersonalizationAppUI,
                            ChromePersonalizationAppUiDelegate>;
+  }
+  if (url.host_piece() == ash::kChromeUISystemExtensionsInternalsHost &&
+      base::FeatureList::IsEnabled(ash::features::kSystemExtensions)) {
+    return &NewWebUI<ash::SystemExtensionsInternalsUI>;
   }
 
 #if !defined(OFFICIAL_BUILD)
@@ -1380,10 +1386,8 @@ std::vector<GURL> ChromeWebUIControllerFactory::GetListOfAcceptableURLs() {
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   return std::vector<GURL>{
       GURL(chrome::kChromeUIUntrustedCroshURL),
-      GURL(chrome::kChromeUIOsCroshAppURL), GURL(chrome::kOsUICroshURL),
       GURL(ash::file_manager::kChromeUIFileManagerUntrustedURL),
-      GURL(chrome::kChromeUIUntrustedTerminalURL),
-      GURL(chrome::kOsUITerminalURL), GURL(chrome::kOsUIAboutURL),
+      GURL(chrome::kChromeUIUntrustedTerminalURL), GURL(chrome::kOsUIAboutURL),
       GURL(chrome::kChromeUIAccountManagerErrorURL),
       GURL(chrome::kOsUIAccountManagerErrorURL),
       GURL(chrome::kChromeUIAccountManagerWelcomeURL),
@@ -1393,42 +1397,44 @@ std::vector<GURL> ChromeWebUIControllerFactory::GetListOfAcceptableURLs() {
       GURL(chrome::kChromeUIAddSupervisionURL),
       GURL(chrome::kOsUIAddSupervisionURL),
       GURL(chrome::kChromeUIAppDisabledURL), GURL(chrome::kOsUIAppDisabledURL),
-      GURL(chrome::kOsUIArcGraphicsTracingURL),
-      GURL(chrome::kOsUIArcOverviewTracingURL),
-      GURL(chrome::kOsUIArcPowerControlURL),
-      GURL(chrome::kOsUIAssistantOptInURL),
-      GURL(chrome::kOsUIBluetoothPairingURL), GURL(chrome::kOsUIComponentsUrl),
-      GURL(chrome::kChromeUICrashesUrl), GURL(chrome::kOsUICrashesUrl),
-      GURL(chrome::kOsUICreditsURL), GURL(chrome::kOsUICrostiniCreditsURL),
-      GURL(chrome::kOsUICrostiniInstallerUrl),
-      GURL(chrome::kOsUICrostiniUpgraderUrl), GURL(chrome::kOsUICryptohomeURL),
-      GURL(chrome::kOsUIDeviceLogUrl), GURL(chrome::kOsUIDiagnosticsAppURL),
+      GURL(chrome::kChromeUIArcGraphicsTracingURL),
+      GURL(chrome::kChromeUIArcOverviewTracingURL),
+      GURL(chrome::kChromeUIArcPowerControlURL),
+      GURL(chrome::kChromeUIAssistantOptInURL),
+      GURL(chrome::kChromeUIBluetoothPairingURL),
+      GURL(chrome::kOsUIComponentsUrl), GURL(chrome::kChromeUICrashesUrl),
+      GURL(chrome::kOsUICrashesUrl), GURL(chrome::kOsUICreditsURL),
+      GURL(chrome::kChromeUICrostiniCreditsURL),
+      GURL(chrome::kChromeUICrostiniInstallerUrl),
+      GURL(chrome::kChromeUICrostiniUpgraderUrl),
+      GURL(chrome::kChromeUICryptohomeURL), GURL(chrome::kOsUIDeviceLogUrl),
+      GURL(chrome::kChromeUIDiagnosticsAppURL),
       GURL(chrome::kChromeUIDriveInternalsUrl),
       GURL(chrome::kOsUIDriveInternalsUrl),
       GURL(chrome::kChromeUIEmojiPickerURL), GURL(chrome::kOsUIEmojiPickerURL),
       GURL(ash::file_manager::kChromeUIFileManagerURL),
-      GURL(chrome::kOsUIFileManagerURL), GURL(chrome::kChromeUIFlagsURL),
-      GURL(chrome::kOsUIFlagsURL), GURL(chrome::kOsUIGpuURL),
-      GURL(chrome::kOsUIHistogramsURL),
-      GURL(chrome::kOsUIIntenetConfigDialogURL),
-      GURL(chrome::kOsUIIntenetDetailDialogURL),
+      GURL(chrome::kChromeUIFlagsURL), GURL(chrome::kOsUIFlagsURL),
+      GURL(chrome::kOsUIGpuURL), GURL(chrome::kOsUIHistogramsURL),
+      GURL(chrome::kChromeUIIntenetConfigDialogURL),
+      GURL(chrome::kChromeUIIntenetDetailDialogURL),
       GURL(chrome::kOsUIInvalidationsUrl),
       GURL(chrome::kChromeUILockScreenNetworkURL),
-      GURL(chrome::kOsUILockScreenStartReauthURL),
-      GURL(chrome::kChromeUILockScreenNetworkURL),
-      GURL(chrome::kOsUILockScreenStartReauthURL),
-      GURL(chrome::kOsUIMobileSetupURL), GURL(chrome::kOsUIMultiDeviceSetupUrl),
+      GURL(chrome::kChromeUILockScreenStartReauthURL),
+      GURL(chrome::kChromeUIMobileSetupURL),
+      GURL(chrome::kChromeUIMultiDeviceSetupUrl),
       GURL(chrome::kChromeUINetworkUrl), GURL(chrome::kOsUINetworkUrl),
-      GURL(chrome::kOsUIOSCreditsURL), GURL(chrome::kOsUIOSSettingsURL),
-      GURL(chrome::kOsUIPowerUrl), GURL(chrome::kOsUIPrintManagementUrl),
-      GURL(chrome::kOsUIRestartURL), GURL(chrome::kChromeUIScanningAppURL),
-      GURL(chrome::kOsUIScanningAppURL), GURL(chrome::kOsUISetTimeURL),
-      GURL(chrome::kChromeUIOSSettingsURL), GURL(chrome::kChromeUISettingsURL),
-      GURL(chrome::kOsUISettingsURL), GURL(chrome::kOsUISignInInternalsUrl),
-      GURL(chrome::kOsUISlowURL), GURL(chrome::kOsUISmbCredentialsURL),
-      GURL(chrome::kOsUISmbShareURL), GURL(chrome::kOsUISyncInternalsUrl),
-      GURL(chrome::kOsUISysInternalsUrl), GURL(chrome::kOsUIUserImageURL),
-      GURL(chrome::kOsUIVersionURL), GURL(chrome::kOsUIVmUrl),
+      GURL(chrome::kChromeUIOSCreditsURL), GURL(chrome::kOsUIOSSettingsURL),
+      GURL(chrome::kChromeUIPowerUrl),
+      GURL(chrome::kChromeUIPrintManagementUrl), GURL(chrome::kOsUIRestartURL),
+      GURL(chrome::kChromeUIScanningAppURL), GURL(chrome::kOsUIScanningAppURL),
+      GURL(chrome::kChromeUISetTimeURL), GURL(chrome::kChromeUIOSSettingsURL),
+      GURL(chrome::kChromeUISettingsURL), GURL(chrome::kOsUISettingsURL),
+      GURL(chrome::kOsUISignInInternalsUrl), GURL(chrome::kChromeUISlowURL),
+      GURL(chrome::kChromeUISmbCredentialsURL),
+      GURL(chrome::kChromeUISmbShareURL), GURL(chrome::kOsUISyncInternalsUrl),
+      GURL(chrome::kChromeUISysInternalsUrl),
+      GURL(chrome::kChromeUIUserImageURL), GURL(chrome::kOsUIVersionURL),
+      GURL(chrome::kChromeUIVmUrl),
       // The CL to land this didn't land yet. Once landed they need to be moved
       // to Lacros. However  - as the refactor might precede this, there is no
       // TODO for it.

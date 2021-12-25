@@ -4,23 +4,14 @@
 
 #include "components/content_capture/browser/content_capture_receiver.h"
 
-#include <memory>
-#include <utility>
-
 #include "base/json/json_reader.h"
-#include "base/memory/raw_ptr.h"
-#include "base/strings/utf_string_conversions.h"
-#include "base/task/post_task.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "build/build_config.h"
 #include "components/content_capture/browser/content_capture_test_helper.h"
-#include "content/public/browser/content_browser_client.h"
-#include "content/public/browser/web_contents.h"
 #include "content/public/common/content_features.h"
 #include "content/public/test/test_renderer_host.h"
 #include "content/public/test/test_utils.h"
-#include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/mojom/favicon/favicon_url.mojom.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -54,11 +45,11 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
     // This needed to keep the WebContentsObserverConsistencyChecker checks
     // happy for when AppendChild is called.
     NavigateAndCommit(GURL(kMainFrameUrl));
-    content_capture_sender_ = std::make_unique<FakeContentCaptureSender>();
     main_frame_ = web_contents()->GetMainFrame();
-    // Binds sender with receiver.
-    OnscreenContentProvider::BindContentCaptureReceiver(
-        content_capture_sender_->GetPendingAssociatedReceiver(), main_frame_);
+    EXPECT_TRUE(main_frame_);
+
+    main_frame_sender_ = std::make_unique<FakeContentCaptureSender>();
+    main_frame_sender_->Bind(main_frame_);
 
     helper_.InitTestData(kMainFrameUrl, kChildFrameUrl);
   }
@@ -75,100 +66,12 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
   }
 
   void SetupChildFrame() {
-    child_content_capture_sender_ =
-        std::make_unique<FakeContentCaptureSender>();
-    child_frame_ =
-        content::RenderFrameHostTester::For(main_frame_)->AppendChild("child");
-    // Binds sender with receiver for child frame.
-    OnscreenContentProvider::BindContentCaptureReceiver(
-        child_content_capture_sender_->GetPendingAssociatedReceiver(),
-        child_frame_);
-  }
+    child_frame_ = content::RenderFrameHostTester::For(main_frame_.get())
+                       ->AppendChild("child");
+    EXPECT_TRUE(child_frame_);
 
-  FakeContentCaptureSender* content_capture_sender() {
-    return content_capture_sender_.get();
-  }
-
-  FakeContentCaptureSender* child_content_capture_sender() {
-    return child_content_capture_sender_.get();
-  }
-
-  const std::vector<int64_t>& expected_removed_ids() const {
-    return expected_removed_ids_;
-  }
-
-  ContentCaptureFrame GetExpectedTestData(bool main_frame) const {
-    ContentCaptureFrame expected(helper()->test_data());
-    // Replaces the id with expected id.
-    expected.id = ContentCaptureReceiver::GetIdFrom(
-        main_frame ? main_frame_.get() : child_frame_.get());
-    return expected;
-  }
-
-  ContentCaptureFrame GetExpectedTestDataChange(int64_t expected_id) const {
-    ContentCaptureFrame expected(helper()->test_data_change());
-    // Replaces the id with expected id.
-    expected.id = expected_id;
-    return expected;
-  }
-
-  ContentCaptureFrame GetExpectedTestData2(bool main_frame) const {
-    ContentCaptureFrame expected(helper()->test_data2());
-    // Replaces the id with expected id.
-    expected.id = ContentCaptureReceiver::GetIdFrom(
-        main_frame ? main_frame_.get() : child_frame_.get());
-    return expected;
-  }
-
-  ContentCaptureFrame GetExpectedTestDataUpdate(bool main_frame) const {
-    ContentCaptureFrame expected(helper()->test_data_update());
-    // Replaces the id with expected id.
-    expected.id = ContentCaptureReceiver::GetIdFrom(
-        main_frame ? main_frame_.get() : child_frame_.get());
-    return expected;
-  }
-
-  SessionRemovedTestHelper* session_removed_test_helper() {
-    return &session_removed_test_helper_;
-  }
-
-  void VerifySession(const ContentCaptureSession& expected,
-                     const ContentCaptureSession& result) const {
-    EXPECT_EQ(expected.size(), result.size());
-    for (size_t i = 0; i < expected.size(); i++) {
-      EXPECT_EQ(expected[i].id, result[i].id);
-      EXPECT_EQ(expected[i].url, result[i].url);
-      EXPECT_EQ(expected[i].bounds, result[i].bounds);
-      EXPECT_TRUE(result[i].children.empty());
-    }
-  }
-
-  void DidCaptureContent(const ContentCaptureData& captured_content,
-                         bool first_data) {
-    base::RunLoop run_loop;
-    content_capture_sender()->DidCaptureContent(captured_content, first_data);
-    run_loop.RunUntilIdle();
-  }
-
-  void DidCaptureContentForChildFrame(
-      const ContentCaptureData& captured_content,
-      bool first_data) {
-    base::RunLoop run_loop;
-    child_content_capture_sender()->DidCaptureContent(captured_content,
-                                                      first_data);
-    run_loop.RunUntilIdle();
-  }
-
-  void DidUpdateContent(const ContentCaptureData& updated_content) {
-    base::RunLoop run_loop;
-    content_capture_sender()->DidUpdateContent(updated_content);
-    run_loop.RunUntilIdle();
-  }
-
-  void DidRemoveContent(const std::vector<int64_t>& data) {
-    base::RunLoop run_loop;
-    content_capture_sender()->DidRemoveContent(data);
-    run_loop.RunUntilIdle();
+    child_frame_sender_ = std::make_unique<FakeContentCaptureSender>();
+    child_frame_sender_->Bind(child_frame_);
   }
 
   void BuildChildSession(const ContentCaptureSession& parent,
@@ -182,6 +85,19 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
     child->push_back(parent.front());
   }
 
+  int64_t GetFrameId(bool main_frame) {
+    return ContentCaptureReceiver::GetIdFrom(main_frame ? main_frame_.get()
+                                                        : child_frame_.get());
+  }
+
+  const std::vector<int64_t>& expected_removed_ids() const {
+    return expected_removed_ids_;
+  }
+
+  SessionRemovedTestHelper* session_removed_test_helper() {
+    return &session_removed_test_helper_;
+  }
+
   OnscreenContentProvider* provider() const {
     return helper_.onscreen_content_provider();
   }
@@ -190,16 +106,26 @@ class ContentCaptureReceiverTest : public content::RenderViewHostTestHarness,
     return helper_.content_capture_consumer();
   }
 
+  FakeContentCaptureSender* main_frame_sender() const {
+    return main_frame_sender_.get();
+  }
+  FakeContentCaptureSender* child_frame_sender() const {
+    return child_frame_sender_.get();
+  }
+
   const ContentCaptureTestHelper* helper() const { return &helper_; }
 
  private:
   ContentCaptureTestHelper helper_;
+
   // The sender for main frame.
-  std::unique_ptr<FakeContentCaptureSender> content_capture_sender_;
+  std::unique_ptr<FakeContentCaptureSender> main_frame_sender_;
   // The sender for child frame.
-  std::unique_ptr<FakeContentCaptureSender> child_content_capture_sender_;
+  std::unique_ptr<FakeContentCaptureSender> child_frame_sender_;
+
   raw_ptr<content::RenderFrameHost> main_frame_ = nullptr;
   raw_ptr<content::RenderFrameHost> child_frame_ = nullptr;
+
   // Expected removed Ids.
   std::vector<int64_t> expected_removed_ids_{2};
   SessionRemovedTestHelper session_removed_test_helper_;
@@ -211,10 +137,12 @@ INSTANTIATE_TEST_SUITE_P(,
                          testing::Values(true, false));
 
 TEST_P(ContentCaptureReceiverTest, DidCaptureContent) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
 }
 
@@ -223,23 +151,26 @@ TEST_P(ContentCaptureReceiverTest, MultipleConsumers) {
       std::make_unique<ContentCaptureConsumerHelper>(nullptr);
 
   provider()->AddConsumer(*(consumer2.get()));
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
 
   EXPECT_TRUE(consumer2->parent_session().empty());
   EXPECT_TRUE(consumer2->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer2->captured_data());
 
   // Verifies to get the remove session callback in RemoveConsumer.
   provider()->RemoveConsumer(*(consumer2.get()));
   EXPECT_TRUE(consumer()->removed_sessions().empty());
   EXPECT_EQ(1u, consumer2->removed_sessions().size());
-  std::vector<ContentCaptureFrame> expected{
-      GetExpectedTestData(true /* main_frame */)};
+  std::vector<ContentCaptureFrame> expected{GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */))};
   VerifySession(expected, consumer2->removed_sessions().front());
   EXPECT_EQ(1u, provider()->GetConsumersForTesting().size());
   EXPECT_EQ(consumer(), provider()->GetConsumersForTesting()[0]);
@@ -253,19 +184,23 @@ TEST_P(ContentCaptureReceiverTest, MultipleConsumers) {
 #define MAYBE_DidCaptureContentWithUpdate DidCaptureContentWithUpdate
 #endif
 TEST_P(ContentCaptureReceiverTest, MAYBE_DidCaptureContentWithUpdate) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
   // Simulates to update the content within the same document.
-  DidCaptureContent(helper()->test_data_update(), false /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data_update(),
+                                         false /* first_data */);
   // Verifies to get test_data2() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   // Verifies that the session isn't removed.
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestDataUpdate(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data_update(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
 }
 
@@ -277,56 +212,63 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_DidCaptureContentWithUpdate) {
 #define MAYBE_DidUpdateContent DidUpdateContent
 #endif
 TEST_P(ContentCaptureReceiverTest, MAYBE_DidUpdateContent) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  ContentCaptureFrame expected_data =
-      GetExpectedTestData(true /* main_frame */);
+  ContentCaptureFrame expected_data = GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */));
   EXPECT_EQ(expected_data, consumer()->captured_data());
 
   // Simulate content change.
-  DidUpdateContent(helper()->test_data_change());
+  main_frame_sender()->DidUpdateContent(helper()->test_data_change());
   EXPECT_TRUE(consumer()->updated_parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestDataChange(expected_data.id),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data_change(), expected_data.id),
             consumer()->updated_data());
 }
 
 TEST_P(ContentCaptureReceiverTest, DidRemoveSession) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
   // Simulates to navigate other document.
-  DidCaptureContent(helper()->test_data2(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                         true /* first_data */);
   EXPECT_TRUE(consumer()->parent_session().empty());
   // Verifies that the previous session was removed.
   EXPECT_EQ(1u, consumer()->removed_sessions().size());
-  std::vector<ContentCaptureFrame> expected{
-      GetExpectedTestData(true /* main_frame */)};
+  std::vector<ContentCaptureFrame> expected{GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */))};
   VerifySession(expected, consumer()->removed_sessions().front());
   // Verifies that we get the test_data2() from the new document.
-  EXPECT_EQ(GetExpectedTestData2(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data2(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
 }
 
 TEST_P(ContentCaptureReceiverTest, DidRemoveContent) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
   // Simulates to remove the content.
-  DidRemoveContent(expected_removed_ids());
+  main_frame_sender()->DidRemoveContent(expected_removed_ids());
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
   // Verifies that the removed_ids() was removed from the correct session.
   EXPECT_EQ(expected_removed_ids(), consumer()->removed_ids());
-  std::vector<ContentCaptureFrame> expected{
-      GetExpectedTestData(true /* main_frame */)};
+  std::vector<ContentCaptureFrame> expected{GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */))};
   VerifySession(expected, consumer()->session());
 }
 
@@ -334,22 +276,26 @@ TEST_P(ContentCaptureReceiverTest, ChildFrameDidCaptureContent) {
   // Simulate add child frame.
   SetupChildFrame();
   // Simulate to capture the content from main frame.
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
   // Simulate to capture the content from child frame.
-  DidCaptureContentForChildFrame(helper()->test_data2(), true /* first_data */);
+  child_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                          true /* first_data */);
   // Verifies that the parent_session was set correctly.
   EXPECT_FALSE(consumer()->parent_session().empty());
-  std::vector<ContentCaptureFrame> expected{
-      GetExpectedTestData(true /* main_frame */)};
+  std::vector<ContentCaptureFrame> expected{GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */))};
   VerifySession(expected, consumer()->parent_session());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
   // Verifies that we receive the correct content from child frame.
-  EXPECT_EQ(GetExpectedTestData2(false /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data2(),
+                                GetFrameId(false /* main_frame */)),
             consumer()->captured_data());
 }
 
@@ -362,9 +308,10 @@ TEST_P(ContentCaptureReceiverTest, RenderFrameHostGone) {
   // won't return WebContents.
   receiver->rfh_ = nullptr;
   // Ensure no crash.
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
-  DidUpdateContent(helper()->test_data());
-  DidRemoveContent(expected_removed_ids());
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
+  main_frame_sender()->DidUpdateContent(helper()->test_data());
+  main_frame_sender()->DidRemoveContent(expected_removed_ids());
 }
 
 TEST_P(ContentCaptureReceiverTest, TitleUpdateTaskDelay) {
@@ -380,7 +327,8 @@ TEST_P(ContentCaptureReceiverTest, TitleUpdateTaskDelay) {
   EXPECT_FALSE(task_runner->HasPendingTask());
 
   // Capture content, then update the title.
-  DidCaptureContent(helper()->test_data(), /*first_data=*/true);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         /*first_data=*/true);
   std::u16string title2 = u"title 2";
   receiver->SetTitle(title2);
   // A task should be scheduled.
@@ -428,11 +376,13 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   // Simulate add child frame.
   SetupChildFrame();
   // Simulate to capture the content from child frame.
-  DidCaptureContentForChildFrame(helper()->test_data2(), true /* first_data */);
+  child_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                          true /* first_data */);
   // Verifies that the parent_session was set correctly.
   EXPECT_FALSE(consumer()->parent_session().empty());
 
-  ContentCaptureFrame data = GetExpectedTestData(true /* main_frame */);
+  ContentCaptureFrame data = GetExpectedTestData(
+      helper()->test_data(), GetFrameId(true /* main_frame */));
   // Currently, there is no way to fake frame size, set it to 0.
   data.bounds = gfx::Rect();
   ContentCaptureSession expected{data};
@@ -440,12 +390,14 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   VerifySession(expected, consumer()->parent_session());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
   // Verifies that we receive the correct content from child frame.
-  EXPECT_EQ(GetExpectedTestData2(false /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data2(),
+                                GetFrameId(false /* main_frame */)),
             consumer()->captured_data());
 
   // Get the child session, so we can verify that it has been removed in next
   // navigation
-  ContentCaptureFrame child_frame = GetExpectedTestData2(false);
+  ContentCaptureFrame child_frame = GetExpectedTestData(
+      helper()->test_data2(), GetFrameId(false /* main_frame */));
   // child_frame.children.clear();
   ContentCaptureSession removed_child_session;
   BuildChildSession(expected, consumer()->captured_data(),
@@ -454,7 +406,8 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   // When main frame navigates to same url, the parent session will not change.
   NavigateMainFrame(GURL(kMainFrameUrl));
   SetupChildFrame();
-  DidCaptureContentForChildFrame(helper()->test_data2(), true /* first_data */);
+  child_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                          true /* first_data */);
   VerifySession(expected, consumer()->parent_session());
 
   EXPECT_EQ(2u, consumer()->removed_sessions().size());
@@ -470,7 +423,8 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   // When main frame navigates to same domain, the parent session will change.
   NavigateMainFrame(GURL(kMainFrameUrl2));
   SetupChildFrame();
-  DidCaptureContentForChildFrame(helper()->test_data2(), true /* first_data */);
+  child_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                          true /* first_data */);
 
   // Intentionally reuse the data.id from previous result, so we know navigating
   // to same domain didn't create new ContentCaptureReceiver when call
@@ -479,7 +433,8 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   // or RenderDocument is enabled on same-site main frame navigation, where we
   // will get new RenderFrameHosts after the navigation to |kMainFrameUrl2|.
   if (content::CanSameSiteMainFrameNavigationsChangeRenderFrameHosts())
-    data = GetExpectedTestData(/* main_frame =*/true);
+    data = GetExpectedTestData(helper()->test_data(),
+                               GetFrameId(true /* main_frame */));
 
   data.url = kMainFrameUrl2;
   // Currently, there is no way to fake frame size, set it to 0.
@@ -504,9 +459,11 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
   // change.
   NavigateMainFrame(GURL(kChildFrameUrl));
   SetupChildFrame();
-  DidCaptureContentForChildFrame(helper()->test_data2(), true /* first_data */);
+  child_frame_sender()->DidCaptureContent(helper()->test_data2(),
+                                          true /* first_data */);
 
-  data = GetExpectedTestData2(true /* main_frame */);
+  data = GetExpectedTestData(helper()->test_data2(),
+                             GetFrameId(true /* main_frame */));
   // Currently, there is no way to fake frame size, set it to 0.
   data.bounds = gfx::Rect();
   expected.clear();
@@ -531,11 +488,13 @@ TEST_P(ContentCaptureReceiverTest, MAYBE_ChildFrameCaptureContentFirst) {
 }
 
 TEST_P(ContentCaptureReceiverTest, SameDocumentSameSession) {
-  DidCaptureContent(helper()->test_data(), true /* first_data */);
+  main_frame_sender()->DidCaptureContent(helper()->test_data(),
+                                         true /* first_data */);
   // Verifies to get test_data() with correct frame content id.
   EXPECT_TRUE(consumer()->parent_session().empty());
   EXPECT_TRUE(consumer()->removed_sessions().empty());
-  EXPECT_EQ(GetExpectedTestData(true /* main_frame */),
+  EXPECT_EQ(GetExpectedTestData(helper()->test_data(),
+                                GetFrameId(true /* main_frame */)),
             consumer()->captured_data());
   NavigateMainFrameSameDocument();
   // Verifies the session wasn't removed for the same document navigation.

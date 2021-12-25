@@ -6,7 +6,6 @@
 
 #include "testing/gmock/include/gmock/gmock.h"
 #include "third_party/blink/renderer/core/layout/layout_box_model_object.h"
-#include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
 #include "third_party/blink/renderer/core/paint/paint_controller_paint_test.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
 #include "third_party/blink/renderer/platform/testing/find_cc_layer.h"
@@ -23,13 +22,6 @@ class PaintLayerPainterTest : public PaintControllerPaintTest {
   USING_FAST_MALLOC(PaintLayerPainterTest);
 
  public:
-  PaintController& MainGraphicsLayerPaintController() {
-    return GetLayoutView()
-        .Layer()
-        ->GraphicsLayerBacking(&GetLayoutView())
-        ->GetPaintController();
-  }
-
   CullRect GetCullRect(const PaintLayer& layer) {
     if (RuntimeEnabledFeatures::CullRectUpdateEnabled())
       return layer.GetLayoutObject().FirstFragment().GetCullRect();

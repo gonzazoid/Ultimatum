@@ -23,7 +23,7 @@ chromium-metrics-reviews@google.com.
 <histograms>
 
 <histogram name="Startup.AfterStartupTaskCount" units="units"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>michaeln@chromium.org</owner>
   <summary>
     The number of after-startup tasks that were queued prior to startup
@@ -32,7 +32,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.AfterStartupTaskDelayedUntilTime" units="ms"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>michaeln@chromium.org</owner>
   <summary>
     Time from the process creation until deferred after-startup tasks began
@@ -117,11 +117,14 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.Cold.TimeToFirstVisibleContent" units="ms"
-    expires_after="2022-06-05">
+    expires_after="never">
+<!-- expires-never: guiding metric (internal: go/chrome-browser-guiding-metrics) -->
+
   <owner>yfriedman@chromium.org</owner>
   <owner>pasko@chromium.org</owner>
   <owner>fredmello@chromium.org</owner>
   <owner>yashard@chromium.org</owner>
+  <owner>chrome-analysis-team@google.com</owner>
   <summary>
     The time from Chrome tabbed activity creation to the moment the Chrome first
     appears ready.
@@ -167,6 +170,9 @@ chromium-metrics-reviews@google.com.
     - If the app opens to the Chrome Start page.
 
     - For WebApps, PWAs or WebApks.
+
+    This histogram is of special interest to the chrome-analysis-team@. Do not
+    change its semantics or retire it without talking to them first.
   </summary>
 </histogram>
 
@@ -190,7 +196,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram base="true" name="Startup.Android.FeedContentFirstLoadedTime"
-    units="ms" expires_after="2022-04-17">
+    units="ms" expires_after="2022-06-19">
 <!-- Name completed by histogram_suffixes name="JavaStartMode" -->
 
   <owner>hanxi@chromium.org</owner>
@@ -364,7 +370,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.Android.TimeToGTSFirstMeaningfulPaint.Cold" units="ms"
-    expires_after="2022-02-06">
+    expires_after="2022-06-12">
   <owner>yusufo@chromium.org</owner>
   <owner>yfriedman@chromium.org</owner>
   <summary>
@@ -436,7 +442,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.BrowserMessageLoopFirstIdle" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>gab@chromium.org</owner>
   <owner>etienneb@chromium.org</owner>
   <summary>
@@ -517,7 +523,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Startup.BrowserWindow.FirstPaint" units="ms"
-    expires_after="2022-04-10">
+    expires_after="2022-06-12">
   <owner>gab@chromium.org</owner>
   <owner>mblsha@yandex-team.ru</owner>
   <summary>
@@ -770,6 +776,16 @@ chromium-metrics-reviews@google.com.
     Records whether Incognito switch was present in commmand line switches and
     if Incognito mode was enforced or denied. This is recorded during browser
     startup when commandline is processed.
+  </summary>
+</histogram>
+
+<histogram name="Startup.IOSColdStartType" enum="IOSColdStartType"
+    expires_after="2022-04-01">
+  <owner>jlebel@chromium.org</owner>
+  <owner>chrome-signin-team@chromium.org</owner>
+  <summary>
+    Records session type for a cold start. It is recorded at cold start.
+    Histogram only for iOS.
   </summary>
 </histogram>
 

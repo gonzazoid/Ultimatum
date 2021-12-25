@@ -324,7 +324,6 @@ public abstract class ChromeFeatureList {
     public static final String ENABLE_AUTOMATIC_SNOOZE = "EnableAutomaticSnooze";
     public static final String ENABLE_DANGEROUS_DOWNLOAD_DIALOG = "EnableDangerousDownloadDialog";
     public static final String ENABLE_DUPLICATE_DOWNLOAD_DIALOG = "EnableDuplicateDownloadDialog";
-    public static final String ENHANCED_PROTECTION_PROMO_CARD = "EnhancedProtectionPromoCard";
     public static final String ELASTIC_OVERSCROLL = "ElasticOverscroll";
     public static final String EXPERIMENTS_FOR_AGSA = "ExperimentsForAgsa";
     public static final String EXPLICIT_LANGUAGE_ASK = "ExplicitLanguageAsk";
@@ -336,7 +335,6 @@ public abstract class ChromeFeatureList {
     public static final String FEED_INTERACTIVE_REFRESH = "FeedInteractiveRefresh";
     public static final String FEED_LOADING_PLACEHOLDER = "FeedLoadingPlaceholder";
     public static final String FEED_RELIABILITY_LOGGING = "FeedReliabilityLogging";
-    public static final String FEED_SIGNIN_PROMO_DISMISS = "FeedSignInPromoDismiss";
     public static final String FILLING_PASSWORDS_FROM_ANY_ORIGIN = "FillingPasswordsFromAnyOrigin";
     public static final String FIXED_UMA_SESSION_RESUME_ORDER = "FixedUmaSessionResumeOrder";
     public static final String FOCUS_OMNIBOX_IN_INCOGNITO_TAB_INTENTS =
@@ -482,7 +480,6 @@ public abstract class ChromeFeatureList {
     public static final String SHARED_CLIPBOARD_UI = "SharedClipboardUI";
     public static final String SHARED_HIGHLIGHTING_V2 = "SharedHighlightingV2";
     public static final String SHARED_HIGHLIGHTING_AMP = "SharedHighlightingAmp";
-    public static final String SHARING_HUB_LINK_TOGGLE = "SharingHubLinkToggle";
     public static final String SHOPPING_LIST = "ShoppingList";
     public static final String SHOW_TRUSTED_PUBLISHER_URL = "ShowTrustedPublisherURL";
     public static final String SMART_SUGGESTION_FOR_LARGE_DOWNLOADS =

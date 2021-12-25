@@ -139,6 +139,8 @@ source_set("browser_sources") {
     "devtools_permission_overrides.h",
     "devtools_socket_factory.h",
     "disallow_activation_reason.h",
+    "document_ref.cc",
+    "document_ref.h",
     "document_service.h",
     "document_service_internal.cc",
     "document_service_internal.h",
@@ -175,6 +177,7 @@ source_set("browser_sources") {
     "font_list_async.h",
     "frame_accept_header.cc",
     "frame_accept_header.h",
+    "frame_type.h",
     "generated_code_cache_settings.h",
     "global_request_id.cc",
     "global_request_id.h",
@@ -230,7 +233,6 @@ source_set("browser_sources") {
     "native_io_context.cc",
     "native_io_context.h",
     "native_web_keyboard_event.h",
-    "navigating_frame_type.h",
     "navigation_controller.cc",
     "navigation_controller.h",
     "navigation_details.cc",
@@ -390,6 +392,8 @@ source_set("browser_sources") {
     "video_capture_service.h",
     "visibility.h",
     "vpn_service_proxy.h",
+    "weak_document_ptr.cc",
+    "weak_document_ptr.h",
     "web_contents.cc",
     "web_contents.h",
     "web_contents_delegate.cc",
@@ -569,6 +573,10 @@ source_set("browser_sources") {
 
   if (is_linux || is_chromeos) {
     sources += [ "zygote_host/zygote_host_linux.h" ]
+  }
+
+  if (is_chromeos) {
+    sources += [ "lock_screen_storage.h" ]
   }
 
   if (!is_android) {

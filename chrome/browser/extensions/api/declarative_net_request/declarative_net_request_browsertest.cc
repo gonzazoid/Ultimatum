@@ -184,7 +184,8 @@ class DeclarativeNetRequestBrowserTest
     feature_list_.InitWithFeatures(
         /*enabled_features=*/
         {blink::features::kInterestGroupStorage,
-         blink::features::kAdInterestGroupAPI, blink::features::kFledge},
+         blink::features::kAdInterestGroupAPI, blink::features::kFledge,
+         blink::features::kFencedFrames},
         /*disabled_features=*/
         {});
     net::test_server::RegisterDefaultHandlers(embedded_test_server());
@@ -3655,8 +3656,16 @@ IN_PROC_BROWSER_TEST_P(DeclarativeNetRequestBrowserTest,
 
 // Test that the action matched badge text for an extension is visible in an
 // incognito context if the extension is incognito enabled.
+// Test is disabled on Mac. See https://crbug.com/1280116
+#if defined(OS_MAC)
+#define MAYBE_ActionsMatchedCountAsBadgeTextIncognito \
+  DISABLED_ActionsMatchedCountAsBadgeTextIncognito
+#else
+#define MAYBE_ActionsMatchedCountAsBadgeTextIncognito \
+  ActionsMatchedCountAsBadgeTextIncognito
+#endif
 IN_PROC_BROWSER_TEST_P(DeclarativeNetRequestBrowserTest,
-                       ActionsMatchedCountAsBadgeTextIncognito) {
+                       MAYBE_ActionsMatchedCountAsBadgeTextIncognito) {
   TestRule rule = CreateGenericRule();
   rule.condition->url_filter = "abc.com";
   rule.id = kMinValidID;

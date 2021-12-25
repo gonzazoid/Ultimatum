@@ -2124,7 +2124,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ash.Overview.AnimationSmoothness.Enter{OverviewAnimationMode}"
-    units="%" expires_after="2021-12-31">
+    units="%" expires_after="2022-10-15">
   <owner>omrilio@chromium.org</owner>
   <owner>oshima@chromium.org</owner>
   <summary>
@@ -2142,7 +2142,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Ash.Overview.AnimationSmoothness.Exit{OverviewAnimationMode}"
-    units="%" expires_after="2021-12-31">
+    units="%" expires_after="2022-10-15">
   <owner>omrilio@chromium.org</owner>
   <owner>oshima@chromium.org</owner>
   <summary>
@@ -2643,6 +2643,17 @@ chromium-metrics-reviews@google.com.
     crashes, restarts, or sessions so this is only intended to give a rough
     approximation. This means that this metric will only be recorded in sessions
     spanning at least 7 days.
+  </summary>
+</histogram>
+
+<histogram name="Ash.SearchModelUpdateInterval" units="ms"
+    expires_after="2022-12-01">
+  <owner>yulunwu@google.com</owner>
+  <owner>tbarzic@google.com</owner>
+  <summary>
+    Records the time interval between user-initiated search model updates after
+    the user starts a search query. Used to record how quickly users update the
+    search model after passing in their first keystroke.
   </summary>
 </histogram>
 

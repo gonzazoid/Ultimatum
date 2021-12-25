@@ -36,6 +36,7 @@ Bəzi funksiyalar əlçatmaz ola bilər ki, nəticədə tərcihlərə edilən d�
 <translation id="2313870531055795960">URL'ləri Chromium'da saxlanılan təhlükəli saytların siyahısı ilə yoxlayır Sayt parolunuzu oğurlamağa çalışdıqda və ya zərərli fayl endirdiyinizdə Chromium səhifə məzmunundan kiçik nümunələr də daxil olmaqla, URL'ləri Təhlükəsiz Baxışa göndərə bilər.</translation>
 <translation id="2343156876103232566">Buradan Android telefonunuza nömrə göndərmək üçün hər iki cihazda Chromium'a daxil olun.</translation>
 <translation id="2347108572062610441">Bu artırma Chromium'u başlatdığınız zaman hansı səhifənin göstərildiyini dəyişdi.</translation>
+<translation id="2359808026110333948">Davam edin</translation>
 <translation id="2396765026452590966">"<ph name="EXTENSION_NAME" />" artırması Chromium'u başlatdığınız zaman hansı səhifənin göstərildiyini dəyişdi.</translation>
 <translation id="2401032172288869980">Chromium bu sayt üçün kamera və mikrofon icazəsi tələb edir</translation>
 <translation id="2483889755041906834">Chromium'da</translation>
@@ -108,20 +109,22 @@ Bəzi funksiyalar əlçatmaz ola bilər ki, nəticədə tərcihlərə edilən d�
 <translation id="4271805377592243930">Chromium ilə yardım alın</translation>
 <translation id="4285930937574705105">Naməlum xəta üzündən quraşdırmaq alınmadı. Əgər Chromium hazırda işləyirsə, lütfən, qapadın və yenidən cəhd edin.</translation>
 <translation id="4407044323746248786">Chromium'dan istənilən halda çıxılsın?</translation>
+<translation id="4414390922528416758">Chromium'un ən vacib hesab etdiyi məxfilik seçimlərini fərdiləşdirin. Bu bələdçiyə hər ayar və seçim daxil deyil.</translation>
 <translation id="4415566066719264597">Chromium'a Arxa Fonda İşləmək İcazəsi Verin</translation>
 <translation id="4423735387467980091">Fərdiləşdirin və Chromium'u kontrol edin</translation>
+<translation id="4427306783828095590">Təkmil qoruma ilə fişinq və zərərli proqramların bloklanması üçün daha çox iş görülür</translation>
 <translation id="452711251841752011">Chromium'a xoş gəlmisiniz; yeni brauzer pəncərəsi açılıb</translation>
 <translation id="4544142686420020088">Chromium güncəllənmədi, xəta baş verdi. <ph name="BEGIN_LINK" />Chrome'un güncəllənmə problemlərini və alınmayan güncəllənmələri həll edin.<ph name="END_LINK" /></translation>
 <translation id="454579500955453258">Yeni Chromium profilində davam edilsin?</translation>
 <translation id="4567424176335768812"><ph name="USER_EMAIL_ADDRESS" /> kimi daxil olmusunuz. İndi bütün daxil olan cihazlarınızdan əlfəcin, tarixçə və digər ayarlara daxil ola bilərsiniz.</translation>
 <translation id="459535195905078186">Chromium Tətbiqləri</translation>
+<translation id="4621240073146040695">Güncəllənmək üzrədir. Güncəlləşməni tamamlamaq üçün Chromium'u yenidən işə salın.</translation>
 <translation id="4665829708273112819">Xəbərdarlıq: Chromium artırmaların brauzer tarixçənizi yazmasının qarşısını ala bilməz. Bu artırmanı Anonim rejimdə deaktiv etmək üçün bu seçimi ləğv edin.</translation>
 <translation id="4677944499843243528">Profil başqa kompüterdə başqa Chromium prosesi tərəfindən (<ph name="PROCESS_ID" />)istifadə olunur (<ph name="HOST_NAME" />). Chromium profili xəta almaması üçün qapadıb. Əgər bu profilin başqa proseslər tərəfindən istifadə olunmadığına əminsinizsə, profili blokdan çıxarın və Chromium'u yenidən başladın.</translation>
 <translation id="469338717132742108">Chromium OS ilə yardım alın</translation>
 <translation id="4708774505295300557">Kimsə bu kompüterdə <ph name="ACCOUNT_EMAIL_LAST" /> kimi Chromium'a daxil olub. Məlumatınızı ayrı saxlamaq üçün yeni Chromium istifadəçisi yaradın.</translation>
 <translation id="4746050847053251315">Chromium'dan istənilən halda çıxılsın?</translation>
 <translation id="4748217263233248895">Chromium üçün xüsusi güvənlik güncəllənməsi indicə tətbiq edildi. Yenidən başladaraq açıq qalmış tablarınızı bərpa edə bilərsiniz.</translation>
-<translation id="4750035648288509542">Güncəllənmək üzrədir! Güncəlləməni tamamlamaq üçün Chromium'u yenidən başladın. Anonim pəncərələr yenidən açılmayacaq.</translation>
 <translation id="4788777615168560705">Chromium parollarınızı yoxlaya bilmir. 24 saatdan sonra yenidən cəhd edin və ya <ph name="BEGIN_LINK" />Google Hesabınızda parolları yoxlayın<ph name="END_LINK" />.</translation>
 <translation id="479167709087336770">Bu, Google axtarışda istifadə edilən eyni orfoqrafiya yoxlayandan istifadə edir. Brauzerdə yazdığınız mətn Google'a göndərilir. Bunu istənilən vaxt ayarlardan dəyişə bilərsiniz.</translation>
 <translation id="4888717733111232871">mDNS trafikinə imkan vermək üçün Chromium üçün daxil olan qayda.</translation>
@@ -232,6 +235,7 @@ Bəzi funksiyalar əlçatmaz ola bilər. Xüsusi profil direktoriyası göstəri
 <translation id="7561906087460245826">Chromium'dan datanı silin (<ph name="URL" />)</translation>
 <translation id="7585853947355360626">Ayar bu səhifədə göstərilməsə, <ph name="LINK_BEGIN" />
       Chromium OS ayarlarına<ph name="LINK_END" /> baxın</translation>
+<translation id="7597596667193879455">Hesabınızda Qabaqcıl Güvənli Baxışı aktiv etdiniz. İndi onu Chromium üçün əldə edin.</translation>
 <translation id="761356813943268536">Chromium kameranızı və mikrofonunuzu işlədir.</translation>
 <translation id="7617377681829253106">Chromium daha da keyfiyyətli oldu</translation>
 <translation id="7686590090926151193">Chromium defolt brauzeriniz deyil</translation>
@@ -291,5 +295,6 @@ Bəzi funksiyalar əlçatmaz ola bilər. Xüsusi profil direktoriyası göstəri
 <translation id="9214764063801632699">Chromium OS sistemi</translation>
 <translation id="93478295209880648">Chromium düzgün işləməyə bilər, çünki daha Windows XP və ya Windows Vista'da dəstəklənmir</translation>
 <translation id="965162752251293939">Chromium'u kim istifadə edir?</translation>
+<translation id="967427899662692980">Chromium’un ən güclü güvənlik sistemini əldə edin</translation>
 <translation id="985602178874221306">Chromium Müəllifləri</translation>
 </translationbundle>

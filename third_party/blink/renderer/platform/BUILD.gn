@@ -653,6 +653,8 @@ component("platform") {
     "fonts/opentype/open_type_caps_support.cc",
     "fonts/opentype/open_type_caps_support.h",
     "fonts/opentype/open_type_caps_support_mpl.cc",
+    "fonts/opentype/open_type_cpal_lookup.cc",
+    "fonts/opentype/open_type_cpal_lookup.h",
     "fonts/opentype/open_type_math_stretch_data.h",
     "fonts/opentype/open_type_math_support.cc",
     "fonts/opentype/open_type_math_support.h",
@@ -678,6 +680,8 @@ component("platform") {
     "fonts/shaping/glyph_bounds_accumulator.h",
     "fonts/shaping/harfbuzz_face.cc",
     "fonts/shaping/harfbuzz_face.h",
+    "fonts/shaping/harfbuzz_face_from_typeface.cc",
+    "fonts/shaping/harfbuzz_face_from_typeface.h",
     "fonts/shaping/harfbuzz_font_cache.cc",
     "fonts/shaping/harfbuzz_font_cache.h",
     "fonts/shaping/harfbuzz_font_data.h",
@@ -739,8 +743,6 @@ component("platform") {
     "geometry/calculation_expression_node.h",
     "geometry/calculation_value.cc",
     "geometry/calculation_value.h",
-    "geometry/cg/float_rect_cg.cc",
-    "geometry/cg/float_size_cg.cc",
     "geometry/double_point.cc",
     "geometry/double_point.h",
     "geometry/double_rect.cc",
@@ -755,14 +757,10 @@ component("platform") {
     "geometry/float_polygon.h",
     "geometry/float_quad.cc",
     "geometry/float_quad.h",
-    "geometry/float_rect.cc",
-    "geometry/float_rect.h",
     "geometry/float_rect_outsets.cc",
     "geometry/float_rect_outsets.h",
     "geometry/float_rounded_rect.cc",
     "geometry/float_rounded_rect.h",
-    "geometry/float_size.cc",
-    "geometry/float_size.h",
     "geometry/geometry_as_json.h",
     "geometry/geometry_hash_traits.h",
     "geometry/int_rect_outsets.h",
@@ -974,11 +972,6 @@ component("platform") {
     "graphics/graphics_context_state.cc",
     "graphics/graphics_context_state.h",
     "graphics/graphics_context_state_saver.h",
-    "graphics/graphics_layer.cc",
-    "graphics/graphics_layer.h",
-    "graphics/graphics_layer_client.h",
-    "graphics/graphics_layer_tree_as_text.cc",
-    "graphics/graphics_layer_tree_as_text.h",
     "graphics/graphics_types.cc",
     "graphics/graphics_types.h",
     "graphics/graphics_types_3d.h",
@@ -1057,7 +1050,6 @@ component("platform") {
     "graphics/paint/paint_chunk.cc",
     "graphics/paint/paint_chunk.h",
     "graphics/paint/paint_chunk_subset.h",
-    "graphics/paint/paint_chunk_subset_recorder.h",
     "graphics/paint/paint_chunker.cc",
     "graphics/paint/paint_chunker.h",
     "graphics/paint/paint_controller.cc",
@@ -1136,8 +1128,6 @@ component("platform") {
     "graphics/skia/sk_size_hash.h",
     "graphics/skia/skia_utils.cc",
     "graphics/skia/skia_utils.h",
-    "graphics/squashing_disallowed_reasons.cc",
-    "graphics/squashing_disallowed_reasons.h",
     "graphics/static_bitmap_image.cc",
     "graphics/static_bitmap_image.h",
     "graphics/static_bitmap_image_to_video_frame_copier.cc",
@@ -1756,11 +1746,6 @@ component("platform") {
       "Carbon.framework",
       "Foundation.framework",
     ]
-  } else {
-    sources -= [
-      "geometry/cg/float_rect_cg.cc",
-      "geometry/cg/float_size_cg.cc",
-    ]
   }
 
   if (is_win) {
@@ -2032,6 +2017,7 @@ source_set("blink_platform_unittests_sources") {
     "fonts/generic_font_family_settings_test.cc",
     "fonts/opentype/font_format_check_test.cc",
     "fonts/opentype/font_settings_test.cc",
+    "fonts/opentype/open_type_cpal_lookup_test.cc",
     "fonts/opentype/open_type_math_support_test.cc",
     "fonts/opentype/open_type_vertical_data_test.cc",
     "fonts/opentype/variable_axes_names_test.cc",
@@ -2059,9 +2045,7 @@ source_set("blink_platform_unittests_sources") {
     "geometry/float_box_test_helpers.h",
     "geometry/float_polygon_test.cc",
     "geometry/float_quad_test.cc",
-    "geometry/float_rect_test.cc",
     "geometry/float_rounded_rect_test.cc",
-    "geometry/float_size_test.cc",
     "geometry/geometry_test_helpers.cc",
     "geometry/geometry_test_helpers.h",
     "geometry/layout_rect_test.cc",
@@ -2397,8 +2381,7 @@ group("blink_platform_unittests_data") {
 
     # Required by some font tests.
     "//third_party/blink/web_tests/external/wpt/fonts/",
-
-    # Required by some font tests.
+    "//third_party/blink/web_tests/external/wpt/css/css-fonts/resources",
     "//third_party/blink/web_tests/third_party/",
   ]
 

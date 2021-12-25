@@ -15,7 +15,7 @@ import {html, mixinBehaviors, PolymerElement} from 'chrome://resources/polymer/v
 import {I18nBehavior, loadTimeData} from '../../i18n_setup.js';
 import {$$} from '../../utils.js';
 import {ChromeCartProxy} from '../cart/chrome_cart_proxy.js';
-import {ModuleDescriptor} from '../module_descriptor.js';
+import {ModuleDescriptorV2, ModuleHeight} from '../module_descriptor.js';
 
 /**
  * Implements the UI of chrome cart module. This module shows pending carts for
@@ -245,25 +245,6 @@ class ChromeCartModuleElement extends mixinBehaviors
   }
 
   /** @private */
-  onDismissButtonClick_() {
-    ChromeCartProxy.getHandler().hideCartModule();
-    this.dispatchEvent(new CustomEvent('dismiss-module', {
-      bubbles: true,
-      composed: true,
-      detail: {
-        message:
-            loadTimeData.getString('modulesCartModuleMenuHideToastMessage'),
-        restoreCallback: () => {
-          ChromeCartProxy.getHandler().restoreHiddenCartModule();
-          chrome.metricsPrivate.recordUserAction(
-              'NewTabPage.Carts.UndoHideModule');
-        },
-      },
-    }));
-    chrome.metricsPrivate.recordUserAction('NewTabPage.Carts.HideModule');
-  }
-
-  /** @private */
   onDisableButtonClick_() {
     this.dispatchEvent(new CustomEvent('disable-module', {
       bubbles: true,
@@ -403,7 +384,7 @@ class ChromeCartModuleElement extends mixinBehaviors
 
 customElements.define(ChromeCartModuleElement.is, ChromeCartModuleElement);
 
-/** @return {!Promise<?HTMLElement>} */
+/** @return {!Promise<!HTMLElement>} */
 async function createCartElement() {
   // getWarmWelcomeVisible makes server-side change and might flip the status of
   // whether welcome surface should show or not. Anything whose visibility
@@ -416,9 +397,6 @@ async function createCartElement() {
   const {carts} = await ChromeCartProxy.getHandler().getMerchantCarts();
   chrome.metricsPrivate.recordSmallCount(
       'NewTabPage.Carts.CartCount', carts.length);
-  if (carts.length === 0) {
-    return null;
-  }
   const element = new ChromeCartModuleElement();
   if (welcomeVisible) {
     element.headerChipText = loadTimeData.getString('modulesCartHeaderNew');
@@ -430,7 +408,8 @@ async function createCartElement() {
   return element;
 }
 
-/** @type {!ModuleDescriptor} */
-export const chromeCartDescriptor = new ModuleDescriptor(
+/** @type {!ModuleDescriptorV2} */
+export const chromeCartDescriptor = new ModuleDescriptorV2(
     /*id=*/ 'chrome_cart',
-    /*name=*/ loadTimeData.getString('modulesCartSentence'), createCartElement);
+    /*name=*/ loadTimeData.getString('modulesCartSentence'),
+    /*height*/ ModuleHeight.TALL, createCartElement);

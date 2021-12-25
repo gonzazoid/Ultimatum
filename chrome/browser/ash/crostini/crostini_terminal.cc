@@ -12,7 +12,6 @@
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
 #include "base/metrics/histogram_functions.h"
-#include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -160,10 +159,10 @@ void LoadIconsFromResources(
   if (images.size() >= resource_ids.size()) {
     return std::move(callback).Run(std::move(images));
   }
+  auto resource_id = resource_ids[images.size()];
   apps::LoadIconFromResource(
-      apps::IconType::kStandard, apps::kAppShortcutIconSizeDip,
-      resource_ids[images.size()], /*placeholder=*/false,
-      apps::IconEffects::kNone,
+      apps::IconType::kStandard, apps::kAppShortcutIconSizeDip, resource_id,
+      /*placeholder=*/false, apps::IconEffects::kNone,
       base::BindOnce(
           [](std::vector<int> resource_ids, std::vector<gfx::ImageSkia> images,
              base::OnceCallback<void(std::vector<gfx::ImageSkia>)> callback,
@@ -385,7 +384,7 @@ void RecordTerminalSettingsChangesUMAs(Profile* profile) {
       {"theme-variations", TerminalSetting::kThemeVariations},
   });
 
-  const base::DictionaryValue* settings = profile->GetPrefs()->GetDictionary(
+  const base::Value* settings = profile->GetPrefs()->GetDictionary(
       crostini::prefs::kCrostiniTerminalSettings);
   for (const auto item : settings->DictItems()) {
     // Only record settings for /hterm/profiles/default/.
@@ -402,14 +401,14 @@ void RecordTerminalSettingsChangesUMAs(Profile* profile) {
 }
 
 std::string GetTerminalSettingBackgroundColor(Profile* profile) {
-  const base::DictionaryValue* value = profile->GetPrefs()->GetDictionary(
+  const base::Value* value = profile->GetPrefs()->GetDictionary(
       crostini::prefs::kCrostiniTerminalSettings);
   const std::string* result = value->FindStringKey(kSettingBackgroundColor);
   return result ? *result : kDefaultBackgroundColor;
 }
 
 bool GetTerminalSettingPassCtrlW(Profile* profile) {
-  const base::DictionaryValue* value = profile->GetPrefs()->GetDictionary(
+  const base::Value* value = profile->GetPrefs()->GetDictionary(
       crostini::prefs::kCrostiniTerminalSettings);
   return value->FindBoolKey(kSettingPassCtrlW).value_or(kDefaultPassCtrlW);
 }

@@ -513,7 +513,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.CloudReportingBasicRequestSize" units="KB"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>zmin@chromium.org</owner>
   <owner>pastarmovj@chromium.org</owner>
   <summary>
@@ -544,7 +544,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.CloudReportingResponse"
-    enum="EnterpriseCloudReportingResponse" expires_after="2022-04-17">
+    enum="EnterpriseCloudReportingResponse" expires_after="2022-06-19">
   <owner>zmin@chromium.org</owner>
   <owner>pastarmovj@chromium.org</owner>
   <summary>
@@ -1390,9 +1390,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.EnterCriticalPolicySectionDelay.Total" units="ms"
-    expires_after="2022-04-10">
-  <owner>grt@chromium.org</owner>
+    expires_after="2022-06-12">
   <owner>zmin@chromium.org</owner>
+  <owner>grt@chromium.org</owner>
   <summary>
     Elapsed time taken to acquire each lock to access policies in the Windows
     registry (at user scope and then at machine scope). This metric is recorded
@@ -1402,9 +1402,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.EnterCriticalPolicySectionDelay.{Scope}.{Result}"
-    units="ms" expires_after="2021-12-31">
-  <owner>grt@chromium.org</owner>
+    units="ms" expires_after="2022-06-12">
   <owner>zmin@chromium.org</owner>
+  <owner>grt@chromium.org</owner>
   <summary>
     Elapsed time taken to acquire the lock to access policies in the Windows
     registry. The success or failure variant of this metric is recorded once for
@@ -1421,9 +1421,9 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.EnterCriticalPolicySectionError"
-    enum="WinGetLastError" expires_after="2022-04-10">
-  <owner>grt@chromium.org</owner>
+    enum="WinGetLastError" expires_after="2022-06-12">
   <owner>zmin@chromium.org</owner>
+  <owner>grt@chromium.org</owner>
   <summary>
     Windows error code following a failure to acquire the lock to access
     policies in the Windows registry shortly after browser startup.
@@ -1990,10 +1990,33 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.PolicyUserVerification"
-    enum="EnterprisePolicyUserVerification" expires_after="2022-04-17">
+    enum="EnterprisePolicyUserVerification" expires_after="2022-06-19">
   <owner>poromov@chromium.org</owner>
   <owner>chromeos-commercial-remote-management@google.com</owner>
   <summary>Tracking the results of policy user verification.</summary>
+</histogram>
+
+<histogram name="Enterprise.ProfileSeparation.DasherPolicyFetch.HttpResponse"
+    enum="HttpResponseCode" expires_after="2022-12-08">
+  <owner>ydago@chromium.org</owner>
+  <owner>zmin@chromium.org</owner>
+  <summary>
+    The Http statuses returned by the server when trying to get the
+    ManagedAccounsSigninRestriction policy value for individual dasher accounts.
+    This is recorded after trying to the the policy value, when the status is
+    available.
+  </summary>
+</histogram>
+
+<histogram name="Enterprise.ProfileSeparation.DasherPolicyFetch.NetworkError"
+    enum="NetErrorCodes" expires_after="2022-12-08">
+  <owner>ydago@chromium.org</owner>
+  <owner>zmin@chromium.org</owner>
+  <summary>
+    The network errors that happen when trying to get the
+    ManagedAccounsSigninRestriction policy value for individual dasher accounts.
+    This is recorded every time after trying to the the policy value.
+  </summary>
 </histogram>
 
 <histogram name="Enterprise.PublicSession.ExtensionPermissions"
@@ -2344,7 +2367,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="Enterprise.UserPolicyChromeOS.InitialFetch.OAuth2Error"
-    enum="GoogleServiceAuthError" expires_after="2021-12-26">
+    enum="GoogleServiceAuthError" expires_after="2022-03-01">
   <owner>igorcov@chromium.org</owner>
   <owner>asumaneev@google.com</owner>
   <summary>Service error during OAuth2 access token fetch.</summary>
@@ -2595,7 +2618,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="EnterpriseCheck.IsDomainJoined" enum="BooleanEnabled"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>pastarmovj@chromium.org</owner>
   <owner>rogerta@chromium.org</owner>
   <owner>zmin@chromium.org</owner>
@@ -2606,7 +2629,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="EnterpriseCheck.IsEnterpriseUser" enum="BooleanEnabled"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>pastarmovj@chromium.org</owner>
   <owner>rogerta@chromium.org</owner>
   <owner>zmin@chromium.org</owner>
@@ -2618,7 +2641,7 @@ chromium-metrics-reviews@google.com.
 </histogram>
 
 <histogram name="EnterpriseCheck.IsFullyManaged2" enum="IsFullyManagedBoolean"
-    expires_after="2022-04-17">
+    expires_after="2022-06-19">
   <owner>twellington@google.com</owner>
   <owner>tedchcoc@chromium.org</owner>
   <summary>

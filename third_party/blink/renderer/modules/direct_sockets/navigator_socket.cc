@@ -4,6 +4,7 @@
 
 #include "third_party/blink/renderer/modules/direct_sockets/navigator_socket.h"
 
+#include "base/metrics/histogram_functions.h"
 #include "net/base/net_errors.h"
 #include "services/network/public/mojom/tcp_socket.mojom-blink.h"
 #include "services/network/public/mojom/udp_socket.mojom-blink.h"
@@ -25,6 +26,13 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
+
+namespace {
+
+constexpr char kPermissionDeniedHistogramName[] =
+    "DirectSockets.PermissionDeniedFailures";
+
+}  // namespace
 
 const char NavigatorSocket::kSupplementName[] = "NavigatorSocket";
 
@@ -145,7 +153,8 @@ ScriptPromise NavigatorSocket::openUDPSocket(ScriptState* script_state,
     return ScriptPromise();
 
   auto* resolver = MakeGarbageCollected<ScriptPromiseResolver>(script_state);
-  UDPSocket* pending = MakeGarbageCollected<UDPSocket>(*resolver);
+  UDPSocket* pending = MakeGarbageCollected<UDPSocket>(
+      ExecutionContext::From(script_state), *resolver);
   pending_udp_.insert(pending);
   ScriptPromise promise = resolver->Promise();
 
@@ -167,6 +176,18 @@ bool NavigatorSocket::OpenSocketPermitted(ScriptState* script_state,
   if (!window) {
     exception_state.ThrowDOMException(DOMExceptionCode::kNotSupportedError,
                                       "Current frame is detached.");
+    return false;
+  }
+
+  // TODO(crbug.com/1119600): Do not consume (or check) transient activation
+  // for reconnection attempts.
+  if (!LocalFrame::ConsumeTransientUserActivation(window->GetFrame())) {
+    base::UmaHistogramEnumeration(
+        kPermissionDeniedHistogramName,
+        blink::mojom::blink::DirectSocketFailureType::kTransientActivation);
+    exception_state.ThrowDOMException(
+        DOMExceptionCode::kNotAllowedError,
+        "Must be handling a user gesture to open a socket.");
     return false;
   }
 

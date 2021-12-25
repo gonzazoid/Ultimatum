@@ -60,6 +60,7 @@ class BrowserNonClientFrameViewChromeOS
   void UpdateThrobber(bool running) override;
   bool CanUserExitFullscreen() const override;
   SkColor GetCaptionColor(BrowserFrameActiveState active_state) const override;
+  SkColor GetFrameColor(BrowserFrameActiveState active_state) const override;
   TabSearchBubbleHost* GetTabSearchBubbleHost() override;
   void UpdateMinimumSize() override;
 
@@ -222,6 +223,9 @@ class BrowserNonClientFrameViewChromeOS
   // fullscreen (not immersive fullscreen). Returns false for immersive
   // fullscreen.
   bool GetHideCaptionButtonsForFullscreen() const;
+
+  // Called any time the background color may have changed.
+  void OnUpdateBackgroundColor();
 
   // Called any time the frame color may have changed.
   void OnUpdateFrameColor();

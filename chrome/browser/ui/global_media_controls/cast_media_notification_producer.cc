@@ -21,7 +21,7 @@ namespace {
 bool ShouldHideNotification(const raw_ptr<Profile> profile,
                             const media_router::MediaRoute& route) {
   // TODO(crbug.com/1195382): Display multizone group route.
-  if (!route.for_display() || route.is_connecting()) {
+  if (route.is_connecting()) {
     return true;
   }
 
@@ -128,8 +128,7 @@ void CastMediaNotificationProducer::OnMediaItemUIDismissed(
 }
 
 void CastMediaNotificationProducer::OnRoutesUpdated(
-    const std::vector<media_router::MediaRoute>& routes,
-    const std::vector<media_router::MediaRoute::Id>& joinable_route_ids) {
+    const std::vector<media_router::MediaRoute>& routes) {
   const bool had_items = HasActiveItems();
 
   base::EraseIf(items_, [&routes](const auto& item) {

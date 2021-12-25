@@ -112,6 +112,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="1308113895091915999">Dostępna oferta</translation>
 <translation id="1312803275555673949">Co o tym świadczy?</translation>
 <translation id="131405271941274527"><ph name="URL" /> chce wysyłać i odbierać informacje po dotknięciu telefonem urządzenia z NFC</translation>
+<translation id="1314311879718644478">Oglądaj treści rzeczywistości rozszerzonej</translation>
 <translation id="1314509827145471431">Wiązanie przy prawej krawędzi</translation>
 <translation id="1318023360584041678">Zapisano w grupie kart</translation>
 <translation id="1319245136674974084">Nie pytaj ponownie dla tej aplikacji</translation>
@@ -176,6 +177,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="1472675084647422956">Pokaż więcej</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Szukasz wersji przeglądarki? Wejdź na</translation>
 <translation id="1476595624592550506">Zmień hasło</translation>
 <translation id="1483493594462132177">Wyślij</translation>
 <translation id="1484290072879560759">Wybierz adres wysyłki</translation>
@@ -214,6 +216,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="1583429793053364125">Podczas wyświetlania strony wystąpił błąd.</translation>
 <translation id="1586541204584340881">Zainstalowane przez Ciebie rozszerzenia</translation>
 <translation id="1588438908519853928">Normalny</translation>
+<translation id="1589050138437146318">Zainstalować ARCore?</translation>
 <translation id="1592005682883173041">Lokalny dostęp do danych</translation>
 <translation id="1594030484168838125">Wybierz</translation>
 <translation id="160851722280695521">Zagraj w grę Dino Run w Chrome</translation>
@@ -1252,6 +1255,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="4968522289500246572">Ta aplikacja jest przeznaczona na urządzenia mobilne i po zmianie rozmiaru może sprawiać problemy. Może uruchamiać się ponownie lub działać nieprawidłowo.</translation>
 <translation id="4969341057194253438">Usuń nagranie</translation>
 <translation id="4973922308112707173">Dwa otwory u góry</translation>
+<translation id="4976702386844183910">Ostatnia wizyta <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Korzystać z mikrofonu?</translation>
 <translation id="4984339528288761049">Prc5 (koperta)</translation>
 <translation id="4989163558385430922">Pokaż wszystko</translation>
@@ -1337,6 +1341,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="5215116848420601511">Formy płatności i adresy z Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Taca 13</translation>
+<translation id="5216942107514965959">Ostatnio używana dzisiaj</translation>
 <translation id="5222812217790122047">E-mail jest wymagany</translation>
 <translation id="5230733896359313003">Adres wysyłki</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1380,6 +1385,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="5333022057423422993">Przeglądarka Chrome znalazła użyte właśnie hasło w naruszeniu bezpieczeństwa danych. W trosce o bezpieczeństwo Twoich kont zalecamy jak najszybsze sprawdzenie zapisanych haseł.</translation>
 <translation id="5334013548165032829">Szczegółowe dzienniki systemowe</translation>
 <translation id="5334145288572353250">Zapisać adres?</translation>
+<translation id="5335920952954443287">Bijące serce</translation>
 <translation id="5340250774223869109">Aplikacja jest zablokowana</translation>
 <translation id="534295439873310000">Urządzenia z funkcją NFC</translation>
 <translation id="5344579389779391559">Ta strona może próbować obciążyć Cię płatnością</translation>
@@ -1522,6 +1528,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="5869522115854928033">Zapisane hasła</translation>
 <translation id="5873013647450402046">Bank chce potwierdzić Twoją tożsamość.</translation>
 <translation id="5887400589839399685">Zapisano kartę</translation>
+<translation id="5887687176710214216">Ostatnio używana wczoraj</translation>
 <translation id="5895138241574237353">Uruchom ponownie</translation>
 <translation id="5895187275912066135">Wystawiony dnia</translation>
 <translation id="5901630391730855834">Żółty</translation>
@@ -1715,6 +1722,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="6529602333819889595">&amp;Ponów usunięcie</translation>
 <translation id="6545864417968258051">Skanowanie Bluetooth</translation>
 <translation id="6547208576736763147">Dwa otwory po lewej</translation>
+<translation id="6554732001434021288">Ostatnio używano <ph name="NUM_DAYS" /> dni temu</translation>
 <translation id="6556866813142980365">Ponów</translation>
 <translation id="6569060085658103619">Przeglądasz stronę rozszerzenia</translation>
 <translation id="6573200754375280815">Dwa otwory po prawej</translation>
@@ -1877,6 +1885,7 @@ Jeśli się nie zgodzisz, zostaną one zablokowane ze względu na Twoje ustawien
 <translation id="7118618213916969306">Wyszukaj URL ze schowka, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Zamknij inne karty lub programy</translation>
 <translation id="7129409597930077180">Nie można wysłać pod ten adres. Wybierz inny.</translation>
+<translation id="7132939140423847331">Administrator nie zezwala na kopiowanie tych danych.</translation>
 <translation id="7135130955892390533">Wyświetlanie informacji o obecności</translation>
 <translation id="7138472120740807366">Metoda dostawy</translation>
 <translation id="7139724024395191329">Emirat</translation>
@@ -2049,6 +2058,7 @@ Dodatkowe informacje:
 <translation id="7654909834015434372">Gdy zmodyfikujesz adnotacje, dokument wróci do pierwotnej orientacji</translation>
 <translation id="765676359832457558">Ukryj ustawienia zaawansowane...</translation>
 <translation id="7658239707568436148">Anuluj</translation>
+<translation id="7659878911471462949">Płacz ze szczęścia</translation>
 <translation id="7662298039739062396">Ustawienie kontrolowane przez rozszerzenie</translation>
 <translation id="7663736086183791259">Certyfikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Niedozwolone w trybie incognito</translation>
@@ -2149,7 +2159,6 @@ Dodatkowe informacje:
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Może prosić o zgodę na używanie urządzeń i danych rzeczywistości wirtualnej</translation>
 <translation id="7984945080620862648">Nie możesz teraz odwiedzić strony <ph name="SITE" />, bo wysłała ona zakodowane poświadczenia, których Chrome nie może przetworzyć. Błędy sieci i ataki są zazwyczaj przejściowe, więc prawdopodobnie strona będzie wkrótce działać.</translation>
-<translation id="79859296434321399">Aby oglądać treści rzeczywistości rozszerzonej, zainstaluj ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Wiązanie</translation>
 <translation id="7992044431894087211">Udostępnianie ekranu w aplikacji <ph name="APPLICATION_TITLE" /> zostało wznowione</translation>
@@ -2253,6 +2262,7 @@ Dodatkowe informacje:
 <translation id="830498451218851433">Składanie w połowie</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Zainstalowane aplikacje i częstotliwość ich użycia</translation>
+<translation id="8317207217658302555">Zaktualizować ARCore?</translation>
 <translation id="831997045666694187">Wieczorem</translation>
 <translation id="8321476692217554900">powiadomienia</translation>
 <translation id="8328484624016508118">Gdy zamkniesz wszystkie karty incognito, Chrome usunie:
@@ -2323,7 +2333,6 @@ Dodatkowe informacje:
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Zresetuj uprawnienia}few{Zresetuj uprawnienia}many{Zresetuj uprawnienia}other{Zresetuj uprawnienia}}</translation>
 <translation id="8555010941760982128">Użyj tego kodu w momencie płatności</translation>
 <translation id="8557066899867184262">Kod CVC znajduje się na odwrocie karty.</translation>
-<translation id="8558485628462305855">Aby oglądać treści rzeczywistości rozszerzonej, zaktualizuj ARCore</translation>
 <translation id="8559762987265718583">Nie można nawiązać prywatnego połączenia z <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, ponieważ data i godzina (<ph name="DATE_AND_TIME" />) ustawione na urządzeniu są nieprawidłowe.</translation>
 <translation id="8564182942834072828">Oddzielne dokumenty / Kopie niesortowane</translation>
 <translation id="8564985650692024650">Chromium zaleca zresetowanie hasła, którego używasz w: <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, jeśli zostało użyte na innej stronie.</translation>
@@ -2435,6 +2444,7 @@ Dodatkowe informacje:
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />; aby wyświetlić historię przeglądania w Chrome, naciśnij Tab, a potem Enter</translation>
 <translation id="8987927404178983737">Miesiąc</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Szukasz wersji systemu? Wejdź na</translation>
 <translation id="899688752321268742"><ph name="URL" /> chce wiedzieć, kiedy używasz urządzenia</translation>
 <translation id="8996941253935762404">Na następnej stronie znajdują się szkodliwe programy</translation>
 <translation id="8997023839087525404">Certyfikat przesłany przez serwer nie został publicznie ujawniony przez protokół Certificate Transparency. Jest to wymagane w przypadku niektórych certyfikatów jako potwierdzenie, że są one zaufane i zabezpieczone przed atakami.</translation>

@@ -208,6 +208,8 @@ void NativeWidgetAura::InitNativeWidget(Widget::InitParams params) {
   gfx::NativeView parent = params.parent;
   gfx::NativeView context = params.context;
   if (!params.child) {
+    wm::TransientWindowManager::GetOrCreate(window_)->AddObserver(this);
+
     // Set up the transient child before the window is added. This way the
     // LayoutManager knows the window has a transient parent.
     if (parent && parent->GetType() != aura::client::WINDOW_TYPE_UNKNOWN) {
@@ -708,7 +710,7 @@ bool NativeWidgetAura::IsMinimized() const {
 
 void NativeWidgetAura::Restore() {
   if (window_)
-    window_->SetProperty(aura::client::kShowStateKey, ui::SHOW_STATE_NORMAL);
+    wm::Restore(window_);
 }
 
 void NativeWidgetAura::SetFullscreen(bool fullscreen,
@@ -1101,19 +1103,18 @@ void NativeWidgetAura::OnDragExited() {
   drop_helper_->OnDragExit();
 }
 
-ui::mojom::DragOperation NativeWidgetAura::OnPerformDrop(
-    const ui::DropTargetEvent& event,
-    std::unique_ptr<ui::OSExchangeData> data) {
-  DCHECK(drop_helper_.get() != nullptr);
-  return drop_helper_->OnDrop(event.data(), event.location(),
-                              last_drop_operation_);
-}
-
 aura::client::DragDropDelegate::DropCallback NativeWidgetAura::GetDropCallback(
     const ui::DropTargetEvent& event) {
   DCHECK(drop_helper_);
   return drop_helper_->GetDropCallback(event.data(), event.location(),
                                        last_drop_operation_);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// NativeWidgetAura, wm::TransientWindowObserver implementation:
+
+void NativeWidgetAura::OnTransientParentChanged(aura::Window* new_parent) {
+  delegate_->OnNativeWidgetParentChanged(new_parent);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

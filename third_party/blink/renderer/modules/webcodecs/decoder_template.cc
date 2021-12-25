@@ -68,7 +68,8 @@ template <typename Traits>
 DecoderTemplate<Traits>::DecoderTemplate(ScriptState* script_state,
                                          const InitType* init,
                                          ExceptionState& exception_state)
-    : ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
+    : ReclaimableCodec(ExecutionContext::From(script_state)),
+      ExecutionContextLifecycleObserver(ExecutionContext::From(script_state)),
       script_state_(script_state),
       state_(V8CodecState::Enum::kUnconfigured),
       trace_counter_id_(g_sequence_num_for_counters.GetNext()) {
@@ -82,7 +83,8 @@ DecoderTemplate<Traits>::DecoderTemplate(ScriptState* script_state,
   main_thread_task_runner_ =
       context->GetTaskRunner(TaskType::kInternalMediaRealTime);
 
-  logger_ = std::make_unique<CodecLogger>(context, main_thread_task_runner_);
+  logger_ = std::make_unique<CodecLogger<media::Status>>(
+      context, main_thread_task_runner_);
 
   logger_->log()->SetProperty<media::MediaLogProperty::kFrameUrl>(
       context->Url().GetString().Ascii());
@@ -634,6 +636,8 @@ void DecoderTemplate<Traits>::OnInitializeDone(media::Status status) {
   if (is_flush) {
     pending_request_->resolver.Release()->Resolve();
   } else {
+    logger_->SendPlayerNameInformation(*GetExecutionContext(),
+                                       Traits::GetName());
     Traits::UpdateDecoderLog(*decoder_, *pending_request_->media_config,
                              logger_->log());
 

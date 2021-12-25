@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Təklif əlçatandır</translation>
 <translation id="1312803275555673949">Hansı dəlillər bunu dəstəkləyir?</translation>
 <translation id="131405271941274527">NFC cihazında telefonunuza toxunan zaman <ph name="URL" /> məlumat göndərmək və qəbul etmək istəyir</translation>
+<translation id="1314311879718644478">Artırılmış reallıq məzmununa baxın</translation>
 <translation id="1314509827145471431">Sağdan uclarını qovuşdurun</translation>
 <translation id="1318023360584041678">Tab qrupunda saxlanıldı</translation>
 <translation id="1319245136674974084">Bu tətbiq haqqında bir daha soruşmayın</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">Daha çox göstərin</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Brauzer versiyası axtarırsınız? Ziyarət edin</translation>
 <translation id="1476595624592550506">Parolunuzu dəyişin</translation>
 <translation id="1483493594462132177">Göndərin</translation>
 <translation id="1484290072879560759">Göndəriş Ünvanı seçin</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">Bu veb səhifəni göstərərkən xəta baş verdi.</translation>
 <translation id="1586541204584340881">Quraşdırdığınız artırmalar</translation>
 <translation id="1588438908519853928">Normal</translation>
+<translation id="1589050138437146318">ARCore quraşdırılsın?</translation>
 <translation id="1592005682883173041">Yerli Data Girişi</translation>
 <translation id="1594030484168838125">Seçin</translation>
 <translation id="160851722280695521">Chrome'da Dinozavr Qaçış oyununu oynayın</translation>
@@ -1256,6 +1259,7 @@
 <translation id="4968522289500246572">Bu tətbiq mobil cihaz üçün nəzərdə tutulmuşdur və ölçüsü hər cihaz üçün uyğun olmaya bilər. Tətbiq problemlərlə qarşılaşa bilər və ya yenidən başladıla bilər.</translation>
 <translation id="4969341057194253438">Qeydəalmanı silin</translation>
 <translation id="4973922308112707173">Yuxarıdan qoşa deşik açın</translation>
+<translation id="4976702386844183910">Son ziyarət: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Mikrofondan istifadə edilsin?</translation>
 <translation id="4984339528288761049">Prc5 (Zərf)</translation>
 <translation id="4989163558385430922">Hamısına baxın</translation>
@@ -1341,6 +1345,7 @@
 <translation id="5215116848420601511">Google Pay istifadə edən kart və ünvanlar</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Qab 13</translation>
+<translation id="5216942107514965959">Son ziyarət bu gün olub</translation>
 <translation id="5222812217790122047">E-poçt ünvanı tələb olunur</translation>
 <translation id="5230733896359313003">Göndəriş Ünvanı</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1384,6 +1389,7 @@
 <translation id="5333022057423422993">Chrome indicə istifadə etdiyiniz parolu bir data pozuntusunda tapıb. Hesablarınızı qorumaq üçün yadda saxlanmış parollarınızı yoxlamağınızı tövsiyə edirik.</translation>
 <translation id="5334013548165032829">Ətraflı sistem qeydləri</translation>
 <translation id="5334145288572353250">Ünvan saxlanılsın?</translation>
+<translation id="5335920952954443287">Ürək döyüntüsü</translation>
 <translation id="5340250774223869109">Tətbiq bloklanıb</translation>
 <translation id="534295439873310000">NFC cihazları</translation>
 <translation id="5344579389779391559">Bu səhifədə Sizdən ödəniş tutula bilər</translation>
@@ -1526,6 +1532,7 @@
 <translation id="5869522115854928033">Saxlanılmış parollar</translation>
 <translation id="5873013647450402046">Bankınız bunun siz olduğunuzu təsdiq etmək istəyir.</translation>
 <translation id="5887400589839399685">Kart yadda saxlanıldı</translation>
+<translation id="5887687176710214216">Son ziyarət dünən olub</translation>
 <translation id="5895138241574237353">Yenidən başladın</translation>
 <translation id="5895187275912066135">Buraxılış Tarixi</translation>
 <translation id="5901630391730855834">Sarı</translation>
@@ -1719,6 +1726,7 @@
 <translation id="6529602333819889595">Silinməni yenidən edin</translation>
 <translation id="6545864417968258051">Bluetooth axtarışı</translation>
 <translation id="6547208576736763147">Soldan qoşa deşik açın</translation>
+<translation id="6554732001434021288">Son ziyarət <ph name="NUM_DAYS" /> gün əvvəl olub</translation>
 <translation id="6556866813142980365">Yenidən edin</translation>
 <translation id="6569060085658103619">Artırma səhifəsinə baxırsınız</translation>
 <translation id="6573200754375280815">Sağdan qoşa deşik açın</translation>
@@ -1881,6 +1889,7 @@
 <translation id="7118618213916969306">Mübadilə buferindən link axtarın, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Digər tab və ya proqramları bağlayın</translation>
 <translation id="7129409597930077180">Bu ünvana göndərmək mümkün deyil. Başqa ünvan seçin.</translation>
+<translation id="7132939140423847331">Admininiz bu məlumatın kopyalanmasını qadağan edib.</translation>
 <translation id="7135130955892390533">Statusu göstərin</translation>
 <translation id="7138472120740807366">Çatdırılma üsulu</translation>
 <translation id="7139724024395191329">Əmirlik</translation>
@@ -2053,6 +2062,7 @@
 <translation id="7654909834015434372">Annotasiyaları redaktə etdiyiniz zaman bu sənəd ilkin vəziyyətinə qayıdacaq</translation>
 <translation id="765676359832457558">Qabaqcıl ayarları gizlədin...</translation>
 <translation id="7658239707568436148">Ləğv edin</translation>
+<translation id="7659878911471462949">Sevinc göz yaşları</translation>
 <translation id="7662298039739062396">Ayara artırma tərəfindən nəzarət edildi</translation>
 <translation id="7663736086183791259">Sertifikat <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Anonim rejimdə icazə verilmir</translation>
@@ -2153,7 +2163,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Saytlar virtual reallıq cihazları və datadan istifadə üçün icazə istəyə bilər</translation>
 <translation id="7984945080620862648">Sayt güvənsiz kredensiallar göndərdiyi üçün <ph name="SITE" /> ünvanına girə bilməzsiniz.</translation>
-<translation id="79859296434321399">Artırılmış virtual reallıq kontentinə baxmaq üçün ARCore quraşdırın</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Uclarını qovuşdurun</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> ilə ekran paylaşımı davam etdirilib</translation>
@@ -2257,6 +2266,7 @@
 <translation id="830498451218851433">Yarımçıq qatlayın</translation>
 <translation id="8307358339886459768">Kiçik Ölçülü Foto</translation>
 <translation id="8307888238279532626">Quraşdırılmış tətbiqlər və nə zaman istifadə edildikləri</translation>
+<translation id="8317207217658302555">ARCore güncəllənsin?</translation>
 <translation id="831997045666694187">Axşam</translation>
 <translation id="8321476692217554900">bildirişlər</translation>
 <translation id="8328484624016508118">Bütün Anonim tabları bağladıqdan sonra Chrome bunları təmizləyəcək:
@@ -2327,7 +2337,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{İcazəni sıfırlayın}other{İcazələri sıfırlayın}}</translation>
 <translation id="8555010941760982128">Ödəniş zamanı bu koddan istifadə edin</translation>
 <translation id="8557066899867184262">CVC kartın arxasında yerləşir.</translation>
-<translation id="8558485628462305855">Artırılmış virtual reallıq kontentinə baxmaq üçün ARCore'u güncəlləyin</translation>
 <translation id="8559762987265718583">Cihazınızın tarixi və vaxtı (<ph name="DATE_AND_TIME" />) yanlış olduğundan, <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> domeninə şəxsi bağlantı yaradıla bilməz.</translation>
 <translation id="8564182942834072828">Ayrıca sənədlər/Sıralanmamış nüsxələr</translation>
 <translation id="8564985650692024650">Parolunuzdan digər saytlarda təkrar istifadə etmisinizsə, Chromium <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> parolunuzu sıfırlamağı tövsiyə edir.</translation>
@@ -2439,6 +2448,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />, Tab düyməsi, sonra Enter düyməsinə basaraq Chrome'da brauzer tarixçənizə baxın</translation>
 <translation id="8987927404178983737">Ay</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Sistem versiyası axtarırsınız? Ziyarət edin</translation>
 <translation id="899688752321268742"><ph name="URL" /> bu cihazdan nə zaman aktiv şəkildə istifadə etdiyinizi bilmək istədyir</translation>
 <translation id="8996941253935762404">Qarşıdakı saytda ziyanverici proqramlar var</translation>
 <translation id="8997023839087525404">Server, Sertifikat Şəffaflığı siyasəti istifadə edilərək aşkarlanmamış sertifikatı təqdim etdi. Bu, sertifikatların etibarlı və hücum edənlərə qarşı qorunduğuna əmin olmaq üçün tələb olunur.</translation>

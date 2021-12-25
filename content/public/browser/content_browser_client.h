@@ -1803,6 +1803,10 @@ class CONTENT_EXPORT ContentBrowserClient {
   // browser-initiated navigations. The initiating origin is intended to help
   // users make security decisions about whether to allow an external
   // application to launch.
+  //
+  // |initiator_document| refers to the document that initiated the navigation,
+  // if it is still available. Use |initiating_origin| instead for security
+  // decisions.
   virtual bool HandleExternalProtocol(
       const GURL& url,
       base::RepeatingCallback<WebContents*()> web_contents_getter,
@@ -1814,6 +1818,7 @@ class CONTENT_EXPORT ContentBrowserClient {
       ui::PageTransition page_transition,
       bool has_user_gesture,
       const absl::optional<url::Origin>& initiating_origin,
+      RenderFrameHost* initiator_document,
       mojo::PendingRemote<network::mojom::URLLoaderFactory>* out_factory);
 
   // Creates an OverlayWindow to be used for Picture-in-Picture. This window
@@ -1844,8 +1849,7 @@ class CONTENT_EXPORT ContentBrowserClient {
   // Called on every request completion to update the data use when network
   // service is enabled.
   virtual void OnNetworkServiceDataUseUpdate(
-      int process_id,
-      int route_id,
+      GlobalRenderFrameHostId render_frame_host_id,
       int32_t network_traffic_annotation_id_hash,
       int64_t recv_bytes,
       int64_t sent_bytes);
@@ -2174,19 +2178,22 @@ class CONTENT_EXPORT ContentBrowserClient {
   // by the embedder.
   virtual void FlushBackgroundAttributions(base::OnceClosure callback);
 
-  // Determines whether to assign documents to origin-keyed agent clusters by
-  // default. That is, it controls the behaviour when the Origin-Agent-Cluster
-  // header is absent.
+  // Allows overriding the policy of whether to assign documents to origin-keyed
+  // agent clusters by default. That is, it controls the behaviour when the
+  // Origin-Agent-Cluster header is absent.
   //
   // If the embedder returns true, this prevents the use of origin-keyed agent
   // clusters by default (i.e., when the Origin-Agent-Cluster header is absent).
   // If the embedder returns false, then the decision is based on
   // blink::features::kOriginAgentClusterDefaultEnabled instead.
-  //
-  // Note that this is inverted from the corresponding enterprise policy
-  // (kOriginAgentClusterDefaultEnabled).
   virtual bool ShouldDisableOriginAgentClusterDefault(
       BrowserContext* browser_context);
+
+  // Whether a navigation in |browser_context| should preconnect early.
+  virtual bool ShouldPreconnectNavigation(BrowserContext* browser_context);
+
+  // Returns true if First-Party Sets is enabled.
+  virtual bool IsFirstPartySetsEnabled();
 };
 
 }  // namespace content

@@ -7,7 +7,6 @@ import {
   assertInstanceof,
   assertNotReached,
 } from '../../../assert.js';
-import {AsyncJobQueue} from '../../../async_job_queue.js';
 // eslint-disable-next-line no-unused-vars
 import {StreamConstraints} from '../../../device/stream_constraints.js';
 import {
@@ -35,7 +34,6 @@ import {
   ErrorType,
   Facing,  // eslint-disable-line no-unused-vars
   NoChunkError,
-  PerfEvent,
   Resolution,
   VideoType,
 } from '../../../type.js';
@@ -115,48 +113,28 @@ function beforeUnloadListener(event) {
 }
 
 /**
- * Contains video recording result.
+ * @typedef {{
+ *   blob: !Blob,
+ *   resolution: !Resolution,
+ *   timestamp: number,
+ * }}
  */
-export class VideoResult {
-  /**
-   * @param {{
-   *     resolution: !Resolution,
-   *     duration: number,
-   *     videoSaver: !VideoSaver,
-   *     everPaused: boolean,
-   * }} params
-   */
-  constructor({resolution, duration, videoSaver, everPaused}) {
-    /**
-     * @const {!Resolution}
-     * @public
-     */
-    this.resolution = resolution;
+export let VideoSnapshotResult;
 
-    /**
-     * @const {number}
-     * @public
-     */
-    this.duration = duration;
-
-    /**
-     * @const {!VideoSaver}
-     * @public
-     */
-    this.videoSaver = videoSaver;
-
-    /**
-     * @const {boolean}
-     * @public
-     */
-    this.everPaused = everPaused;
-  }
-}
+/**
+ * @typedef {{
+ *   resolution: !Resolution,
+ *   duration: number,
+ *   videoSaver: !VideoSaver,
+ *   everPaused: boolean,
+ * }}
+ */
+export let VideoResult;
 
 /**
  * @typedef {{
  *   name: string,
- *   getBlob: function(): !Promise<!Blob>,
+ *   gifSaver: !GifSaver,
  *   resolution: !Resolution,
  *   duration: number,
  * }}
@@ -179,33 +157,12 @@ export class VideoHandler {
   }
 
   /**
-   * Handles the result video.
-   * @param {!VideoResult} video Captured video result.
-   * @return {!Promise}
-   * @abstract
-   */
-  handleResultVideo(video) {
-    assertNotReached();
-  }
-
-  /**
-   * Handles the result gif video.
-   * @param {!GifResult} result
-   * @return {!Promise}
-   * @abstract
-   */
-  handleResultGif(result) {
-    assertNotReached();
-  }
-
-  /**
    * Handles the result video snapshot.
-   * @param {!PhotoResult} photo photo Captured video snapshot photo.
-   * @param {string} name Name of the video snapshot result to be saved as.
+   * @param {!VideoSnapshotResult} videoSnapshotResult
    * @return {!Promise}
    * @abstract
    */
-  handleResultPhoto(photo, name) {
+  handleVideoSnapshot(videoSnapshotResult) {
     assertNotReached();
   }
 
@@ -222,6 +179,24 @@ export class VideoHandler {
    * @abstract
    */
   getPreviewVideo() {
+    assertNotReached();
+  }
+
+  /**
+   * @param {!GifResult} gifResult
+   * @return {!Promise<void>}
+   * @abstract
+   */
+  async onGifCaptureDone(gifResult) {
+    assertNotReached();
+  }
+
+  /**
+   * @param {!VideoResult} videoResult
+   * @return {!Promise<void>}
+   * @abstract
+   */
+  async onVideoCaptureDone(videoResult) {
     assertNotReached();
   }
 }
@@ -323,11 +298,11 @@ export class Video extends ModeBase {
     this.recordingType_ = RecordType.NORMAL;
 
     /**
-     * Queueing all taking video snapshot jobs requested in a single recording.
-     * @type {!AsyncJobQueue}
+     * The ongoing video snapshot.
+     * @type {?Promise<void>}
      * @private
      */
-    this.snapshots_ = new AsyncJobQueue();
+    this.snapshotting_ = null;
 
     /**
      * Promise for process of toggling video pause/resume. Sets to null if CCA
@@ -370,9 +345,7 @@ export class Video extends ModeBase {
    *     record type option groups.
    */
   getToggledRecordOption_() {
-    if (state.get(state.State.SHOULD_HANDLE_INTENT_RESULT) ||
-        !state.get(state.State.EXPERT) ||
-        !state.get(state.State.SHOW_GIF_RECORDING_OPTION)) {
+    if (state.get(state.State.SHOULD_HANDLE_INTENT_RESULT)) {
       return RecordType.NORMAL;
     }
     return Object.values(RecordType).find((t) => state.get(t)) ||
@@ -394,32 +367,38 @@ export class Video extends ModeBase {
    * Takes a video snapshot during recording.
    * @return {!Promise} Promise resolved when video snapshot is finished.
    */
-  takeSnapshot() {
-    const doSnapshot = async () => {
-      let blob;
-      if (await this.isBlobVideoSnapshotEnabled()) {
-        const photoSettings = /** @type {!PhotoSettings} */ ({
-          imageWidth: this.snapshotResolution_.width,
-          imageHeight: this.snapshotResolution_.height,
-        });
-        const results = await this.crosImageCapture_.takePhoto(photoSettings);
-        blob = await results[0];
-      } else {
-        blob = await this.crosImageCapture_.grabJpegFrame();
-      }
+  async takeSnapshot() {
+    if (this.snapshotting_ !== null) {
+      return;
+    }
+    state.set(state.State.SNAPSHOTTING, true);
+    this.snapshotting_ = (async () => {
+      try {
+        const timestamp = Date.now();
+        let blob;
+        if (await this.isBlobVideoSnapshotEnabled()) {
+          const photoSettings = /** @type {!PhotoSettings} */ ({
+            imageWidth: this.snapshotResolution_.width,
+            imageHeight: this.snapshotResolution_.height,
+          });
+          const results = await this.crosImageCapture_.takePhoto(photoSettings);
+          blob = await results[0];
+        } else {
+          blob = await this.crosImageCapture_.grabJpegFrame();
+        }
 
-      this.handler_.playShutterEffect();
-      const imageName = (new Filenamer()).newImageName();
-      await this.handler_.handleResultPhoto(
-          {
-            resolution: this.captureResolution_,
-            blob,
-            isVideoSnapshot: true,
-          },
-          imageName);
-    };
-    this.snapshots_.push(doSnapshot);
-    return this.snapshots_.flush();
+        this.handler_.playShutterEffect();
+        await this.handler_.handleVideoSnapshot({
+          blob,
+          resolution: this.captureResolution_,
+          timestamp,
+        });
+      } finally {
+        state.set(state.State.SNAPSHOTTING, false);
+        this.snapshotting_ = null;
+      }
+    })();
+    return this.snapshotting_;
   }
 
   /**
@@ -516,7 +495,7 @@ export class Video extends ModeBase {
    * @override
    */
   async start_() {
-    this.snapshots_ = new AsyncJobQueue();
+    assert(this.snapshotting_ === null);
     this.togglePaused_ = null;
     this.everPaused_ = false;
 
@@ -576,18 +555,11 @@ export class Video extends ModeBase {
       state.set(state.State.RECORDING, false);
       this.gifRecordTime_.stop({pause: false});
 
-      // TODO(b:191950622): Close capture stream before handleResultGif()
+      // TODO(b:191950622): Close capture stream before onGifCaptureDone()
       // opening preview page when multi-stream recording enabled.
-      await this.handler_.handleResultGif({
+      return () => this.handler_.onGifCaptureDone({
         name: gifName,
-        getBlob: async () => {
-          // Measure the latency of gif encoder finishing rest of the encoding
-          // works.
-          state.set(PerfEvent.GIF_CAPTURE_POST_PROCESSING, true);
-          const blob = await gifSaver.endWrite();
-          state.set(PerfEvent.GIF_CAPTURE_POST_PROCESSING, false);
-          return blob;
-        },
+        gifSaver,
         resolution: this.captureResolution_,
         duration: this.gifRecordTime_.inMilliseconds(),
       });
@@ -604,7 +576,7 @@ export class Video extends ModeBase {
         } finally {
           this.recordTime_.stop({pause: false});
           sound.play(dom.get('#sound-rec-end', HTMLAudioElement));
-          await this.snapshots_.flush();
+          await this.snapshotting_;
         }
       } catch (e) {
         // Tolerates the error if it is due to the very short duration. Reports
@@ -617,29 +589,19 @@ export class Video extends ModeBase {
 
       if (isVideoTooShort()) {
         toast.show(I18nString.ERROR_MSG_VIDEO_TOO_SHORT);
-        if (videoSaver !== null) {
-          await videoSaver.cancel();
-        }
-        return;
+        await videoSaver.cancel();
+        return () => this.snapshotting_;
       }
 
-      state.set(PerfEvent.VIDEO_CAPTURE_POST_PROCESSING, true);
-
-      try {
-        await this.handler_.handleResultVideo(new VideoResult({
+      return async () => {
+        await this.handler_.onVideoCaptureDone({
           resolution: this.captureResolution_,
           duration: this.recordTime_.inMilliseconds(),
           videoSaver,
           everPaused: this.everPaused_,
-        }));
-        state.set(
-            PerfEvent.VIDEO_CAPTURE_POST_PROCESSING, false,
-            {resolution: this.captureResolution_, facing: this.facing_});
-      } catch (e) {
-        state.set(
-            PerfEvent.VIDEO_CAPTURE_POST_PROCESSING, false, {hasError: true});
-        throw e;
-      }
+        });
+        await this.snapshotting_;
+      };
     }
   }
 

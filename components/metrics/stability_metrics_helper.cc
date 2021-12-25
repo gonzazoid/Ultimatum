@@ -130,12 +130,6 @@ void StabilityMetricsHelper::ProvideStabilityMetrics(
         prefs::kStabilityExtensionRendererFailedLaunchCount, 0);
   }
 
-  count = local_state_->GetInteger(prefs::kStabilityRendererHangCount);
-  if (count) {
-    stability_proto->set_renderer_hang_count(count);
-    local_state_->SetInteger(prefs::kStabilityRendererHangCount, 0);
-  }
-
   count =
       local_state_->GetInteger(prefs::kStabilityExtensionRendererLaunchCount);
   if (count) {
@@ -155,7 +149,6 @@ void StabilityMetricsHelper::ClearSavedStabilityMetrics() {
   local_state_->SetInteger(prefs::kStabilityPageLoadCount, 0);
   local_state_->SetInteger(prefs::kStabilityRendererCrashCount, 0);
   local_state_->SetInteger(prefs::kStabilityRendererFailedLaunchCount, 0);
-  local_state_->SetInteger(prefs::kStabilityRendererHangCount, 0);
   local_state_->SetInteger(prefs::kStabilityRendererLaunchCount, 0);
 }
 
@@ -172,7 +165,6 @@ void StabilityMetricsHelper::RegisterPrefs(PrefRegistrySimple* registry) {
   registry->RegisterIntegerPref(prefs::kStabilityPageLoadCount, 0);
   registry->RegisterIntegerPref(prefs::kStabilityRendererCrashCount, 0);
   registry->RegisterIntegerPref(prefs::kStabilityRendererFailedLaunchCount, 0);
-  registry->RegisterIntegerPref(prefs::kStabilityRendererHangCount, 0);
   registry->RegisterIntegerPref(prefs::kStabilityRendererLaunchCount, 0);
 }
 
@@ -199,6 +191,28 @@ void StabilityMetricsHelper::BrowserUtilityProcessCrashed(
   base::UmaHistogramSparse("ChildProcess.Crashed.UtilityProcessHash", hash);
   base::UmaHistogramSparse("ChildProcess.Crashed.UtilityProcessExitCode",
                            exit_code);
+  RecordStabilityEvent(StabilityEventType::kUtilityCrash);
+}
+
+void StabilityMetricsHelper::BrowserUtilityProcessLaunchFailed(
+    const std::string& metrics_name,
+    int launch_error_code
+#if defined(OS_WIN)
+    ,
+    DWORD last_error
+#endif
+) {
+  uint32_t hash = variations::HashName(metrics_name);
+  base::UmaHistogramSparse("ChildProcess.LaunchFailed.UtilityProcessHash",
+                           hash);
+  base::UmaHistogramSparse("ChildProcess.LaunchFailed.UtilityProcessErrorCode",
+                           launch_error_code);
+#if defined(OS_WIN)
+  base::UmaHistogramSparse("ChildProcess.LaunchFailed.WinLastError",
+                           last_error);
+#endif
+  // TODO(wfh): Decide if this utility process launch failure should also
+  // trigger a Stability Event.
 }
 
 void StabilityMetricsHelper::BrowserChildProcessCrashed() {
@@ -334,8 +348,6 @@ void StabilityMetricsHelper::LogRendererHang() {
   base::UmaHistogramMemoryMB(
       "ChildProcess.HungRendererAvailableMemoryMB",
       base::SysInfo::AmountOfAvailablePhysicalMemory() / 1024 / 1024);
-  IncrementPrefValue(prefs::kStabilityRendererHangCount);
-  RecordStabilityEvent(StabilityEventType::kRendererHang);
 }
 
 // static

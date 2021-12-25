@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Sign in to this site and Chrome. You can turn on sync later.</translation>
 <translation id="424864128008805179">Sign out of Chrome?</translation>
 <translation id="4249068189593983585">Chrome tip. For more tab options, touch and hold the Show Tabs button in the toolbar, which is at the bottom or top of your screen.</translation>
-<translation id="4267862249323750454">Passwords are saved to <ph name="BEGIN_LINK" />Google Password Manager<ph name="END_LINK" /> so that you can use them on any device.</translation>
 <translation id="4523886039239821078">Some add-ons cause Chrome to crash. Please uninstall:</translation>
 <translation id="4633328489441962921">Chrome can't check for updates</translation>
 <translation id="4698415050768537821">Chrome couldn't check all passwords. Try again tomorrow or <ph name="BEGIN_LINK" />check passwords in your Google Account.<ph name="END_LINK" /></translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Stay safe with Google Chrome</translation>
 <translation id="8772179140489533211">Shows prompts to sign in to Chrome.</translation>
+<translation id="8788269841521769222">You won't need to remember this password. It will be saved to Google Password Manager for <ph name="EMAIL" /></translation>
 <translation id="9112744793181547300">Set Chrome as default?</translation>
 </translationbundle>

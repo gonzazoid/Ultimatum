@@ -12,13 +12,14 @@
 #include "base/containers/span.h"
 #include "content/common/content_export.h"
 #include "third_party/abseil-cpp/absl/types/optional.h"
+#include "third_party/skia/include/core/SkBitmap.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "url/gurl.h"
 
 namespace content {
 class WebContents;
 
-extern const char CONTENT_EXPORT kSecWebIdCsrfHeader[];
+extern const char CONTENT_EXPORT kSecFedCmCsrfHeader[];
 
 // Represents a federated user account which is used when displaying an account
 // selector.
@@ -45,7 +46,7 @@ struct CONTENT_EXPORT IdentityRequestAccount {
     kAuto,
   };
 
-  IdentityRequestAccount(const std::string& sub,
+  IdentityRequestAccount(const std::string& account_id,
                          const std::string& email,
                          const std::string& name,
                          const std::string& given_name,
@@ -54,8 +55,7 @@ struct CONTENT_EXPORT IdentityRequestAccount {
   IdentityRequestAccount(const IdentityRequestAccount&);
   ~IdentityRequestAccount();
 
-  // sub, short for subject, is the unique identifier.
-  std::string sub;
+  std::string account_id;
   std::string email;
   std::string name;
   std::string given_name;
@@ -81,6 +81,7 @@ struct CONTENT_EXPORT IdentityProviderMetadata {
 
   absl::optional<SkColor> brand_text_color;
   absl::optional<SkColor> brand_background_color;
+  SkBitmap brand_icon;
 };
 
 // IdentityRequestDialogController is in interface for control of the UI
@@ -110,6 +111,14 @@ class CONTENT_EXPORT IdentityRequestDialogController {
       const IdentityRequestDialogController&) = delete;
 
   virtual ~IdentityRequestDialogController() = default;
+
+  // Returns the ideal size for the identity provider brand icon. The brand icon
+  // is displayed in the accounts dialog.
+  virtual int GetBrandIconIdealSize();
+
+  // Returns the minimum size for the identity provider brand icon. The brand
+  // icon is displayed in the accounts dialog.
+  virtual int GetBrandIconMinimumSize();
 
   // Permission-oriented flow methods.
 

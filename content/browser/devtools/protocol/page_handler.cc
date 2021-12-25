@@ -194,11 +194,14 @@ bool CanExecuteGlobalCommands(
 
 }  // namespace
 
-PageHandler::PageHandler(EmulationHandler* emulation_handler,
-                         BrowserHandler* browser_handler,
-                         bool allow_unsafe_operations)
+PageHandler::PageHandler(
+    EmulationHandler* emulation_handler,
+    BrowserHandler* browser_handler,
+    bool allow_unsafe_operations,
+    absl::optional<url::Origin> navigation_initiator_origin)
     : DevToolsDomainHandler(Page::Metainfo::domainName),
       allow_unsafe_operations_(allow_unsafe_operations),
+      navigation_initiator_origin_(navigation_initiator_origin),
       enabled_(false),
       screencast_enabled_(false),
       screencast_quality_(kDefaultScreenshotQuality),
@@ -520,6 +523,15 @@ void PageHandler::Navigate(const std::string& url,
   params.referrer = Referrer(GURL(referrer.fromMaybe("")), policy);
   params.transition_type = type;
   params.frame_tree_node_id = frame_tree_node->frame_tree_node_id();
+  if (navigation_initiator_origin_.has_value()) {
+    // When this agent has an initiator origin defined, ensure that its
+    // navigations are considered renderer-initiated by that origin, such that
+    // URL spoof defenses are in effect. (crbug.com/1192417)
+    params.is_renderer_initiated = true;
+    params.initiator_origin = *navigation_initiator_origin_;
+    params.source_site_instance = SiteInstance::CreateForURL(
+        host_->GetBrowserContext(), navigation_initiator_origin_->GetURL());
+  }
   // Handler may be destroyed while navigating if the session
   // gets disconnected as a result of access checks.
   base::WeakPtr<PageHandler> weak_self = weak_factory_.GetWeakPtr();
@@ -1803,6 +1815,27 @@ CreateNotRestoredExplanation(
   return reasons;
 }
 
+std::unique_ptr<Page::BackForwardCacheNotRestoredExplanationTree>
+CreateNotRestoredExplanationTree(
+    const BackForwardCacheCanStoreTreeResult& tree_result) {
+  auto explanation = CreateNotRestoredExplanation(
+      tree_result.GetDocumentResult().not_stored_reasons(),
+      tree_result.GetDocumentResult().blocklisted_features(),
+      tree_result.GetDocumentResult().disabled_reasons());
+
+  auto children_array = std::make_unique<
+      protocol::Array<Page::BackForwardCacheNotRestoredExplanationTree>>();
+  for (auto& child : tree_result.GetChildren()) {
+    children_array->emplace_back(
+        CreateNotRestoredExplanationTree(*(child.get())));
+  }
+  return Page::BackForwardCacheNotRestoredExplanationTree::Create()
+      .SetUrl(tree_result.GetUrl().spec())
+      .SetExplanations(std::move(explanation))
+      .SetChildren(std::move(children_array))
+      .Build();
+}
+
 Response PageHandler::AddCompilationCache(const std::string& url,
                                           const Binary& data) {
   // We're just checking a permission here, the real business happens
@@ -1814,7 +1847,8 @@ Response PageHandler::AddCompilationCache(const std::string& url,
 
 void PageHandler::BackForwardCacheNotUsed(
     const NavigationRequest* navigation,
-    const BackForwardCacheCanStoreDocumentResult* result) {
+    const BackForwardCacheCanStoreDocumentResult* result,
+    const BackForwardCacheCanStoreTreeResult* tree_result) {
   if (!enabled_)
     return;
 
@@ -1827,8 +1861,15 @@ void PageHandler::BackForwardCacheNotUsed(
       result->not_stored_reasons(), result->blocklisted_features(),
       result->disabled_reasons());
 
+  // TODO(crbug.com/1281855): |tree_result| should not be nullptr when |result|
+  // has the reasons.
+  std::unique_ptr<Page::BackForwardCacheNotRestoredExplanationTree>
+      explanation_tree =
+          tree_result ? CreateNotRestoredExplanationTree(*tree_result)
+                      : nullptr;
   frontend_->BackForwardCacheNotUsed(devtools_navigation_token, frame_id,
-                                     std::move(explanation));
+                                     std::move(explanation),
+                                     std::move(explanation_tree));
 }
 
 bool PageHandler::ShouldBypassCSP() {

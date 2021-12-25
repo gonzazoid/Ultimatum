@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Ёсць прапанова</translation>
 <translation id="1312803275555673949">Што пацвярджае гэту інфармацыю?</translation>
 <translation id="131405271941274527">Сайт <ph name="URL" /> запытвае доступ на абмен інфармацыяй, калі вы націсканнем выбіраеце свой тэлефон на прыладзе NFC</translation>
+<translation id="1314311879718644478">Праглядайце змесціва ў рэжыме дапоўненай рэальнасці</translation>
 <translation id="1314509827145471431">Пераплёт справа</translation>
 <translation id="1318023360584041678">Захавана ў групе ўкладак</translation>
 <translation id="1319245136674974084">Больш не пытаць адносна гэтай праграмы</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">Разгарнуць</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Шукаеце версію браўзера? Наведайце старонку</translation>
 <translation id="1476595624592550506">Змяніце пароль</translation>
 <translation id="1483493594462132177">Адправіць</translation>
 <translation id="1484290072879560759">Выбраць адрас дастаўкі</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">Падчас паказу вэб-старонкі нешта пайшло не так.</translation>
 <translation id="1586541204584340881">Якія пашырэнні вы ўсталявалі.</translation>
 <translation id="1588438908519853928">Звычайны</translation>
+<translation id="1589050138437146318">Усталяваць ARCore?</translation>
 <translation id="1592005682883173041">Доступ да лакальных даных</translation>
 <translation id="1594030484168838125">Выбраць</translation>
 <translation id="160851722280695521">Гуляць у "Прабежку з дыназаўрам" у Chrome</translation>
@@ -1260,6 +1263,7 @@
 <translation id="4968522289500246572">Гэта праграма створана для мабільных прылад, таму змяненне яе памеру можа выклікаць памылкі. Праграма можа працаваць няправільна або перазапусціцца.</translation>
 <translation id="4969341057194253438">Выдаліць запіс</translation>
 <translation id="4973922308112707173">Дзве дзіркі зверху</translation>
+<translation id="4976702386844183910">Апошняе наведванне: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Выкарыстоўваць мікрафон?</translation>
 <translation id="4984339528288761049">Prc5 (канверт)</translation>
 <translation id="4989163558385430922">Паказаць усе</translation>
@@ -1345,6 +1349,7 @@
 <translation id="5215116848420601511">Спосабы аплаты і адрасы, якія выкарыстоўваюць Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Латок 13</translation>
+<translation id="5216942107514965959">Апошняе наведванне: сёння</translation>
 <translation id="5222812217790122047">Электронны адрас (абавязкова)</translation>
 <translation id="5230733896359313003">Адрас дастаўкі</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1388,6 +1393,7 @@
 <translation id="5333022057423422993">Браўзер Chrome выявіў, што пароль, які вы толькі што выкарысталі, быў раскрыты пры ўцечцы даных. Мы рэкамендуем вам абараніць свае ўліковыя запісы, праверыўшы захаваныя паролі.</translation>
 <translation id="5334013548165032829">Падрабязныя сістэмныя журналы</translation>
 <translation id="5334145288572353250">Захаваць адрас?</translation>
+<translation id="5335920952954443287">Пульсуючае сэрца</translation>
 <translation id="5340250774223869109">Праграма заблакіравана</translation>
 <translation id="534295439873310000">Прылады NFC</translation>
 <translation id="5344579389779391559">Гэта старонка можа паспрабаваць спагнаць з вас грошы</translation>
@@ -1530,6 +1536,7 @@
 <translation id="5869522115854928033">Захаваныя паролі</translation>
 <translation id="5873013647450402046">Ваш банк хоча пацвердзіць, што гэта вы.</translation>
 <translation id="5887400589839399685">Картка захавана</translation>
+<translation id="5887687176710214216">Апошняе наведванне: учора</translation>
 <translation id="5895138241574237353">Перазапусціць</translation>
 <translation id="5895187275912066135">Выдадзены</translation>
 <translation id="5901630391730855834">Жоўты</translation>
@@ -1723,6 +1730,7 @@
 <translation id="6529602333819889595">&amp;Узнавіць выдаленне</translation>
 <translation id="6545864417968258051">Пошук прылад Bluetooth</translation>
 <translation id="6547208576736763147">Дзве дзіркі злева</translation>
+<translation id="6554732001434021288">Апошняе наведванне: <ph name="NUM_DAYS" /> сут таму</translation>
 <translation id="6556866813142980365">Узнавіць</translation>
 <translation id="6569060085658103619">Вы праглядаеце старонку пашырэння</translation>
 <translation id="6573200754375280815">Дзве дзіркі справа</translation>
@@ -1885,6 +1893,7 @@
 <translation id="7118618213916969306">Пошук URL-адраса з буфера абмену: <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Закрыйце іншыя ўкладкі або праграмы</translation>
 <translation id="7129409597930077180">Адпраўка на гэты адрас немагчымая. Выберыце іншы адрас.</translation>
+<translation id="7132939140423847331">Ваш адміністратар забараніў капіраванне гэтых даных.</translation>
 <translation id="7135130955892390533">Паказаць стан</translation>
 <translation id="7138472120740807366">Спосаб дастаўкі</translation>
 <translation id="7139724024395191329">Эмірат</translation>
@@ -2058,6 +2067,7 @@
 <translation id="7654909834015434372">Калі вы будзеце змяняць анатацыі, гэты дакумент прыме першапачатковую пазіцыю</translation>
 <translation id="765676359832457558">Схаваць пашыраныя налады...</translation>
 <translation id="7658239707568436148">Скасаваць</translation>
+<translation id="7659878911471462949">Слёзы радасці</translation>
 <translation id="7662298039739062396">Налада кантралюецца пашырэннем</translation>
 <translation id="7663736086183791259">Сертыфікат <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Забаронена ў рэжыме інкогніта</translation>
@@ -2158,7 +2168,6 @@
 <translation id="7977894662897852582">EDP</translation>
 <translation id="798134797138789862">Сайт можа запытваць дазвол на выкарыстанне даных і прылад віртуальнай рэальнасці</translation>
 <translation id="7984945080620862648">Вы не можаце адкрыць вэб-сайт <ph name="SITE" />, бо ён адправіў зашыфраваныя ўліковыя даныя, якія Chrome не можа апрацаваць. Звычайна памылкі сеткі і атакі – часовая з'ява, таму гэта старонка будзе, хутчэй за ўсё, працаваць пазней.</translation>
-<translation id="79859296434321399">Каб праглядаць змесціва ў рэжыме дапоўненай рэальнасці, усталюйце ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Пераплёт</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" /> зноў абагульвае экран</translation>
@@ -2262,6 +2271,7 @@
 <translation id="830498451218851433">Згіб напалову</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Усталяваныя праграмы, і як часта яны выкарыстоўваліся</translation>
+<translation id="8317207217658302555">Абнавіць ARCore?</translation>
 <translation id="831997045666694187">Вечар</translation>
 <translation id="8321476692217554900">апавяшчэнні</translation>
 <translation id="8328484624016508118">Пасля закрыцця ўсіх укладак у рэжыме інкогніта, Chrome выдаліць:
@@ -2332,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Скінуць дазвол}one{Скінуць дазволы}few{Скінуць дазволы}many{Скінуць дазволы}other{Скінуць дазволы}}</translation>
 <translation id="8555010941760982128">Выкарыстайце гэты код пры афармленні заказу</translation>
 <translation id="8557066899867184262">CVC знаходзіцца на адвароце карткі.</translation>
-<translation id="8558485628462305855">Каб праглядаць змесціва ў рэжыме дапоўненай рэальнасці, абнавіце ARCore</translation>
 <translation id="8559762987265718583">Памылка прыватнага падключэння да дамена <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />: дата і час на вашай прыладзе (<ph name="DATE_AND_TIME" />) няправільныя.</translation>
 <translation id="8564182942834072828">Асобныя дакументы, неразабраныя копіі</translation>
 <translation id="8564985650692024650">Chromium рэкамендуе скінуць пароль <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, калі вы карысталіся ім на іншых сайтах.</translation>
@@ -2444,6 +2453,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />. Каб азнаёміцца з гісторыяй прагляду сайтаў у Chrome, націсніце Tab, затым Enter</translation>
 <translation id="8987927404178983737">Месяц</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Шукаеце версію сістэмы? Наведайце старонку</translation>
 <translation id="899688752321268742">Сайт <ph name="URL" /> запытвае дазвол на атрыманне інфармацыі пра тое, калі вы карыстаецеся гэтай прыладай</translation>
 <translation id="8996941253935762404">Сайт, на які вы збіраецеся перайсці, змяшчае шкодныя праграмы</translation>
 <translation id="8997023839087525404">Сервер падаў сертыфікат, які не быў публічна раскрыты згодна са стандартам "Празрыстасць сертыфікатаў". Гэта патрабаванне выстаўляецца да пэўных сертыфікатаў, каб упэўніцца ў іх надзейнасці і ў мэтах абароны ад зламыснікаў.</translation>

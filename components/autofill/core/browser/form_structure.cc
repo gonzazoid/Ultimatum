@@ -22,7 +22,6 @@
 #include "base/logging.h"
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/no_destructor.h"
 #include "base/strings/strcat.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_piece.h"
@@ -1340,7 +1339,8 @@ void FormStructure::LogQualityMetrics(
     else if (!field->only_fill_when_focused())
       did_autofill_all_possible_fields = false;
 
-    autofilled_field_types.insert(type.GetStorableType());
+    if (field->is_autofilled)
+      autofilled_field_types.insert(type.GetStorableType());
 
     // Keep track of the frames of detected and autofilled (credit card) fields.
     frames_of_detected_fields.insert(field->host_frame);
@@ -1474,8 +1474,12 @@ void FormStructure::LogQualityMetrics(
         frames_of_autofilled_credit_card_fields.size());
 
     if (card_form) {
-      AutofillMetrics::LogCreditCardNumberFills(autofilled_field_types);
-      AutofillMetrics::LogCreditCardSeamlessFills(autofilled_field_types);
+      AutofillMetrics::LogCreditCardNumberFills(
+          autofilled_field_types,
+          AutofillMetrics::MeasurementTime::kSubmissionTime);
+      AutofillMetrics::LogCreditCardSeamlessFills(
+          autofilled_field_types,
+          AutofillMetrics::MeasurementTime::kSubmissionTime);
     }
   }
 }

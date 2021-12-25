@@ -540,9 +540,10 @@ void CaptureModeSession::Initialize() {
   // the region is not larger than the current display.
   ClampCaptureRegionToRootWindowSize();
 
-  capture_mode_bar_widget_->Init(
-      CreateWidgetParams(parent, CaptureModeBarView::GetBounds(current_root_),
-                         "CaptureModeBarWidget"));
+  capture_mode_bar_widget_->Init(CreateWidgetParams(
+      parent,
+      CaptureModeBarView::GetBounds(current_root_, is_in_projector_mode_),
+      "CaptureModeBarWidget"));
   capture_mode_bar_view_ = capture_mode_bar_widget_->SetContentsView(
       std::make_unique<CaptureModeBarView>(is_in_projector_mode_));
   capture_mode_bar_widget_->GetNativeWindow()->SetTitle(
@@ -1120,6 +1121,10 @@ void CaptureModeSession::HideAllUis() {
     // without animation) when ShowAllUis() is called.
     widget->GetNativeWindow()->SetProperty(aura::client::kAnimationsDisabledKey,
                                            true);
+    // The layer's opacity could be less than 1.f if the widget was hidden
+    // before we disabled the animations above. We need to reset the opacity
+    // back to 1.f as we will hide the widget without animation.
+    widget->GetLayer()->SetOpacity(1.f);
     widget->Hide();
   }
 
@@ -1138,7 +1143,8 @@ void CaptureModeSession::ShowAllUis() {
     // before we re-enable the animations. This is to avoid having those widgets
     // show up in the captured images or videos in case this is used right
     // before ending the session to perform the capture.
-    widget->Show();
+    if (CanShowWidget(widget))
+      widget->Show();
     widget->GetNativeWindow()->SetProperty(aura::client::kAnimationsDisabledKey,
                                            false);
   }
@@ -1146,10 +1152,19 @@ void CaptureModeSession::ShowAllUis() {
   layer()->SchedulePaint(layer()->bounds());
 }
 
+bool CaptureModeSession::CanShowWidget(views::Widget* widget) const {
+  // If widget is the capture label widget, we will show it only if it doesn't
+  // intersect with the settings widget.
+  return !(capture_label_widget_ && capture_mode_settings_widget_ &&
+           capture_label_widget_.get() == widget &&
+           capture_mode_settings_widget_->GetWindowBoundsInScreen().Intersects(
+               capture_label_widget_->GetWindowBoundsInScreen()));
+}
+
 void CaptureModeSession::RefreshBarWidgetBounds() {
   DCHECK(capture_mode_bar_widget_);
   capture_mode_bar_widget_->SetBounds(
-      CaptureModeBarView::GetBounds(current_root_));
+      CaptureModeBarView::GetBounds(current_root_, is_in_projector_mode_));
   auto* parent = GetParentContainer(current_root_);
   parent->StackChildAtTop(capture_mode_bar_widget_->GetNativeWindow());
   if (user_nudge_controller_)
@@ -1252,6 +1267,7 @@ void CaptureModeSession::PaintCaptureRegion(gfx::Canvas* canvas) {
       return;
 
     cc::PaintFlags focus_ring_flags;
+    focus_ring_flags.setAntiAlias(true);
     focus_ring_flags.setColor(AshColorProvider::Get()->GetControlsLayerColor(
         AshColorProvider::ControlsLayerType::kFocusRingColor));
     focus_ring_flags.setStyle(cc::PaintFlags::kStroke_Style);

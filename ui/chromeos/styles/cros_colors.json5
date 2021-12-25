@@ -41,6 +41,7 @@
       dark: "$google_blue_300",
       debug: "$google_red_600",
       generate_per_mode: true,
+      generate_inverted: true,
     },
     color_alert: {
       light: "$google_red_600",
@@ -224,8 +225,14 @@
     menu_item_ripple_color: "$ripple_color",
 
     toggle_color: "$color_prominent",
-    toggle_bg_color_inactive: "$google_grey_400",
-    toggle_button_color_inactive: "$white",
+    toggle_bg_color_inactive: {
+      light: "rgba($google_grey_700_rgb, $second_tone_opacity)",
+      dark: "rgba($google_grey_200_rgb, $second_tone_opacity)"
+    },
+    toggle_button_color_inactive: {
+      light: "$white",
+      dark: "$google_grey_400"
+    },
     toggle_ripple_color: "rgba($toggle_color_rgb, .2)",
     toggle_ripple_color_inactive: "rgba($google_grey_600_rgb, .15)",
 
@@ -435,6 +442,7 @@
     /* toast */
     /* Toast colors are inverted for contrast. */
     toast_background_color: "$bg_color_elevation_2_inverted",
+    toast_button_color: "$color_prominent_inverted",
     toast_text_color: "$color_primary_inverted",
     toast_icon_color: "$color_primary_inverted",
     toast_icon_color_warning: "$color_warning_inverted",

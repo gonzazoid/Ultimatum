@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Боломжит саналууд</translation>
 <translation id="1312803275555673949">Үүнийг ямар нотолгоо дэмждэг вэ?</translation>
 <translation id="131405271941274527">Таныг NFC төхөөрөмж дээр утсаараа товших үед <ph name="URL" /> нь мэдээлэл илгээх, хүлээн авах хүсэлтэй байна</translation>
+<translation id="1314311879718644478">Өргөтгөсөн бодит орчны контентыг үзэх</translation>
 <translation id="1314509827145471431">Баруун ирмэг дагуу үдэж хавтаслах</translation>
 <translation id="1318023360584041678">Табын бүлэгт хадгалсан</translation>
 <translation id="1319245136674974084">Энэ аппад дахин бүү асуу</translation>
@@ -215,6 +216,7 @@
 <translation id="1583429793053364125">Энэхүү веб хуудсыг харуулахад ямар нэгэн алдаа гарлаа.</translation>
 <translation id="1586541204584340881">Таны ямар өргөтгөл суулгасан болох</translation>
 <translation id="1588438908519853928">Хэвийн</translation>
+<translation id="1589050138437146318">ARCore-г суулгах уу?</translation>
 <translation id="1592005682883173041">Суурин өгөгдлийн хандалт</translation>
 <translation id="1594030484168838125">Сонгох</translation>
 <translation id="160851722280695521">Chrome-д Dino Run тоглоомыг тоглох</translation>
@@ -1263,6 +1265,7 @@
 <translation id="4968522289500246572">Энэ апп мобайлд зориулагдсан бөгөөд үүний хэмжээ сайн өөрчлөгдөхгүй байж магадгүй. Энэ апп асуудалтай тулгарч эсвэл дахин эхэлж магадгүй.</translation>
 <translation id="4969341057194253438">Бичлэгийг устгах</translation>
 <translation id="4973922308112707173">Дээд буланд хоёр нүх цоолох</translation>
+<translation id="4976702386844183910">Хамгийн сүүлд <ph name="DATE" />-д зочилсон</translation>
 <translation id="4984088539114770594">Микрофон ашиглах уу?</translation>
 <translation id="4984339528288761049">Prc5 (Дугтуй)</translation>
 <translation id="4989163558385430922">Бүгдийг харах</translation>
@@ -1348,6 +1351,7 @@
 <translation id="5215116848420601511">Google Pay-г ашиглаж буй төлбөрийн хэрэгсэл болон хаяг</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Тавиур 13</translation>
+<translation id="5216942107514965959">Хамгийн сүүлд өнөөдөр зочилсон</translation>
 <translation id="5222812217790122047">Имэйл шаардлагатай</translation>
 <translation id="5230733896359313003">Хүргэлтийн хаяг</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1391,6 +1395,7 @@
 <translation id="5333022057423422993">Chrome таны дөнгөж сая ашигласан нууц үгийг өгөгдлийн зөрчлөөс оллоо. Бүртгэлүүдээ хамгаалахын тулд бид таныг хадгалсан нууц үгнүүдээ шалгахыг зөвлөж байна.</translation>
 <translation id="5334013548165032829">Системийн дэлгэрэнгүй лог</translation>
 <translation id="5334145288572353250">Хаягийг хадгалах уу?</translation>
+<translation id="5335920952954443287">Цохилох зүрх</translation>
 <translation id="5340250774223869109">Аппликэйшнийг блоклосон</translation>
 <translation id="534295439873310000">NFC төхөөрөмжүүд</translation>
 <translation id="5344579389779391559">Энэ хуудас танд төлбөр ногдуулахаар оролдож болзошгүй</translation>
@@ -1533,6 +1538,7 @@
 <translation id="5869522115854928033">Хадгалагдсан нууц үг</translation>
 <translation id="5873013647450402046">Таны банк таныг мөн болохыг баталгаажуулахыг хүсэж байна.</translation>
 <translation id="5887400589839399685">Картыг хадгалсан</translation>
+<translation id="5887687176710214216">Хамгийн сүүлд өчигдөр зочилсон</translation>
 <translation id="5895138241574237353">Дахин асаах</translation>
 <translation id="5895187275912066135">Гаргасан огноо</translation>
 <translation id="5901630391730855834">Шар</translation>
@@ -1725,6 +1731,7 @@
 <translation id="6529602333819889595">&amp; Устгах үйлдлийг дахин хийх</translation>
 <translation id="6545864417968258051">Bluetooth скан хийх</translation>
 <translation id="6547208576736763147">Зүүн ирмэг дагуу хоёр нүх цоолох</translation>
+<translation id="6554732001434021288">Хамгийн сүүлд <ph name="NUM_DAYS" /> хоногийн өмнө зочилсон</translation>
 <translation id="6556866813142980365">Дахин хийх</translation>
 <translation id="6569060085658103619">Та өргөтгөлийн хуудсыг харж байна.</translation>
 <translation id="6573200754375280815">Баруун ирмэг дагуу хоёр нүх цоолох</translation>
@@ -2060,6 +2067,7 @@
 <translation id="7654909834015434372">Тэмдэглэгээг засахад энэ документ анхны эргүүлэлт рүүгээ буцна</translation>
 <translation id="765676359832457558">Ахисан түвшний тохиргоог нуух...</translation>
 <translation id="7658239707568436148">Болих</translation>
+<translation id="7659878911471462949">Баярын нулимс</translation>
 <translation id="7662298039739062396">Тохируулгыг өргөтгөлөөр хянадаг</translation>
 <translation id="7663736086183791259">Гэрчилгээ <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Нууцлалтай горимд зөвшөөрдөггүй</translation>
@@ -2160,7 +2168,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Виртуал бодит байдлын төхөөрөмжүүд болон өгөгдлийг ашиглахыг хүсэх боломжтой</translation>
 <translation id="7984945080620862648">Та энэхүү <ph name="SITE" />-д хандах боломжгүй байна. Учир нь вебсайт эмх замбараагүй мэдээлэл илгээсэн тул Chrome энэ мэдээллийг боловсруулах боломжгүй байна. Сүлжээний алдаа болон халдлага нь ихэвчлэн түр зуурынх байдаг бөгөөд энэ хуудас хэсэг хугацааны дараа ажиллаж болох юм.</translation>
-<translation id="79859296434321399">Өргөтгөсөн бодит орчны (АR) агуулга харахын тулд ARCore-г суулгана уу</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Үдэж хавтаслах</translation>
 <translation id="7992044431894087211"><ph name="APPLICATION_TITLE" />-тай дэлгэц хуваалцахыг үргэлжлүүлсэн</translation>
@@ -2264,6 +2271,7 @@
 <translation id="830498451218851433">Хагас нугалаа</translation>
 <translation id="8307358339886459768">Жижиг-Зураг</translation>
 <translation id="8307888238279532626">Суулгасан аппууд болон тэдгээрийг ашигладаг давтамж</translation>
+<translation id="8317207217658302555">ARCore-г шинэчлэх үү?</translation>
 <translation id="831997045666694187">Үдэш</translation>
 <translation id="8321476692217554900">мэдэгдэл</translation>
 <translation id="8328484624016508118">Бүх нууцлалтай табыг хаасны дараа Chrome дараахыг арилгана:
@@ -2334,7 +2342,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Зөвшөөрлийг шинэчлэх}other{Зөвшөөрлүүдийг шинэчлэх}}</translation>
 <translation id="8555010941760982128">Тооцоо хийхдээ энэ кодыг ашиглаарай</translation>
 <translation id="8557066899867184262">Карт баталгаажуулалтын код таны картын ард байрладаг.</translation>
-<translation id="8558485628462305855">Өргөтгөсөн бодит орчны (AR) агуулга харахын тулд ARCore-г шинэчилнэ үү</translation>
 <translation id="8559762987265718583"><ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> руу таны төхөөрөмжийн он сар өдөр, цаг <ph name="DATE_AND_TIME" /> ) буруу байгаа учраас хувийн холболт үүсгэж болохгүй байна.</translation>
 <translation id="8564182942834072828">Тусдаа документ/Зэрэгцүүлээгүй хувь</translation>
 <translation id="8564985650692024650">Хэрэв та <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />-н нууц үгийг бусад сайтад дахин ашигласан бол Chromium-с үүнийг шинэчлэхийг зөвлөж байна.</translation>

@@ -50,7 +50,6 @@
 <translation id="4214277427269650960">Inicie sessão neste site e no Chrome. Pode ativar a sincronização mais tarde.</translation>
 <translation id="424864128008805179">Pretende terminar sessão no Chrome?</translation>
 <translation id="4249068189593983585">Sugestão para o Chrome: para obter mais opções de separadores, toque sem soltar no botão Mostrar separadores na barra de ferramentas, que se encontra na parte superior ou inferior do ecrã.</translation>
-<translation id="4267862249323750454">As palavras-passe são guardadas no <ph name="BEGIN_LINK" />Gestor de palavras-passe da Google<ph name="END_LINK" /> para poder utilizá-las em qualquer dispositivo.</translation>
 <translation id="4523886039239821078">Alguns suplementos provocam falhas no sistema do Chrome. Desinstale:</translation>
 <translation id="4633328489441962921">O Chrome não consegue verificar se existem atualizações.</translation>
 <translation id="4698415050768537821">O Chrome não conseguiu verificar todas as palavras-passe. Tente novamente amanhã ou <ph name="BEGIN_LINK" />verifique as palavras-passe na sua Conta Google<ph name="END_LINK" />.</translation>
@@ -113,5 +112,6 @@
 <translation id="8540666473246803645">Google Chrome</translation>
 <translation id="8736550665979974340">Proteja-se com o Google Chrome</translation>
 <translation id="8772179140489533211">Mostra pedidos para iniciar sessão no Chrome.</translation>
+<translation id="8788269841521769222">Não terá de memorizar esta palavra-passe. Será guardada no Gestor de palavras-passe da Google de <ph name="EMAIL" /></translation>
 <translation id="9112744793181547300">Pretende definir o Chrome como a predefinição?</translation>
 </translationbundle>

@@ -26,6 +26,7 @@
 #include "mojo/core/ports/event.h"
 #include "mojo/core/ports/node.h"
 #include "mojo/core/ports/node_delegate.h"
+#include "mojo/core/ports/port_locker.h"
 #include "mojo/core/ports/user_message.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -197,13 +198,13 @@ class TestNode : public NodeDelegate {
     return true;
   }
 
-  void EnqueueEvent(ScopedEvent event) {
+  void EnqueueEvent(const NodeName& from_node, ScopedEvent event) {
     idle_event_.Reset();
 
     // NOTE: This may be called from ForwardMessage and thus must not reenter
     // |node_|.
     base::AutoLock lock(lock_);
-    incoming_events_.emplace(std::move(event));
+    incoming_events_.push({from_node, std::move(event)});
     events_available_event_.Signal();
   }
 
@@ -267,6 +268,11 @@ class TestNode : public NodeDelegate {
     return status.unacknowledged_message_count;
   }
 
+  void AllowPortMerge(const PortRef& port_ref) {
+    SinglePortLocker locker(&port_ref);
+    locker.port()->pending_merge_peer = true;
+  }
+
  private:
   void ProcessEvents() {
     for (;;) {
@@ -279,20 +285,21 @@ class TestNode : public NodeDelegate {
       dispatching_ = true;
       while (!incoming_events_.empty()) {
         if (block_on_event_ &&
-            incoming_events_.front()->type() == blocked_event_type_) {
+            incoming_events_.front().second->type() == blocked_event_type_) {
           blocked_ = true;
           // Go idle if we hit a blocked event type.
           break;
         } else {
           blocked_ = false;
         }
-        ScopedEvent event = std::move(incoming_events_.front());
+        auto node_event_pair = std::move(incoming_events_.front());
         incoming_events_.pop();
 
         // NOTE: AcceptMessage() can re-enter this object to call any of the
         // NodeDelegate interface methods.
         base::AutoUnlock unlock(lock_);
-        node_.AcceptEvent(std::move(event));
+        node_.AcceptEvent(node_event_pair.first,
+                          std::move(node_event_pair.second));
       }
 
       dispatching_ = false;
@@ -319,7 +326,7 @@ class TestNode : public NodeDelegate {
   bool blocked_ = false;
   bool block_on_event_ = false;
   Event::Type blocked_event_type_;
-  base::queue<ScopedEvent> incoming_events_;
+  base::queue<std::pair<NodeName, ScopedEvent>> incoming_events_;
   base::queue<ScopedMessage> saved_messages_;
 };
 
@@ -378,10 +385,12 @@ class PortsTest : public testing::Test, public MessageRouter {
     } else {
       EXPECT_EQ(OK, node0->node().CreateUninitializedPort(port0));
       EXPECT_EQ(OK, node1->node().CreateUninitializedPort(port1));
-      EXPECT_EQ(OK, node0->node().InitializePort(*port0, node1->name(),
-                                                 port1->name()));
-      EXPECT_EQ(OK, node1->node().InitializePort(*port1, node0->name(),
-                                                 port0->name()));
+      EXPECT_EQ(
+          OK, node0->node().InitializePort(*port0, node1->name(), port1->name(),
+                                           node1->name(), port1->name()));
+      EXPECT_EQ(
+          OK, node1->node().InitializePort(*port1, node0->name(), port0->name(),
+                                           node0->name(), port0->name()));
     }
   }
 
@@ -424,7 +433,7 @@ class PortsTest : public testing::Test, public MessageRouter {
           message_event->GetMessage<TestMessage>()->payload()));
     }
 
-    it->second->EnqueueEvent(std::move(event));
+    it->second->EnqueueEvent(from_node->name(), std::move(event));
   }
 
   void BroadcastEvent(TestNode* from_node, ScopedEvent event) override {
@@ -440,7 +449,7 @@ class PortsTest : public testing::Test, public MessageRouter {
       // Broadcast doesn't deliver to the local node.
       if (node == from_node)
         continue;
-      node->EnqueueEvent(event->Clone());
+      node->EnqueueEvent(from_node->name(), event->CloneForBroadcast());
     }
   }
 
@@ -1226,6 +1235,7 @@ TEST_F(PortsTest, MergePorts) {
   EXPECT_EQ(OK, node0.SendStringMessage(A, "hey"));
 
   // Initiate a merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   WaitForIdle();
@@ -1271,6 +1281,7 @@ TEST_F(PortsTest, MergePortWithClosedPeer1) {
   EXPECT_EQ(OK, node0.node().ClosePort(A));
 
   // Initiate a merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   WaitForIdle();
@@ -1309,10 +1320,11 @@ TEST_F(PortsTest, MergePortWithClosedPeer2) {
   EXPECT_EQ(OK, node1.node().CreatePortPair(&C, &D));
 
   // Write a message on D and close it.
-  EXPECT_EQ(OK, node0.SendStringMessage(D, "hey"));
+  EXPECT_EQ(OK, node1.SendStringMessage(D, "hey"));
   EXPECT_EQ(OK, node1.node().ClosePort(D));
 
   // Initiate a merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   WaitForIdle();
@@ -1357,6 +1369,7 @@ TEST_F(PortsTest, MergePortsWithClosedPeers) {
   WaitForIdle();
 
   // Initiate a merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   WaitForIdle();
@@ -1402,6 +1415,7 @@ TEST_F(PortsTest, MergePortsWithMovedPeers) {
   EXPECT_EQ(OK, node1.SendStringMessage(D, "hi"));
 
   // Initiate a merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   WaitForIdle();
@@ -1442,14 +1456,17 @@ TEST_F(PortsTest, MergePortsFailsGracefully) {
   PortRef X, Y;
   EXPECT_EQ(OK, node0.node().CreateUninitializedPort(&X));
   EXPECT_EQ(OK, node1.node().CreateUninitializedPort(&Y));
-  EXPECT_EQ(OK, node0.node().InitializePort(X, node1.name(), Y.name()));
-  EXPECT_EQ(OK, node1.node().InitializePort(Y, node0.name(), X.name()));
+  EXPECT_EQ(OK, node0.node().InitializePort(X, node1.name(), Y.name(),
+                                            node1.name(), Y.name()));
+  EXPECT_EQ(OK, node1.node().InitializePort(Y, node0.name(), X.name(),
+                                            node0.name(), X.name()));
 
   // Block the merge from proceeding until we can do something stupid with port
   // C. This avoids the test logic racing with async merge logic.
   node1.BlockOnEvent(Event::Type::kMergePort);
 
   // Initiate the merge between B and C.
+  node1.AllowPortMerge(C);
   EXPECT_EQ(OK, node0.node().MergePorts(B, node1.name(), C.name()));
 
   // Move C to a new port E. This is not a sane use of Node's public API but
@@ -1634,6 +1651,7 @@ TEST_F(PortsTest, RemotePeerStatusAfterRemotePortMerge) {
   ASSERT_EQ(OK, node1.node().GetStatus(d, &status));
   EXPECT_FALSE(status.peer_remote);
 
+  node1.AllowPortMerge(c);
   EXPECT_EQ(OK, node0.node().MergePorts(b, node1.name(), c.name()));
   WaitForIdle();
 

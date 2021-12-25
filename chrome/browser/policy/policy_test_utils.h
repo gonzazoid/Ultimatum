@@ -5,8 +5,6 @@
 #ifndef CHROME_BROWSER_POLICY_POLICY_TEST_UTILS_H_
 #define CHROME_BROWSER_POLICY_POLICY_TEST_UTILS_H_
 
-#include <string>
-
 #include "base/files/file_path.h"
 #include "build/chromeos_buildflags.h"
 #include "chrome/test/base/chrome_test_utils.h"
@@ -14,19 +12,11 @@
 #include "components/security_interstitials/core/controller_client.h"
 #include "url/gurl.h"
 
-class Browser;
-
 namespace content {
 class WebContents;
 }  // namespace content
 
-namespace extensions {
-class Extension;
-}  // namespace extensions
-
 namespace policy {
-
-extern const base::FilePath::CharType kTestExtensionsDir[];
 
 class PolicyMap;
 
@@ -45,8 +35,6 @@ class PolicyTest : public PlatformBrowserTest {
   PolicyTest();
   ~PolicyTest() override;
 
-  void SetUp() override;
-
   void SetUpInProcessBrowserTestFixture() override;
 
   void SetUpOnMainThread() override;
@@ -55,40 +43,23 @@ class PolicyTest : public PlatformBrowserTest {
 
   void SetScreenshotPolicy(bool enabled);
 
-  scoped_refptr<const extensions::Extension> LoadUnpackedExtension(
-      const base::FilePath::StringType& name);
-
   void UpdateProviderPolicy(const PolicyMap& policy);
 
   static void SetPolicy(PolicyMap* policies,
                         const char* key,
                         absl::optional<base::Value> value);
 
-  void ApplySafeSearchPolicy(absl::optional<base::Value> legacy_safe_search,
-                             absl::optional<base::Value> google_safe_search,
-                             absl::optional<base::Value> legacy_youtube,
-                             absl::optional<base::Value> youtube_restrict);
-
 #if BUILDFLAG(IS_CHROMEOS_ASH)
   void TestScreenshotFile(bool enabled);
 #endif  // BUILDFLAG(IS_CHROMEOS_ASH)
 
-  static GURL GetExpectedSearchURL(bool expect_safe_search);
-
-  static void CheckSafeSearch(Browser* browser,
-                              bool expect_safe_search,
-                              const std::string& url = "http://google.com/");
-
   static bool FetchSubresource(content::WebContents* web_contents,
                                const GURL& url);
 
-  bool IsShowingInterstitial(content::WebContents* tab);
-
-  void WaitForInterstitial(content::WebContents* tab);
-
-  int IsEnhancedProtectionMessageVisibleOnInterstitial();
-
   void FlushBlocklistPolicy();
+
+  // Navigates to `url` and returns true if navigation completed.
+  bool NavigateToUrl(GURL url, PlatformBrowserTest* browser_test);
 
   testing::NiceMock<MockConfigurationPolicyProvider> provider_;
 };

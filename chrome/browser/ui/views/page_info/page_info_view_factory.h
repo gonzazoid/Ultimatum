@@ -20,13 +20,15 @@ class SiteInfo;
 class ChromePageInfoUiDelegate;
 class PageInfo;
 class PageInfoNavigationHandler;
+class PageInfoHistoryController;
 
 // A factory class that creates pages and individual views for page info.
 class PageInfoViewFactory {
  public:
   PageInfoViewFactory(PageInfo* presenter,
                       ChromePageInfoUiDelegate* ui_delegate,
-                      PageInfoNavigationHandler* navigation_handler);
+                      PageInfoNavigationHandler* navigation_handler,
+                      PageInfoHistoryController* history_controller);
 
   // Bubble width constraints.
   static constexpr int kMinBubbleWidth = 320;
@@ -53,6 +55,7 @@ class PageInfoViewFactory {
     VIEW_ID_PAGE_INFO_CURRENT_VIEW,
     VIEW_ID_PAGE_INFO_RESET_PERMISSIONS_BUTTON,
     VIEW_ID_PAGE_INFO_ABOUT_THIS_SITE_BUTTON,
+    VIEW_ID_PAGE_INFO_HISTORY_BUTTON
   };
 
   // Creates a separator view with padding on top and bottom. Use with flex
@@ -130,6 +133,7 @@ class PageInfoViewFactory {
   raw_ptr<PageInfo> presenter_;
   raw_ptr<ChromePageInfoUiDelegate> ui_delegate_;
   raw_ptr<PageInfoNavigationHandler> navigation_handler_;
+  raw_ptr<PageInfoHistoryController> history_controller_;
 };
 
 #endif  // CHROME_BROWSER_UI_VIEWS_PAGE_INFO_PAGE_INFO_VIEW_FACTORY_H_

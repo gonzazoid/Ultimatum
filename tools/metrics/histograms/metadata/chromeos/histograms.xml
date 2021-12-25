@@ -274,6 +274,27 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
   </summary>
 </histogram>
 
+<histogram name="ChromeOS.Camera.FaceAutoExposure.FunctionStatus"
+    enum="ChromeOSCameraFaceAutoExposureFunctionStatus"
+    expires_after="2022-11-16">
+  <owner>mojahsu@chromium.org</owner>
+  <owner>chromeos-camera-eng@google.com</owner>
+  <summary>
+    Records face auto exposure function status of the Chrome OS device. The
+    metric is reported when the camera is detected.
+  </summary>
+</histogram>
+
+<histogram name="ChromeOS.Camera.FaceAutoExposure.MaxNumDetectedFaces"
+    units="faces" expires_after="2022-11-16">
+  <owner>mojahsu@chromium.org</owner>
+  <owner>chromeos-camera-eng@google.com</owner>
+  <summary>
+    Records max number of detected faces of the camera session in Chrome OS
+    camera service. The metric is reported when the camera is closed.
+  </summary>
+</histogram>
+
 <histogram name="ChromeOS.Camera.Facing" enum="ChromeOSCameraFacing"
     expires_after="2022-10-01">
   <owner>wtlee@chromium.org</owner>
@@ -525,6 +546,7 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
     enum="ChromeOSProfileCollectionStatus" expires_after="2022-05-01">
   <owner>aalexand@google.com</owner>
   <owner>gmx@chromium.org</owner>
+  <owner>cwp-team@google.com</owner>
   <summary>
     A count of successes and various failure modes related to collecting and
     processing profile data obtained via &quot;perf events&quot; on Chrome OS.
@@ -532,7 +554,7 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="ChromeOS.CWP.CollectProcessTypes"
-    enum="ChromeOSProcessTypeCollectionStatus" expires_after="2022-01-19">
+    enum="ChromeOSProcessTypeCollectionStatus" expires_after="2023-01-19">
   <owner>aalexand@google.com</owner>
   <owner>cwp-team@google.com</owner>
   <summary>
@@ -565,7 +587,7 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram name="ChromeOS.CWP.ParsePSICPU" enum="ChromeOSParsePSICPUStatus"
     expires_after="2022-05-01">
-  <owner>dubin@google.com</owner>
+  <owner>shantuo@google.com</owner>
   <owner>cwp-team@google.com</owner>
   <summary>
     A count of successes and various failure modes related to the parsing of PSI
@@ -595,6 +617,10 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
     means &quot;no pressure&quot; - 0%.
   </summary>
   <token key="PType">
+    <variant name="ArcFull"
+        summary="Percentage of time ARC was fully halted waiting on memory"/>
+    <variant name="ArcSome"
+        summary="Percentage of ARC had some blocking on memory"/>
     <variant name="Full"
         summary="Percentage of time fully halted waiting on memory operations"/>
     <variant name="Some"
@@ -603,8 +629,8 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
 </histogram>
 
 <histogram name="ChromeOS.CWP.RecordPerf" enum="ChromeOSProfileRecordStatus"
-    expires_after="2022-01-30">
-  <owner>dubin@google.com</owner>
+    expires_after="2022-12-20">
+  <owner>shantuo@google.com</owner>
   <owner>cwp-team@google.com</owner>
   <summary>
     A count of the various outcomes related to recording the profile data
@@ -618,6 +644,7 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
     expires_after="2022-03-27">
   <owner>aalexand@google.com</owner>
   <owner>gmx@chromium.org</owner>
+  <owner>cwp-team@google.com</owner>
   <summary>
     Records the number of &quot;perf events&quot; reports included in an UMA
     upload on Chrome OS.
@@ -1420,7 +1447,7 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
 
 <histogram
     name="ChromeOS.Settings.Accessibility.FullscreenMagnifierMouseFollowingMode"
-    enum="MagnifierMouseFollowingMode" expires_after="2022-01-26">
+    enum="MagnifierMouseFollowingMode" expires_after="2022-12-13">
   <owner>josiahk@chromium.org</owner>
   <owner>chromium-accessibility@chromium.org</owner>
   <summary>
@@ -1897,21 +1924,6 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
   </token>
 </histogram>
 
-<histogram name="ChromeOS.Sharesheet.CopyToClipboard.MimeType" units="mimetype"
-    expires_after="2022-10-08">
-  <owner>melzhang@chromium.org</owner>
-  <owner>chromeos-apps-foundation-team@google.com</owner>
-  <summary>
-    Records the mime type of the content being copied after the Copy To
-    Clipboard action is invoked from the Sharesheet by the user.
-
-    This histogram could record multiple times in a single share in the event
-    that the user shares data of mime types at once. However, a single share
-    will not record the same mime type twice. E.g. sharing 2 images in one share
-    will record the image mimetype once.
-  </summary>
-</histogram>
-
 <histogram name="ChromeOS.Sharesheet.FileCount" units="files"
     expires_after="2022-10-08">
   <owner>dominickn@chromium.org</owner>
@@ -1976,6 +1988,26 @@ incoming reviews. Googlers can read more about this at go/gwsq-gerrit.
   <owner>dominickn@chromium.org</owner>
   <owner>melzhang@chromium.org</owner>
   <summary>Records user action on sharesheet invocations.</summary>
+</histogram>
+
+<histogram name="ChromeOS.Sharesheet.{Location}.MimeType"
+    enum="ChromeOSSharesheetMimeType" expires_after="2022-10-08">
+  <owner>melzhang@chromium.org</owner>
+  <owner>chromeos-apps-foundation-team@google.com</owner>
+  <summary>
+    Records the mime type of the content being copied at the {Location} point in
+    the Sharesheet flow.
+
+    This histogram could record multiple times in a single share in the event
+    that the user shares data of mime types at once. However, a single share
+    will not record the same mime type twice. E.g. sharing 2 images in one share
+    will record the image mimetype once.
+  </summary>
+  <token key="Location">
+    <variant name="CopyToClipboard"
+        summary="After copy to clipboard is selected"/>
+    <variant name="Invocation" summary="When the sharesheet is first invoked"/>
+  </token>
 </histogram>
 
 <histogram name="ChromeOS.Sync.PreferencesMigrated" enum="BooleanMigrated"

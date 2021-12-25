@@ -88,10 +88,17 @@ void WebStateImpl::RealizedWebState::Init(const CreateParams& params,
     DCHECK(certificate_policy_cache_);
     certificate_policy_cache_->UpdateCertificatePolicyCache(
         web::BrowserState::GetCertificatePolicyCache(params.browser_state));
+
+    // Load the stable identifier. Must not be empty or nil.
+    DCHECK(session_storage.stableIdentifier.length);
+    stable_identifier_ = [session_storage.stableIdentifier copy];
   } else {
     certificate_policy_cache_ =
         std::make_unique<SessionCertificatePolicyCacheImpl>(
             params.browser_state);
+
+    // Generate a random stable identifier. Ensure it is immutable.
+    stable_identifier_ = [[[NSUUID UUID] UUIDString] copy];
   }
 }
 
@@ -555,6 +562,10 @@ BrowserState* WebStateImpl::RealizedWebState::GetBrowserState() const {
   return navigation_manager_->GetBrowserState();
 }
 
+NSString* WebStateImpl::RealizedWebState::GetStableIdentifier() const {
+  return [stable_identifier_ copy];
+}
+
 void WebStateImpl::RealizedWebState::OpenURL(
     const WebState::OpenURLParams& params) {
   DCHECK(Configured());
@@ -574,13 +585,11 @@ void WebStateImpl::RealizedWebState::Stop() {
 CRWSessionStorage* WebStateImpl::RealizedWebState::BuildSessionStorage() {
   [web_controller_ recordStateInHistory];
   if (restored_session_storage_) {
-    // UserData can be updated in an uncommitted WebState. Even
-    // if a WebState hasn't been restored, its opener value may have changed.
-    std::unique_ptr<SerializableUserData> serializable_user_data =
+    // UserData can be updated in an uncommitted WebState. Even if a WebState
+    // hasn't been restored, its opener value may have changed.
+    restored_session_storage_.userData =
         SerializableUserDataManager::FromWebState(owner_)
-            ->CreateSerializableUserData();
-    [restored_session_storage_
-        setSerializableUserData:std::move(serializable_user_data)];
+            ->GetUserDataForSession();
     return restored_session_storage_;
   }
   return SessionStorageBuilder::BuildStorage(*owner_, *navigation_manager_,

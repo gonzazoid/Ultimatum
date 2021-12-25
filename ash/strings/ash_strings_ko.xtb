@@ -25,7 +25,6 @@
 <translation id="1104084341931202936">접근성 설정 표시</translation>
 <translation id="1104621072296271835">기기가 연결되면 더욱 원활하게 작동합니다</translation>
 <translation id="1111781754511998498">프로젝터</translation>
-<translation id="1119348796022671382">테마 색상 모드는 배경화면에서 추출한 색상을 사용하여 인터페이스에 부드럽게 반영합니다.</translation>
 <translation id="112308213915226829">실행기 자동 숨김</translation>
 <translation id="1142002900084379065">최근 사진</translation>
 <translation id="1148499908455722006"><ph name="USER_NAME" /> 정보 대화상자 열기</translation>
@@ -35,6 +34,7 @@
 <translation id="1175572348579024023">스크롤</translation>
 <translation id="1178581264944972037">일시중지</translation>
 <translation id="1181037720776840403">삭제</translation>
+<translation id="118437560755358292">보안 강화를 위해 비밀번호 또는 PIN 입력</translation>
 <translation id="118532027333893379">전체 화면을 캡처하려면 아무 곳이나 탭하세요.</translation>
 <translation id="1190609913194133056">알림 센터</translation>
 <translation id="1190678134285018527">기기를 이전 버전으로 되돌리세요</translation>
@@ -113,7 +113,6 @@
 <translation id="1632985212731562677">설정 &gt; 접근성에서 스위치 제어를 사용 중지할 수 있습니다.</translation>
 <translation id="1637505162081889933">기기 <ph name="NUM_DEVICES" />대</translation>
 <translation id="1654477262762802994">음성 검색 시작</translation>
-<translation id="1667964833127753507">중성 색상 모드는 배경화면에서 추출한 색상을 사용하지 않고 밝거나 어두운 중성 색상으로 대체합니다.</translation>
 <translation id="1677472565718498478"><ph name="TIME" /> 남음</translation>
 <translation id="1677507110654891115"><ph name="FEATURE_NAME" />이 연결되어 있지 않습니다.</translation>
 <translation id="1698080062160024910"><ph name="TOTAL_TIME" /> 타이머 · <ph name="LABEL" /></translation>
@@ -132,6 +131,7 @@
 <translation id="1768366657309696705"><ph name="LAUNCHER_KEY_NAME" /> + 마침표 단축키가 변경되었습니다. Insert 키를 사용하려면 <ph name="LAUNCHER_KEY_NAME" /> 키 + Shift + Backspace 키를 누르세요.</translation>
 <translation id="1770726142253415363"><ph name="ROW_NUMBER" />행, <ph name="COLUMN_NUMBER" />열로 이동했습니다.</translation>
 <translation id="1771761307086386028">오른쪽으로 스크롤</translation>
+<translation id="1774796056689732716">현재 캘린더에서 <ph name="CURRENT_MONTH_YEAR" />을 표시 중이며 선택된 날짜는 <ph name="DATE" />입니다.</translation>
 <translation id="1787955149152357925">꺼짐</translation>
 <translation id="1804572139604454141">디스크 공간이 매우 부족하여 녹화가 종료되었습니다.</translation>
 <translation id="181103072419391116">신호 강도 <ph name="SIGNAL_STRENGTH" />, 관리자가 관리함</translation>
@@ -191,6 +191,7 @@
 <translation id="2222841058024245321">데스크 7</translation>
 <translation id="2224075387478458881">보호된 콘텐츠가 보일 때는 화면 녹화를 할 수 없습니다.</translation>
 <translation id="225680501294068881">기기 검색 중...</translation>
+<translation id="2257486738914982088"><ph name="FILENAME" /> 파일을 다운로드하는 중에 문제가 발생했습니다.</translation>
 <translation id="2268130516524549846">블루투스를 사용 안 함</translation>
 <translation id="2268813581635650749">모두 로그아웃</translation>
 <translation id="2269016722240250274">다른 애플리케이션에서 마이크를 사용 중입니다.</translation>
@@ -338,6 +339,7 @@
 <translation id="3307642347673023554">노트북 모드로 전환됨</translation>
 <translation id="3308453408813785101"><ph name="USER_EMAIL_ADDRESS" />님은 나중에도 로그인할 수 있습니다.</translation>
 <translation id="3321628682574733415">잘못된 부모 코드</translation>
+<translation id="3339826665088060472">화면 캡처, 스크린샷을 찍고 화면을 녹화하는 도구</translation>
 <translation id="3341303451326249809">스크린샷 촬영됨</translation>
 <translation id="334252345105450327">스크린샷 찍기</translation>
 <translation id="3351879221545518001">현재 화면을 전송하고 있습니다.</translation>
@@ -394,6 +396,7 @@
 <translation id="3606978283550408104">점자 디스플레이가 연결되었습니다.</translation>
 <translation id="3615926715408477684">모바일 데이터를 사용 설정하면 블루투스가 사용 설정됩니다.</translation>
 <translation id="3616883743181209306">메뉴가 화면 오른쪽 상단으로 이동했습니다.</translation>
+<translation id="3619536907358025872">화면 캡처 설정</translation>
 <translation id="3621202678540785336">입력</translation>
 <translation id="3621712662352432595">오디오 설정</translation>
 <translation id="3626281679859535460">밝기</translation>
@@ -470,7 +473,6 @@
 <translation id="412298498316631026">창</translation>
 <translation id="4129129681837227511">잠금 화면에 알림이 표시되도록 하려면 잠금을 해제하여 설정을 변경하세요.</translation>
 <translation id="4146833061457621061">음악을 틀어 줘</translation>
-<translation id="4157822100366708405">어두운 테마 설정</translation>
 <translation id="4173958948577803258">목</translation>
 <translation id="4177913004758410636">{0,plural, =1{1일 이내에 기기 업데이트}other{#일 이내에 기기 업데이트}}</translation>
 <translation id="4181841719683918333">언어</translation>
@@ -492,6 +494,7 @@
 <translation id="4269883910223712419">이 기기의 관리자는 다음과 같은 작업을 할 수 있습니다.</translation>
 <translation id="4274537685965975248">Ctrl + Alt + 아래쪽 화살표 단축키가 변경되었습니다. End 키를 사용하려면 <ph name="LAUNCHER_KEY_NAME" /> 키 + 오른쪽 화살표 키를 누르세요.</translation>
 <translation id="4279490309300973883">미러링</translation>
+<translation id="4283888303416325161">보안 강화를 위해 비밀번호 입력</translation>
 <translation id="4285498937028063278">고정 해제</translation>
 <translation id="429402653707266969">툴바 위치 전환</translation>
 <translation id="4294319844246081198">좋은 아침이에요, <ph name="GIVEN_NAME" />님</translation>
@@ -583,6 +586,7 @@
 <translation id="4831034276697007977">자동 클릭을 사용 중지하시겠습니까?</translation>
 <translation id="4849058404725798627">키보드 포커스로 개체 강조표시</translation>
 <translation id="485592688953820832">작업 없음(일시중지)</translation>
+<translation id="4860284199500934869"><ph name="FILENAME" /> 파일을 다운로드하려면 네트워크 연결 상태를 확인하세요.</translation>
 <translation id="486056901304535126">다운로드가 나중에 시도됩니다. 다운로드가 완료될 때까지는 음성이 Google로 전송되어 처리됩니다.</translation>
 <translation id="4868492592575313542">활성화됨</translation>
 <translation id="4872237917498892622">Alt+검색 또는 Shift 키</translation>
@@ -617,6 +621,8 @@
 <translation id="5075554201838155866">자막 사용</translation>
 <translation id="5078796286268621944">잘못된 PIN</translation>
 <translation id="5083553833479578423">더 많은 어시스턴트 기능을 사용해 보세요.</translation>
+<translation id="5090752371472782287"><ph name="MANAGER" /> 기기로 전송</translation>
+<translation id="5106223312672646208">맞춤설정</translation>
 <translation id="5117590920725113268">다음 달 표시</translation>
 <translation id="5136175204352732067">다른 키보드 연결됨</translation>
 <translation id="5147567197700016471">잠금 해제됨</translation>
@@ -625,6 +631,7 @@
 <translation id="5168181903108465623">전송 기기를 사용할 수 있음</translation>
 <translation id="5170568018924773124">폴더 열기</translation>
 <translation id="5176318573511391780">화면 일부 녹화</translation>
+<translation id="5198413532174090167"><ph name="DATE" />, 일정 <ph name="NUMBER" />개</translation>
 <translation id="5198715732953550718"><ph name="MOVED_APP_NAME" /> 앱과 <ph name="IN_PLACE_APP" /> 앱이 포함된 새 폴더를 만들었습니다.</translation>
 <translation id="5206028654245650022"><ph name="APP_NAME" />, <ph name="NOTIFICATION_TITLE" />: <ph name="MESSAGE" />, <ph name="PHONE_NAME" /></translation>
 <translation id="5206057955438543357">{NUM_NOTIFICATIONS,plural, =1{기타 알림 1개}other{기타 알림 #개}}</translation>
@@ -661,6 +668,7 @@
 <translation id="5426063383988017631">설정 메뉴 닫힘</translation>
 <translation id="5428899915242071344">선택 시작</translation>
 <translation id="5430931332414098647">인스턴트 테더링</translation>
+<translation id="5431318178759467895">컬러</translation>
 <translation id="5431825016875453137">OpenVPN/L2TP</translation>
 <translation id="5433020815079095860">오디오 입력</translation>
 <translation id="544691375626129091">사용 가능한 모든 사용자가 이미 이 세션에 추가되었습니다.</translation>
@@ -708,6 +716,7 @@
 <translation id="5769373120130404283">개인정보 보호 화면</translation>
 <translation id="5777841717266010279">화면 공유를 중단하시겠습니까?</translation>
 <translation id="5779721926447984944">고정된 파일</translation>
+<translation id="5788127256798019331">Play 파일</translation>
 <translation id="5790085346892983794">완료</translation>
 <translation id="5805809050170488595">클릭하여 <ph name="NETWORK_NAME" /> 활성화</translation>
 <translation id="5820394555380036790">Chromium OS</translation>
@@ -760,6 +769,7 @@
 <translation id="607652042414456612">내 컴퓨터가 근처 블루투스 기기에서 검색할 수 있도록 설정되어 있으며 주소(<ph name="ADDRESS" />)와 함께 '<ph name="NAME" />'(으)로 표시됩니다.</translation>
 <translation id="6114505516289286752">음성 파일 <ph name="LANGUAGE" />개 다운로드됨</translation>
 <translation id="6119360623251949462"><ph name="CHARGING_STATE" />, <ph name="BATTERY_SAVER_STATE" /></translation>
+<translation id="6121838516699723042"><ph name="FILENAME" /> 다운로드 확인</translation>
 <translation id="612734058257491180">게스트 세션에서는 Google 어시스턴트를 사용할 수 없습니다.</translation>
 <translation id="6134259848159370930">기기, 앱, 설정, 웹에서 검색합니다.</translation>
 <translation id="6137566720514957455"><ph name="USER_EMAIL_ADDRESS" /> 삭제 대화상자 열기</translation>
@@ -795,9 +805,11 @@
 <translation id="643147933154517414">완료</translation>
 <translation id="6431865393913628856">화면 녹화</translation>
 <translation id="6445835306623867477"><ph name="RECEIVER_NAME" />에 <ph name="ROUTE_TITLE" /> 전송 중</translation>
+<translation id="6447111710783417522"><ph name="DATE" />, 일정 <ph name="NUMBER" />개</translation>
 <translation id="6452181791372256707">거부</translation>
 <translation id="6453179446719226835">언어가 변경됨</translation>
 <translation id="6459472438155181876">화면을 <ph name="DISPLAY_NAME" />(으)로 확장</translation>
+<translation id="6477681113376365978">파일을 다운로드할 수 없음</translation>
 <translation id="6482559668224714696">전체 화면 돋보기</translation>
 <translation id="6490471652906364588">USB-C 기기(오른쪽 포트)</translation>
 <translation id="6491071886865974820"><ph name="MANAGER" />에서 기한 전에 <ph name="DEVICE_TYPE" /> 기기를 업데이트할 것을 요구합니다.</translation>
@@ -809,7 +821,10 @@
 <translation id="6528179044667508675">방해 금지 모드</translation>
 <translation id="65320610082834431">그림 이모티콘</translation>
 <translation id="6537924328260219877">신호 강도 <ph name="SIGNAL_STRENGTH" />, 휴대전화 배터리 <ph name="BATTERY_STATUS" /></translation>
+<translation id="6539852571005954999">스캔 중인 <ph name="FILENAME" /> 파일 다운로드</translation>
 <translation id="6542521951477560771"><ph name="RECEIVER_NAME" />(으)로 전송 중</translation>
+<translation id="655633303491376835"><ph name="APP_NAME" />
+새로 설치됨</translation>
 <translation id="6559976592393364813">관리자에게 요청</translation>
 <translation id="6565007273808762236">eSIM 연결을 사용할 수 없음</translation>
 <translation id="6570831796530454248">{0,plural, =1{1시간 이내에 기기 업데이트}other{#시간 이내에 기기 업데이트}}</translation>
@@ -841,6 +856,7 @@
 <translation id="6723839937902243910">전원</translation>
 <translation id="6727969043791803658">연결됨, 배터리 <ph name="BATTERY_PERCENTAGE" />%</translation>
 <translation id="6732800389263199929">+<ph name="COUNT" /></translation>
+<translation id="6739144137573853180">설정으로 이동</translation>
 <translation id="6751052314767925245">관리자가 시행함</translation>
 <translation id="6751826523481687655">성능 추적이 사용 설정되어 있습니다.</translation>
 <translation id="6752912906630585008"><ph name="REMOVED_DESK" /> 데스크가 삭제되고 <ph name="RECEIVE_DESK" /> 데스크와 병합되었습니다.</translation>
@@ -853,6 +869,7 @@
 <translation id="6811454077060061666">데스크톱용 Google Drive를 사용할 수 없습니다.</translation>
 <translation id="6818242057446442178">한 단어 뒤로 이동</translation>
 <translation id="6820676911989879663">잠시 쉬어 가세요.</translation>
+<translation id="6827049576281411231">일정 창 닫기</translation>
 <translation id="6836499262298959512">위험한 파일</translation>
 <translation id="6837064795450991317">데스크바 숨기기</translation>
 <translation id="6852052252232534364">클릭하여 활성화</translation>
@@ -860,6 +877,7 @@
 <translation id="685782768769951078">{NUM_DIGITS,plural, =1{1자리 남음}other{#자리 남음}}</translation>
 <translation id="6867938213751067702"><ph name="FILENAME" /> 다운로드가 일시중지되었습니다</translation>
 <translation id="6878400149835617132">바로가기 사용 중지됨</translation>
+<translation id="6884665277231944629">오늘로 돌아가기</translation>
 <translation id="6886172995547742638"><ph name="DEVICE_TYPE" /> 기기의 성능이 저하될 수 있습니다. 인증된 <ph name="PREFERRED_MINIMUM_POWER" />W 이상의 USB-C 전원 어댑터를 사용하세요.</translation>
 <translation id="688631446150864480">창을 전환하려면 아래쪽 화살표 키를 누르세요.</translation>
 <translation id="6896758677409633944">복사</translation>
@@ -946,6 +964,7 @@
 <translation id="7497767806359279797">언어 및 키보드 선택</translation>
 <translation id="7509246181739783082">본인 확인</translation>
 <translation id="7513622367902644023">스크린샷 모드 선택됨</translation>
+<translation id="7513922695575567867">현재 캘린더에서 <ph name="DATE" />이 속한 주를 표지 중이며 선택된 날짜는 <ph name="SELECTED_DATE" />입니다.</translation>
 <translation id="7514365320538308">다운로드</translation>
 <translation id="7526573455193969409">네트워크가 모니터링될 수 있음</translation>
 <translation id="7536035074519304529">IP 주소: <ph name="ADDRESS" /></translation>
@@ -955,6 +974,7 @@
 <translation id="7564874036684306347">창을 다른 데스크톱으로 이동하면 예기치 못한 동작이 나타날 수 있습니다. 이후의 알림, 창, 대화상자가 데스크톱 간에 분할될 수 있습니다.</translation>
 <translation id="7569509451529460200">점자와 ChromeVox가 사용 설정되었습니다.</translation>
 <translation id="7569983096843329377">검정색</translation>
+<translation id="757941033127302446">로그인됨</translation>
 <translation id="7579778809502851308">화면 캡처</translation>
 <translation id="7590883480672980941">입력 설정</translation>
 <translation id="7593891976182323525">검색 또는 Shift 키</translation>
@@ -962,7 +982,6 @@
 <translation id="7600875258240007829">모든 알림 보기</translation>
 <translation id="7607002721634913082">일시중지됨</translation>
 <translation id="7610198039767537854"><ph name="DEVICE_TYPE" />에서 휴대전화 카메라 롤의 최근 사진을 봅니다.</translation>
-<translation id="7618774594543487847">중성 색상</translation>
 <translation id="7624117708979618027"><ph name="TEMPERATURE_F" />°F</translation>
 <translation id="7631906263969450674">마커 펜</translation>
 <translation id="7633755430369750696">Nearby Share 설정 표시</translation>
@@ -976,6 +995,7 @@
 <translation id="7662283695561029522">설정하려면 탭하세요.</translation>
 <translation id="7705524343798198388">VPN</translation>
 <translation id="7714767791242455379">새 셀룰러 네트워크 추가</translation>
+<translation id="7720410380936703141">다시 시도</translation>
 <translation id="7723389094756330927">{NUM_NOTIFICATIONS,plural, =1{알림 1개}other{알림 #개}}</translation>
 <translation id="7724603315864178912">잘라내기</translation>
 <translation id="7745560842763881396">실행기에 앱 표시</translation>
@@ -1028,6 +1048,7 @@
 <translation id="8035152190676905274">펜</translation>
 <translation id="8036504271468642248">이전 문장</translation>
 <translation id="8042893070933512245">접근성 설정 메뉴 열기</translation>
+<translation id="8042925093898452104">세부정보 닫기</translation>
 <translation id="8048123526339889627">블루투스 설정</translation>
 <translation id="8051716679295756675">이름이 <ph name="DESK_TEMPLATE_NAME" />인 템플릿이 이미 있습니다.</translation>
 <translation id="8052898407431791827">클립보드에 복사됨</translation>
@@ -1097,6 +1118,7 @@
 <translation id="8513108775083588393">자동 회전</translation>
 <translation id="851458219935658693">현재 데스크의 창 표시, 라디오 버튼 선택됨</translation>
 <translation id="8517041960877371778"><ph name="DEVICE_TYPE" />이(가) 켜져 있는 동안에는 충전되지 않을 수 있습니다.</translation>
+<translation id="8551588720239073785">날짜 및 시간 설정</translation>
 <translation id="8553395910833293175">이미 모든 데스크에 할당되어 있습니다.</translation>
 <translation id="856298576161209842"><ph name="MANAGER" />에서 <ph name="DEVICE_TYPE" /> 기기의 업데이트를 권장합니다.</translation>
 <translation id="8563862697512465947">알림 설정</translation>
@@ -1116,7 +1138,6 @@
 <translation id="8660331759611631213">71의 제곱근</translation>
 <translation id="8663756353922886599"><ph name="CONNECTION_STATUS" />, 신호 강도 <ph name="SIGNAL_STRENGTH" /></translation>
 <translation id="8664753092453405566">네트워크 목록을 표시합니다. <ph name="STATE_TEXT" /></translation>
-<translation id="8668052347555487755">색상 모드</translation>
 <translation id="8676770494376880701">저출력 충전기 연결됨</translation>
 <translation id="8683506306463609433">성능 추적 활성화</translation>
 <translation id="8685326675965865247">기기, 앱, 설정, 웹에서 검색합니다. 앱에서 탐색하려면 화살표 키를 사용하세요.</translation>
@@ -1150,7 +1171,6 @@
 <translation id="8896630965521842259"><ph name="DESK_TEMPLATE_NAME" /> 템플릿이 완전히 삭제됩니다.</translation>
 <translation id="890616557918890486">소스 변경</translation>
 <translation id="8909138438987180327">남은 배터리는 <ph name="PERCENTAGE" />%입니다.</translation>
-<translation id="8913384980486163186">테마 색상(기본값)</translation>
 <translation id="8921554779039049422">H+</translation>
 <translation id="8921624153894383499">Google 어시스턴트가 이 언어를 지원하지 않음</translation>
 <translation id="8926951137623668982">실행기 항상 숨김</translation>
@@ -1162,6 +1182,7 @@
 <translation id="8983038754672563810">HSPA</translation>
 <translation id="8990809378771970590"><ph name="IME_NAME" /> 사용 중</translation>
 <translation id="899350903320462459">알림 작업을 실행하려면 <ph name="LOGIN_ID" />(으)로 기기의 잠금을 해제하세요.</translation>
+<translation id="9000771174482730261">저장용량 관리</translation>
 <translation id="9017320285115481645">Family Link 부모 액세스 코드를 입력하세요.</translation>
 <translation id="9024331582947483881">전체화면</translation>
 <translation id="9047624247355796468"><ph name="NETWORK_NAME" /> 설정 열기</translation>
@@ -1207,6 +1228,7 @@
 <translation id="938963181863597773">오늘 내 일정이 어떻게 돼?</translation>
 <translation id="945522503751344254">의견 보내기</translation>
 <translation id="951991426597076286">거부</translation>
+<translation id="954052413789300507"><ph name="FILENAME" /> 파일을 저장할 공간이 부족합니다. 기기 여유 공간을 확보하세요.</translation>
 <translation id="974545358917229949"><ph name="QUERY" /> 검색결과 <ph name="RESULT_COUNT" />개 표시 중</translation>
 <translation id="98515147261107953">가로 방향</translation>
 <translation id="990277280839877440"><ph name="WINDOW_TITILE" /> 창이 닫혔습니다.</translation>

@@ -208,9 +208,6 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   void AnimateDoubleTapZoom(const gfx::Point& point,
                             const gfx::Rect& rect) override;
 
-  void ClearLayerSelection(LocalFrame*) override;
-  void UpdateLayerSelection(LocalFrame*, const cc::LayerSelection&) override;
-
   // ChromeClient methods:
   String AcceptLanguages() override;
   void SetCursorForPlugin(const ui::Cursor&, LocalFrame*) override;
@@ -266,7 +263,7 @@ class CORE_EXPORT ChromeClientImpl final : public ChromeClient {
   void OnMouseDown(Node&) override;
   void DidUpdateBrowserControls() const override;
 
-  FloatSize ElasticOverscroll() const override;
+  gfx::Vector2dF ElasticOverscroll() const override;
 
   void RegisterPopupOpeningObserver(PopupOpeningObserver*) override;
   void UnregisterPopupOpeningObserver(PopupOpeningObserver*) override;

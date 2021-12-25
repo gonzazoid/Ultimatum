@@ -112,6 +112,7 @@
 <translation id="1308113895091915999">Налице е оферта</translation>
 <translation id="1312803275555673949">Какви доказателства подкрепят твърдението?</translation>
 <translation id="131405271941274527"><ph name="URL" /> иска да изпраща и да получава информация при докосване на телефона ви до устройства с NFC</translation>
+<translation id="1314311879718644478">Преглед на съдържанието за обогатена реалност</translation>
 <translation id="1314509827145471431">Подвързване отдясно</translation>
 <translation id="1318023360584041678">Запазено в групата с раздели</translation>
 <translation id="1319245136674974084">Да не се пита отново за това приложение</translation>
@@ -176,6 +177,7 @@
 <translation id="1472675084647422956">Показване на още</translation>
 <translation id="1473183651233018052">JIS B10</translation>
 <translation id="147358896496811705">2A0</translation>
+<translation id="1475299637784133125">Търсите версията на браузъра? Посетете</translation>
 <translation id="1476595624592550506">Променете паролата си</translation>
 <translation id="1483493594462132177">Изпращане</translation>
 <translation id="1484290072879560759">Избиране на адрес за доставка</translation>
@@ -214,6 +216,7 @@
 <translation id="1583429793053364125">Възникна проблем при показването на тази уеб страница.</translation>
 <translation id="1586541204584340881">Кои разширения сте инсталирали</translation>
 <translation id="1588438908519853928">Нормално</translation>
+<translation id="1589050138437146318">Да се инсталира ли ARCore?</translation>
 <translation id="1592005682883173041">Достъп до локални данни</translation>
 <translation id="1594030484168838125">Избор</translation>
 <translation id="160851722280695521">Играене на играта с динозавъра в Chrome</translation>
@@ -1259,6 +1262,7 @@
 <translation id="4968522289500246572">Това приложение е предназначено за мобилни устройства и може да не функционира правилно след преоразмеряване. То може да има проблеми или да се рестартира.</translation>
 <translation id="4969341057194253438">Изтриване на записа</translation>
 <translation id="4973922308112707173">Двойно перфориране в горната част</translation>
+<translation id="4976702386844183910">Последно посещение: <ph name="DATE" /></translation>
 <translation id="4984088539114770594">Да се използва ли микрофонът?</translation>
 <translation id="4984339528288761049">Prc5 (плик)</translation>
 <translation id="4989163558385430922">Преглед на всички</translation>
@@ -1344,6 +1348,7 @@
 <translation id="5215116848420601511">Начини на плащане и адреси посредством Google Pay</translation>
 <translation id="5215363486134917902">Folio-Sp</translation>
 <translation id="521659676233207110">Тава 13</translation>
+<translation id="5216942107514965959">Последно посещение: днес</translation>
 <translation id="5222812217790122047">Имейл адресът е задължителен</translation>
 <translation id="5230733896359313003">Адрес за доставка</translation>
 <translation id="5230815978613972521">B8</translation>
@@ -1387,6 +1392,7 @@
 <translation id="5333022057423422993">Chrome разкри паролата, която току-що използвахте, при нарушение на сигурността на данните. За да защитите профилите си, ви препоръчваме да проверите запазените си пароли.</translation>
 <translation id="5334013548165032829">Подробните системни регистрационни файлове</translation>
 <translation id="5334145288572353250">Да се запази ли адресът?</translation>
+<translation id="5335920952954443287">Туптящо сърце</translation>
 <translation id="5340250774223869109">Приложението е блокирано</translation>
 <translation id="534295439873310000">Устройства с NFC</translation>
 <translation id="5344579389779391559">Тази страница може да опита да ви таксува пари</translation>
@@ -1529,6 +1535,7 @@
 <translation id="5869522115854928033">Запазени пароли</translation>
 <translation id="5873013647450402046">Банката иска да потвърди самоличността ви.</translation>
 <translation id="5887400589839399685">Картата бе запазена</translation>
+<translation id="5887687176710214216">Последно посещение: вчера</translation>
 <translation id="5895138241574237353">Рестартиране</translation>
 <translation id="5895187275912066135">Издаден на</translation>
 <translation id="5901630391730855834">жълто</translation>
@@ -1722,6 +1729,7 @@
 <translation id="6529602333819889595">&amp;Възстановяване на изтриването</translation>
 <translation id="6545864417968258051">Сканиране за устройства с Bluetooth</translation>
 <translation id="6547208576736763147">Двойно перфориране отляво</translation>
+<translation id="6554732001434021288">Последно посещение: преди <ph name="NUM_DAYS" /> дни</translation>
 <translation id="6556866813142980365">Възстановяване</translation>
 <translation id="6569060085658103619">Преглеждате страница на разширение</translation>
 <translation id="6573200754375280815">Двойно перфориране отдясно</translation>
@@ -1884,6 +1892,7 @@
 <translation id="7118618213916969306">Търсене на URL адреса от буферната памет, <ph name="SHORT_URL" /></translation>
 <translation id="7119414471315195487">Затворете другите раздели или програми.</translation>
 <translation id="7129409597930077180">Този адрес за доставка не се поддържа. Изберете друг.</translation>
+<translation id="7132939140423847331">Администраторът ви е забранил копирането на тези данни.</translation>
 <translation id="7135130955892390533">Показване на състоянието</translation>
 <translation id="7138472120740807366">Начин на бърза доставка</translation>
 <translation id="7139724024395191329">Емирство</translation>
@@ -2056,6 +2065,7 @@
 <translation id="7654909834015434372">Когато редактирате поясненията, документът ще бъде в оригиналната си ориентация</translation>
 <translation id="765676359832457558">Скриване на разширените настройки...</translation>
 <translation id="7658239707568436148">Отказ</translation>
+<translation id="7659878911471462949">Сълзи от радост</translation>
 <translation id="7662298039739062396">Настройката се контролира от разширение</translation>
 <translation id="7663736086183791259">Сертификат <ph name="CERTIFICATE_VALIDITY" /></translation>
 <translation id="7666397036351755929">Не е разрешено в режим „инкогнито“</translation>
@@ -2156,7 +2166,6 @@
 <translation id="7977894662897852582">Edp</translation>
 <translation id="798134797138789862">Може да поиска разрешение да използва устройства и данни за виртуална реалност</translation>
 <translation id="7984945080620862648">В момента не можете да посетите <ph name="SITE" />, защото уебсайтът изпрати кодирани идентификационни данни, които Chrome не може да обработи. Обикновено грешките в мрежата и атаките срещу нея са временни, така че тази страница вероятно ще работи по-късно.</translation>
-<translation id="79859296434321399">За да гледате съдържание с обогатена реалност, инсталирайте ARCore</translation>
 <translation id="7986319120639858961"><ph name="CARD_TITLE" /> <ph name="TIME" /> <ph name="BOOKMARKED" /> <ph name="TITLE" /> <ph name="DOMAIN" /></translation>
 <translation id="799149739215780103">Подвързване</translation>
 <translation id="7992044431894087211">Споделянето на екрана с(ъс) <ph name="APPLICATION_TITLE" /> бе възобновено</translation>
@@ -2260,6 +2269,7 @@
 <translation id="830498451218851433">Сгъване в средата</translation>
 <translation id="8307358339886459768">Small-Photo</translation>
 <translation id="8307888238279532626">Инсталираните приложения и колко често са използвани</translation>
+<translation id="8317207217658302555">Да се актуализира ли ARCore?</translation>
 <translation id="831997045666694187">Вечерта</translation>
 <translation id="8321476692217554900">известия</translation>
 <translation id="8328484624016508118">След като затворите всички раздели в режим „инкогнито“, Chrome изчиства:
@@ -2330,7 +2340,6 @@
 <translation id="8554912124839363479">{NUM_PERMISSIONS,plural, =1{Нулиране на разрешението}other{Нулиране на разрешенията}}</translation>
 <translation id="8555010941760982128">Използвайте този код при плащане</translation>
 <translation id="8557066899867184262">Кодът за проверка се намира на гърба на картата ви.</translation>
-<translation id="8558485628462305855">За да гледате съдържание с обогатена реалност, актуализирайте ARCore</translation>
 <translation id="8559762987265718583">Не може да се установи частна връзка с/ъс <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" />, тъй като датата и часът на устройството ви (<ph name="DATE_AND_TIME" />) са неправилни.</translation>
 <translation id="8564182942834072828">Отделни документи/неподредени копия</translation>
 <translation id="8564985650692024650">Chromium препоръчва да зададете повторно паролата си за <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" />, ако сте я използвали и на други сайтове.</translation>
@@ -2442,6 +2451,7 @@
 <translation id="8987245424886630962"><ph name="VIEW_CHROME_HISTORY_FOCUSED_FRIENDLY_MATCH_TEXT" />. Натиснете Tab и след това – Enter, за да прегледате историята си на сърфиране в Chrome</translation>
 <translation id="8987927404178983737">Месец</translation>
 <translation id="8989148748219918422"><ph name="ORGANIZATION" /> [<ph name="COUNTRY" />]</translation>
+<translation id="8992061558343343009">Търсите версията на системата? Посетете</translation>
 <translation id="899688752321268742"><ph name="URL" /> иска да знае кога това устройство се използва активно</translation>
 <translation id="8996941253935762404">На хоризонта се задава сайт с опасни програми</translation>
 <translation id="8997023839087525404">Сървърът предостави сертификат, който не е разкрит публично чрез правило в Прозрачност на сертификатите. Това се изисква за някои сертификати с цел защита срещу хакери и за да е сигурно, че може да им се има доверие.</translation>
