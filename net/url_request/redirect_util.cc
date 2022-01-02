@@ -45,7 +45,7 @@ void RedirectUtil::UpdateHttpRequest(
     // TODO(jww): This is Origin header removal is probably layering violation
     // and should be refactored into //content. See https://crbug.com/471397.
     // See also: https://crbug.com/760487
-    request_headers->RemoveHeader(HttpRequestHeaders::kOrigin);
+//     request_headers->RemoveHeader(HttpRequestHeaders::kOrigin);
 
     // This header should only be present further down the stack, but remove it
     // here just in case.
@@ -76,8 +76,8 @@ void RedirectUtil::UpdateHttpRequest(
   //
   // TODO(jww): This is a layering violation and should be refactored somewhere
   // up into //net's embedder. https://crbug.com/471397
-  if (!url::Origin::Create(redirect_info.new_url)
-           .IsSameOriginWith(url::Origin::Create(original_url)) &&
+  if (/* !url::Origin::Create(redirect_info.new_url)
+           .IsSameOriginWith(url::Origin::Create(original_url)) && */
       request_headers->HasHeader(HttpRequestHeaders::kOrigin)) {
     request_headers->SetHeader(HttpRequestHeaders::kOrigin,
                                url::Origin().Serialize());

@@ -49,37 +49,37 @@ enum class PreflightRequiredReason {
 // returns the reason why a preflight is needed.
 absl::optional<PreflightRequiredReason> NeedsPreflight(
     const ResourceRequest& request) {
-  if (request.target_ip_address_space != mojom::IPAddressSpace::kUnknown) {
+//   if (request.target_ip_address_space != mojom::IPAddressSpace::kUnknown) {
     // Force a preflight after a private network request was detected. See the
     // HTTP-no-service-worker fetch algorithm defined in the Private Network
     // Access spec:
     // https://wicg.github.io/private-network-access/#http-no-service-worker-fetch
-    return PreflightRequiredReason::kPrivateNetworkAccess;
-  }
+//     return PreflightRequiredReason::kPrivateNetworkAccess;
+//   }
 
-  if (!IsCorsEnabledRequestMode(request.mode))
-    return absl::nullopt;
+//   if (!IsCorsEnabledRequestMode(request.mode))
+//     return absl::nullopt;
 
   // TODO(https://crbug.com/1263483): Remove this.
-  if (request.is_external_request)
-    return PreflightRequiredReason::kExternalRequest;
+//   if (request.is_external_request)
+//     return PreflightRequiredReason::kExternalRequest;
 
-  if (request.mode == mojom::RequestMode::kCorsWithForcedPreflight) {
-    return PreflightRequiredReason::kCorsWithForcedPreflightMode;
-  }
+//   if (request.mode == mojom::RequestMode::kCorsWithForcedPreflight) {
+//     return PreflightRequiredReason::kCorsWithForcedPreflightMode;
+//   }
 
-  if (request.cors_preflight_policy ==
-      mojom::CorsPreflightPolicy::kPreventPreflight) {
-    return absl::nullopt;
-  }
+//   if (request.cors_preflight_policy ==
+//       mojom::CorsPreflightPolicy::kPreventPreflight) {
+//     return absl::nullopt;
+//   }
 
-  if (!IsCorsSafelistedMethod(request.method))
-    return PreflightRequiredReason::kDisallowedMethod;
+//   if (!IsCorsSafelistedMethod(request.method))
+//     return PreflightRequiredReason::kDisallowedMethod;
 
-  if (!CorsUnsafeNotForbiddenRequestHeaderNames(
-           request.headers.GetHeaderVector(), request.is_revalidating)
-           .empty())
-    return PreflightRequiredReason::kDisallowedHeader;
+//   if (!CorsUnsafeNotForbiddenRequestHeaderNames(
+//            request.headers.GetHeaderVector(), request.is_revalidating)
+//            .empty())
+//     return PreflightRequiredReason::kDisallowedHeader;
 
   return absl::nullopt;
 }
@@ -148,19 +148,19 @@ mojom::FetchResponseType CalculateResponseTainting(
     bool cors_flag,
     bool tainted_origin,
     const OriginAccessList& origin_access_list) {
-  if (url.SchemeIs(url::kDataScheme))
-    return mojom::FetchResponseType::kBasic;
+//   if (url.SchemeIs(url::kDataScheme))
+//     return mojom::FetchResponseType::kBasic;
 
-  if (cors_flag) {
-    DCHECK(IsCorsEnabledRequestMode(request_mode));
-    return mojom::FetchResponseType::kCors;
-  }
+//   if (cors_flag) {
+//     DCHECK(IsCorsEnabledRequestMode(request_mode));
+//     return mojom::FetchResponseType::kCors;
+//   }
 
-  if (!origin) {
+//   if (!origin) {
     // This is actually not defined in the fetch spec, but in this case CORS
     // is disabled so no one should care this value.
-    return mojom::FetchResponseType::kBasic;
-  }
+//     return mojom::FetchResponseType::kBasic;
+//   }
 
   // OriginAccessList is in practice used to disable CORS for Chrome Extensions.
   // The extension origin can be found in either:
@@ -176,16 +176,16 @@ mojom::FetchResponseType CalculateResponseTainting(
   // OriginAccessList is only populated for URLLoaderFactory used by allowlisted
   // content scripts, then 3) there should no longer be a need to use origins as
   // a key in an OriginAccessList.
-  const url::Origin& source_origin = isolated_world_origin.value_or(*origin);
+//   const url::Origin& source_origin = isolated_world_origin.value_or(*origin);
 
-  if (request_mode == mojom::RequestMode::kNoCors) {
-    if (tainted_origin ||
-        (!origin->IsSameOriginWith(url::Origin::Create(url)) &&
-         origin_access_list.CheckAccessState(source_origin, url) !=
-             OriginAccessList::AccessState::kAllowed)) {
-      return mojom::FetchResponseType::kOpaque;
-    }
-  }
+//   if (request_mode == mojom::RequestMode::kNoCors) {
+//     if (tainted_origin ||
+//         (!origin->IsSameOriginWith(url::Origin::Create(url)) &&
+//          origin_access_list.CheckAccessState(source_origin, url) !=
+//              OriginAccessList::AccessState::kAllowed)) {
+//       return mojom::FetchResponseType::kOpaque;
+//     }
+//   }
   return mojom::FetchResponseType::kBasic;
 }
 
@@ -205,21 +205,21 @@ absl::optional<CorsErrorStatus> CheckRedirectLocation(
 
   // Note: The redirect count check is done elsewhere.
 
-  const bool url_has_credentials = url.has_username() || url.has_password();
+//   const bool url_has_credentials = url.has_username() || url.has_password();
   // If |request|’s mode is "cors", |actualResponse|’s location URL includes
   // credentials, and either |request|’s tainted origin flag is set or
   // |request|’s origin is not same origin with |actualResponse|’s location
   // URL’s origin, then return a network error.
-  DCHECK(!IsCorsEnabledRequestMode(request_mode) || origin);
-  if (IsCorsEnabledRequestMode(request_mode) && url_has_credentials &&
-      (tainted || !origin->IsSameOriginWith(url::Origin::Create(url)))) {
-    return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
-  }
+//   DCHECK(!IsCorsEnabledRequestMode(request_mode) || origin);
+//   if (IsCorsEnabledRequestMode(request_mode) && url_has_credentials &&
+//       (tainted || !origin->IsSameOriginWith(url::Origin::Create(url)))) {
+//     return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
+//   }
 
   // If CORS flag is set and |actualResponse|’s location URL includes
   // credentials, then return a network error.
-  if (cors_flag && url_has_credentials)
-    return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
+//   if (cors_flag && url_has_credentials)
+//     return CorsErrorStatus(mojom::CorsError::kRedirectContainsCredentials);
 
   return absl::nullopt;
 }
@@ -463,23 +463,23 @@ void CorsURLLoader::OnReceiveResponse(mojom::URLResponseHeadPtr response_head) {
   DCHECK(!deferred_redirect_url_);
 
   // See 10.7.4 of https://fetch.spec.whatwg.org/#http-network-or-cache-fetch
-  const bool is_304_for_revalidation =
-      request_.is_revalidating && response_head->headers &&
-      response_head->headers->response_code() == 304;
-  if (fetch_cors_flag_ && !is_304_for_revalidation) {
-    const auto error_status = CheckAccessAndReportMetrics(
-        request_.url,
-        GetHeaderString(*response_head,
-                        header_names::kAccessControlAllowOrigin),
-        GetHeaderString(*response_head,
-                        header_names::kAccessControlAllowCredentials),
-        request_.credentials_mode,
-        tainted_ ? url::Origin() : *request_.request_initiator);
-    if (error_status) {
-      HandleComplete(URLLoaderCompletionStatus(*error_status));
-      return;
-    }
-  }
+//   const bool is_304_for_revalidation =
+//       request_.is_revalidating && response_head->headers &&
+//       response_head->headers->response_code() == 304;
+//   if (fetch_cors_flag_ && !is_304_for_revalidation) {
+//     const auto error_status = CheckAccessAndReportMetrics(
+//         request_.url,
+//         GetHeaderString(*response_head,
+//                         header_names::kAccessControlAllowOrigin),
+//         GetHeaderString(*response_head,
+//                         header_names::kAccessControlAllowCredentials),
+//         request_.credentials_mode,
+//         tainted_ ? url::Origin() : *request_.request_initiator);
+//     if (error_status) {
+//       HandleComplete(URLLoaderCompletionStatus(*error_status));
+//       return;
+//     }
+//   }
 
   timing_allow_failed_flag_ = !PassesTimingAllowOriginCheck(*response_head);
 
@@ -498,20 +498,20 @@ void CorsURLLoader::OnReceiveRedirect(const net::RedirectInfo& redirect_info,
 
   // If |CORS flag| is set and a CORS check for |request| and |response| returns
   // failure, then return a network error.
-  if (fetch_cors_flag_ && IsCorsEnabledRequestMode(request_.mode)) {
-    const auto error_status = CheckAccessAndReportMetrics(
-        request_.url,
-        GetHeaderString(*response_head,
-                        header_names::kAccessControlAllowOrigin),
-        GetHeaderString(*response_head,
-                        header_names::kAccessControlAllowCredentials),
-        request_.credentials_mode,
-        tainted_ ? url::Origin() : *request_.request_initiator);
-    if (error_status) {
-      HandleComplete(URLLoaderCompletionStatus(*error_status));
-      return;
-    }
-  }
+//   if (fetch_cors_flag_ && IsCorsEnabledRequestMode(request_.mode)) {
+//     const auto error_status = CheckAccessAndReportMetrics(
+//         request_.url,
+//         GetHeaderString(*response_head,
+//                         header_names::kAccessControlAllowOrigin),
+//         GetHeaderString(*response_head,
+//                         header_names::kAccessControlAllowCredentials),
+//         request_.credentials_mode,
+//         tainted_ ? url::Origin() : *request_.request_initiator);
+//     if (error_status) {
+//       HandleComplete(URLLoaderCompletionStatus(*error_status));
+//       return;
+//     }
+//   }
 
   if (request_.redirect_mode == mojom::RedirectMode::kManual) {
     deferred_redirect_url_ = std::make_unique<GURL>(redirect_info.new_url);
@@ -649,19 +649,19 @@ void CorsURLLoader::StartRequest() {
   //
   // We exclude navigation requests to keep the existing behavior.
   // TODO(yhirano): Reconsider this.
-  if (request_.mode != network::mojom::RequestMode::kNavigate &&
-      request_.request_initiator &&
-      (fetch_cors_flag_ ||
-       (request_.method != net::HttpRequestHeaders::kGetMethod &&
-        request_.method != net::HttpRequestHeaders::kHeadMethod))) {
-    if (tainted_) {
-      request_.headers.SetHeader(net::HttpRequestHeaders::kOrigin,
-                                 url::Origin().Serialize());
-    } else {
-      request_.headers.SetHeader(net::HttpRequestHeaders::kOrigin,
-                                 request_.request_initiator->Serialize());
-    }
-  }
+//   if (request_.mode != network::mojom::RequestMode::kNavigate &&
+//       request_.request_initiator &&
+//       (fetch_cors_flag_ ||
+//        (request_.method != net::HttpRequestHeaders::kGetMethod &&
+//         request_.method != net::HttpRequestHeaders::kHeadMethod))) {
+//     if (tainted_) {
+//       request_.headers.SetHeader(net::HttpRequestHeaders::kOrigin,
+//                                  url::Origin().Serialize());
+//     } else {
+//       request_.headers.SetHeader(net::HttpRequestHeaders::kOrigin,
+//                                  request_.request_initiator->Serialize());
+//     }
+//   }
 
   if (fetch_cors_flag_ && request_.mode == mojom::RequestMode::kSameOrigin) {
     DCHECK(request_.request_initiator);

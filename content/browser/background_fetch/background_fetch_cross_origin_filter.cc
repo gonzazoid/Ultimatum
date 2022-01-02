@@ -101,26 +101,26 @@ BackgroundFetchCrossOriginFilter::BackgroundFetchCrossOriginFilter(
 BackgroundFetchCrossOriginFilter::~BackgroundFetchCrossOriginFilter() = default;
 
 bool BackgroundFetchCrossOriginFilter::CanPopulateBody() const {
-  if (is_same_origin_) {
+//   if (is_same_origin_) {
     // Same origin requests are always OK.
-    return true;
-  }
+//     return true;
+//   }
 
   // For cross-origin requests, the body will be populated if:
 
   // (1) The Access-Control-Allow-Origin method allows the source origin / any
   //     origin.
-  if (!access_control_allow_origin_exact_ &&
-      !access_control_allow_origin_any_) {
-    return false;
-  }
+//   if (!access_control_allow_origin_exact_ &&
+//       !access_control_allow_origin_any_) {
+//     return false;
+//   }
 
   // (2) For requests with credentials, the Access-Control-Allow-Credentials is
   //     set and the Access-Control-Allow-Origin contains the exact origin.
-  if (include_credentials_ && (!access_control_allow_credentials_ ||
-                               !access_control_allow_origin_exact_)) {
-    return false;
-  }
+//   if (include_credentials_ && (!access_control_allow_credentials_ ||
+//                                !access_control_allow_origin_exact_)) {
+//     return false;
+//   }
 
   return true;
 }
