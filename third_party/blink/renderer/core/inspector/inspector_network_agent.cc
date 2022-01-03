@@ -886,8 +886,8 @@ BuildObjectForResourceRequest(const ResourceRequest& request,
   auto headers = request.HttpHeaderFields();
 
   // The request's referrer must be generated at this point.
-  DCHECK_NE(request.ReferrerString(), Referrer::ClientReferrerString());
-  headers.Set(http_names::kReferer, AtomicString(request.ReferrerString()));
+  // DCHECK_NE(request.ReferrerString(), Referrer::ClientReferrerString());
+  // headers.Set(http_names::kReferer, AtomicString(request.ReferrerString()));
 
   std::unique_ptr<protocol::Network::Request> result =
       protocol::Network::Request::create()
@@ -1253,12 +1253,12 @@ void InspectorNetworkAgent::PrepareRequest(DocumentLoader* loader,
       // for this request to assure the request will be allowed.
       // TODO: Should we store the referrer header somewhere other than
       // |extra_request_headers_|?
-      if (header_name.LowerASCII() == http_names::kReferer.LowerASCII()) {
-        request.SetReferrerString(value);
-        request.SetReferrerPolicy(network::mojom::ReferrerPolicy::kAlways);
-      } else {
+//       if (header_name.LowerASCII() == http_names::kReferer.LowerASCII()) {
+//         request.SetReferrerString(value);
+//         request.SetReferrerPolicy(network::mojom::ReferrerPolicy::kAlways);
+//       } else {
         request.SetHttpHeaderField(header_name, AtomicString(value));
-      }
+//       }
     }
   }
 

@@ -180,10 +180,10 @@ int HttpNetworkTransaction::Start(const HttpRequestInfo* request_info,
 #if BUILDFLAG(ENABLE_REPORTING)
   // Store values for later use in NEL report generation.
   request_method_ = request_->method;
-  request_->extra_headers.GetHeader(HttpRequestHeaders::kReferer,
-                                    &request_referrer_);
-  request_->extra_headers.GetHeader(HttpRequestHeaders::kUserAgent,
-                                    &request_user_agent_);
+//   request_->extra_headers.GetHeader(HttpRequestHeaders::kReferer,
+//                                     &request_referrer_);
+//   request_->extra_headers.GetHeader(HttpRequestHeaders::kUserAgent,
+//                                     &request_user_agent_);
   request_reporting_upload_depth_ = request_->reporting_upload_depth;
   start_timeticks_ = base::TimeTicks::Now();
 #endif  // BUILDFLAG(ENABLE_REPORTING)

@@ -358,8 +358,8 @@ const struct {
     {"Expect", ConcerningHeaderId::kExpect},
     // The referer is passed in from the caller on a per-request basis, but
     // there's a separate field for it that should be used instead.
-    {net::HttpRequestHeaders::kReferer, ConcerningHeaderId::kReferer},
-    {"Via", ConcerningHeaderId::kVia},
+//     {net::HttpRequestHeaders::kReferer, ConcerningHeaderId::kReferer},
+//     {"Via", ConcerningHeaderId::kVia},
 };
 
 void ReportFetchUploadStreamingUMA(const net::URLRequest* request,

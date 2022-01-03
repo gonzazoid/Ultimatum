@@ -285,31 +285,31 @@ namespace {
 
 // A header string containing any of the following fields will cause
 // an error. The list comes from the fetch standard.
-const char* const kForbiddenHeaderFields[] = {
-    "accept-charset",
-    "accept-encoding",
-    "access-control-request-headers",
-    "access-control-request-method",
-    "connection",
-    "content-length",
-    "cookie",
-    "cookie2",
-    "date",
-    "dnt",
-    "expect",
-    "host",
-    "keep-alive",
-    "origin",
-    "referer",
-    "te",
-    "trailer",
-    "transfer-encoding",
-    "upgrade",
+// const char* const kForbiddenHeaderFields[] = {
+//     "accept-charset",
+//     "accept-encoding",
+//     "access-control-request-headers",
+//     "access-control-request-method",
+//     "connection",
+//     "content-length",
+//     "cookie",
+//     "cookie2",
+//     "date",
+//     "dnt",
+//     "expect",
+//     "host",
+//     "keep-alive",
+//     "origin",
+//     "referer",
+//     "te",
+//     "trailer",
+//     "transfer-encoding",
+//     "upgrade",
     // TODO(mmenke): This is no longer banned, but still here due to issues
     // mentioned in https://crbug.com/571722.
-    "user-agent",
-    "via",
-};
+//     "user-agent",
+//     "via",
+// };
 
 }  // namespace
 
@@ -326,14 +326,14 @@ bool HttpUtil::IsMethodIdempotent(base::StringPiece method) {
 
 // static
 bool HttpUtil::IsSafeHeader(base::StringPiece name) {
-  if (base::StartsWith(name, "proxy-", base::CompareCase::INSENSITIVE_ASCII) ||
-      base::StartsWith(name, "sec-", base::CompareCase::INSENSITIVE_ASCII))
-    return false;
+//   if (base::StartsWith(name, "proxy-", base::CompareCase::INSENSITIVE_ASCII) ||
+//       base::StartsWith(name, "sec-", base::CompareCase::INSENSITIVE_ASCII))
+//     return false;
 
-  for (const char* field : kForbiddenHeaderFields) {
-    if (base::LowerCaseEqualsASCII(name, field))
-      return false;
-  }
+//   for (const char* field : kForbiddenHeaderFields) {
+//     if (base::LowerCaseEqualsASCII(name, field))
+//       return false;
+//   }
   return true;
 }
 

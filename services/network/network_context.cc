@@ -1820,8 +1820,8 @@ void NetworkContext::PreconnectSockets(
   net::HttpRequestInfo request_info;
   request_info.url = url;
   request_info.method = net::HttpRequestHeaders::kGetMethod;
-  request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kUserAgent,
-                                       user_agent);
+//   request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kUserAgent,
+//                                        user_agent);
 
   if (allow_credentials) {
     request_info.load_flags = net::LOAD_NORMAL;

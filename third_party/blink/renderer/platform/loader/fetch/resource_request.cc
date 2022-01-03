@@ -321,7 +321,7 @@ void ResourceRequestHead::SetHTTPOriginToMatchReferrerIfNeeded() {
 }
 
 void ResourceRequestHead::ClearHTTPUserAgent() {
-  http_header_fields_.Remove(http_names::kUserAgent);
+//   http_header_fields_.Remove(http_names::kUserAgent);
 }
 
 void ResourceRequestBody::SetFormBody(
