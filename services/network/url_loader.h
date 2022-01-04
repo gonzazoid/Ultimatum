@@ -190,8 +190,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   void OnReceivedRedirect(net::URLRequest* url_request,
                           const net::RedirectInfo& redirect_info,
                           bool* defer_redirect) override;
-  void OnAuthRequired(net::URLRequest* request,
-                      const net::AuthChallengeInfo& info) override;
+//   void OnAuthRequired(net::URLRequest* request,
+//                       const net::AuthChallengeInfo& info) override;
   void OnCertificateRequested(net::URLRequest* request,
                               net::SSLCertRequestInfo* info) override;
   void OnSSLCertificateError(net::URLRequest* request,
@@ -219,8 +219,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   void OnBeforeURLRequest();
 
   // mojom::AuthChallengeResponder:
-  void OnAuthCredentials(
-      const absl::optional<net::AuthCredentials>& credentials) override;
+//   void OnAuthCredentials(
+//       const absl::optional<net::AuthCredentials>& credentials) override;
 
   // mojom::ClientCertificateResponder:
   void ContinueWithCertificate(
@@ -464,7 +464,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
   const uint32_t request_id_;
   const int keepalive_request_size_;
   const bool keepalive_;
-  const bool do_not_prompt_for_login_;
+//   const bool do_not_prompt_for_login_;
   std::unique_ptr<net::URLRequest> url_request_;
   mojo::Receiver<mojom::URLLoader> receiver_;
   mojo::Receiver<mojom::AuthChallengeResponder>
@@ -549,7 +549,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   base::WeakPtr<KeepaliveStatisticsRecorder> keepalive_statistics_recorder_;
 
-  bool first_auth_attempt_ = true;
+//   bool first_auth_attempt_ = true;
 
   std::unique_ptr<ScopedThrottlingToken> throttling_token_;
 

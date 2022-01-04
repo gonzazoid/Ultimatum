@@ -72,8 +72,8 @@ class NET_EXPORT PacFileFetcherImpl : public PacFileFetcher,
   void OnReceivedRedirect(URLRequest* request,
                           const RedirectInfo& redirect_info,
                           bool* defer_redirect) override;
-  void OnAuthRequired(URLRequest* request,
-                      const AuthChallengeInfo& auth_info) override;
+//   void OnAuthRequired(URLRequest* request,
+//                       const AuthChallengeInfo& auth_info) override;
   void OnSSLCertificateError(URLRequest* request,
                              int net_error,
                              const SSLInfo& ssl_info,

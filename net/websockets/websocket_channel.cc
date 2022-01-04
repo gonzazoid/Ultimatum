@@ -211,15 +211,15 @@ class WebSocketChannel::ConnectDelegate
                                     ssl_info, fatal);
   }
 
-  int OnAuthRequired(const AuthChallengeInfo& auth_info,
-                     scoped_refptr<HttpResponseHeaders> headers,
-                     const IPEndPoint& remote_endpoint,
-                     base::OnceCallback<void(const AuthCredentials*)> callback,
-                     absl::optional<AuthCredentials>* credentials) override {
-    return creator_->OnAuthRequired(auth_info, std::move(headers),
-                                    remote_endpoint, std::move(callback),
-                                    credentials);
-  }
+//   int OnAuthRequired(const AuthChallengeInfo& auth_info,
+//                      scoped_refptr<HttpResponseHeaders> headers,
+//                      const IPEndPoint& remote_endpoint,
+//                      base::OnceCallback<void(const AuthCredentials*)> callback,
+//                      absl::optional<AuthCredentials>* credentials) override {
+//     return creator_->OnAuthRequired(auth_info, std::move(headers),
+//                                     remote_endpoint, std::move(callback),
+//                                     credentials);
+//   }
 
  private:
   // A pointer to the WebSocketChannel that created this object. There is no
@@ -483,16 +483,16 @@ void WebSocketChannel::OnSSLCertificateError(
       std::move(ssl_error_callbacks), socket_url_, net_error, ssl_info, fatal);
 }
 
-int WebSocketChannel::OnAuthRequired(
-    const AuthChallengeInfo& auth_info,
-    scoped_refptr<HttpResponseHeaders> response_headers,
-    const IPEndPoint& remote_endpoint,
-    base::OnceCallback<void(const AuthCredentials*)> callback,
-    absl::optional<AuthCredentials>* credentials) {
-  return event_interface_->OnAuthRequired(
-      auth_info, std::move(response_headers), remote_endpoint,
-      std::move(callback), credentials);
-}
+// int WebSocketChannel::OnAuthRequired(
+//     const AuthChallengeInfo& auth_info,
+//     scoped_refptr<HttpResponseHeaders> response_headers,
+//     const IPEndPoint& remote_endpoint,
+//     base::OnceCallback<void(const AuthCredentials*)> callback,
+//     absl::optional<AuthCredentials>* credentials) {
+//   return event_interface_->OnAuthRequired(
+//       auth_info, std::move(response_headers), remote_endpoint,
+//       std::move(callback), credentials);
+// }
 
 void WebSocketChannel::OnStartOpeningHandshake(
     std::unique_ptr<WebSocketHandshakeRequestInfo> request) {

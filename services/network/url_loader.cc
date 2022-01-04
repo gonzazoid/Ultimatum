@@ -520,7 +520,7 @@ URLLoader::URLLoader(
       request_id_(request_id),
       keepalive_request_size_(keepalive_request_size),
       keepalive_(request.keepalive),
-      do_not_prompt_for_login_(request.do_not_prompt_for_login),
+//       do_not_prompt_for_login_(request.do_not_prompt_for_login),
       receiver_(this, std::move(url_loader_receiver)),
       url_loader_client_(std::move(url_loader_client),
                          std::move(sync_url_loader_client)),
@@ -1249,36 +1249,36 @@ bool URLLoader::HasFetchStreamingUploadBody(const ResourceRequest* request) {
          element.As<network::DataElementChunkedDataPipe>().read_only_once();
 }
 
-void URLLoader::OnAuthRequired(net::URLRequest* url_request,
-                               const net::AuthChallengeInfo& auth_info) {
-  if (has_fetch_streaming_upload_body_) {
-    NotifyCompleted(net::ERR_FAILED);
+// void URLLoader::OnAuthRequired(net::URLRequest* url_request,
+//                                const net::AuthChallengeInfo& auth_info) {
+//   if (has_fetch_streaming_upload_body_) {
+//     NotifyCompleted(net::ERR_FAILED);
     // |this| may have been deleted.
-    return;
-  }
-  auto* url_loader_network_observer = GetURLLoaderNetworkServiceObserver();
-  if (!url_loader_network_observer) {
-    OnAuthCredentials(absl::nullopt);
-    return;
-  }
+//     return;
+//   }
+//   auto* url_loader_network_observer = GetURLLoaderNetworkServiceObserver();
+//   if (!url_loader_network_observer) {
+//     OnAuthCredentials(absl::nullopt);
+//     return;
+//   }
 
-  if (do_not_prompt_for_login_) {
-    OnAuthCredentials(absl::nullopt);
-    return;
-  }
+//   if (do_not_prompt_for_login_) {
+//     OnAuthCredentials(absl::nullopt);
+//     return;
+//   }
 
-  DCHECK(!auth_challenge_responder_receiver_.is_bound());
+//   DCHECK(!auth_challenge_responder_receiver_.is_bound());
 
-  url_loader_network_observer->OnAuthRequired(
-      fetch_window_id_, request_id_, url_request_->url(), first_auth_attempt_,
-      auth_info, url_request->response_headers(),
-      auth_challenge_responder_receiver_.BindNewPipeAndPassRemote());
+//   url_loader_network_observer->OnAuthRequired(
+//       fetch_window_id_, request_id_, url_request_->url(), first_auth_attempt_,
+//       auth_info, url_request->response_headers(),
+//       auth_challenge_responder_receiver_.BindNewPipeAndPassRemote());
 
-  auth_challenge_responder_receiver_.set_disconnect_handler(
-      base::BindOnce(&URLLoader::DeleteSelf, base::Unretained(this)));
+//   auth_challenge_responder_receiver_.set_disconnect_handler(
+//       base::BindOnce(&URLLoader::DeleteSelf, base::Unretained(this)));
 
-  first_auth_attempt_ = false;
-}
+//   first_auth_attempt_ = false;
+// }
 
 void URLLoader::OnCertificateRequested(net::URLRequest* unused,
                                        net::SSLCertRequestInfo* cert_info) {
@@ -1826,19 +1826,19 @@ void URLLoader::LogConcerningRequestHeaders(
   }
 }
 
-void URLLoader::OnAuthCredentials(
-    const absl::optional<net::AuthCredentials>& credentials) {
-  auth_challenge_responder_receiver_.reset();
+// void URLLoader::OnAuthCredentials(
+//     const absl::optional<net::AuthCredentials>& credentials) {
+//   auth_challenge_responder_receiver_.reset();
 
-  if (!credentials.has_value()) {
-    url_request_->CancelAuth();
-  } else {
+//   if (!credentials.has_value()) {
+//     url_request_->CancelAuth();
+//   } else {
     // CancelAuth will proceed to the body, so cookies only need to be reported
     // here.
-    ReportFlaggedResponseCookies();
-    url_request_->SetAuth(credentials.value());
-  }
-}
+//     ReportFlaggedResponseCookies();
+//     url_request_->SetAuth(credentials.value());
+//   }
+// }
 
 void URLLoader::ContinueWithCertificate(
     const scoped_refptr<net::X509Certificate>& x509_certificate,

@@ -128,12 +128,12 @@ class NET_EXPORT_PRIVATE WebSocketStream {
     // Providing null credentials (nullopt in the sync case and nullptr in the
     // async case) cancels authentication. Otherwise the new credentials are set
     // and the opening handshake will be retried with the credentials.
-    virtual int OnAuthRequired(
-        const AuthChallengeInfo& auth_info,
-        scoped_refptr<HttpResponseHeaders> response_headers,
-        const IPEndPoint& remote_endpoint,
-        base::OnceCallback<void(const AuthCredentials*)> callback,
-        absl::optional<AuthCredentials>* credentials) = 0;
+//     virtual int OnAuthRequired(
+//         const AuthChallengeInfo& auth_info,
+//         scoped_refptr<HttpResponseHeaders> response_headers,
+//         const IPEndPoint& remote_endpoint,
+//         base::OnceCallback<void(const AuthCredentials*)> callback,
+//         absl::optional<AuthCredentials>* credentials) = 0;
   };
 
   // Create and connect a WebSocketStream of an appropriate type. The actual
