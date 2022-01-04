@@ -155,10 +155,10 @@ void URLRequest::Delegate::OnReceivedRedirect(URLRequest* request,
                                               const RedirectInfo& redirect_info,
                                               bool* defer_redirect) {}
 
-void URLRequest::Delegate::OnAuthRequired(URLRequest* request,
-                                          const AuthChallengeInfo& auth_info) {
-  request->CancelAuth();
-}
+// void URLRequest::Delegate::OnAuthRequired(URLRequest* request,
+//                                           const AuthChallengeInfo& auth_info) {
+//   request->CancelAuth();
+// }
 
 void URLRequest::Delegate::OnCertificateRequested(
     URLRequest* request,
@@ -879,24 +879,24 @@ void URLRequest::FollowDeferredRedirect(
   job_->FollowDeferredRedirect(removed_headers, modified_headers);
 }
 
-void URLRequest::SetAuth(const AuthCredentials& credentials) {
-  DCHECK(job_.get());
-  DCHECK(job_->NeedsAuth());
+// void URLRequest::SetAuth(const AuthCredentials& credentials) {
+//   DCHECK(job_.get());
+//   DCHECK(job_->NeedsAuth());
 
-  // maybe_sent_cookies_.clear();
-  // maybe_stored_cookies_.clear();
+//   maybe_sent_cookies_.clear();
+//   maybe_stored_cookies_.clear();
 
-  status_ = ERR_IO_PENDING;
-  job_->SetAuth(credentials);
-}
+//   status_ = ERR_IO_PENDING;
+//   job_->SetAuth(credentials);
+// }
 
-void URLRequest::CancelAuth() {
-  DCHECK(job_.get());
-  DCHECK(job_->NeedsAuth());
+// void URLRequest::CancelAuth() {
+//   DCHECK(job_.get());
+//   DCHECK(job_->NeedsAuth());
 
-  status_ = ERR_IO_PENDING;
-  job_->CancelAuth();
-}
+//   status_ = ERR_IO_PENDING;
+//   job_->CancelAuth();
+// }
 
 void URLRequest::ContinueWithCertificate(
     scoped_refptr<X509Certificate> client_cert,
@@ -1031,14 +1031,14 @@ void URLRequest::SetPriority(RequestPriority priority) {
     job_->SetPriority(priority_);
 }
 
-void URLRequest::NotifyAuthRequired(
-    std::unique_ptr<AuthChallengeInfo> auth_info) {
-  DCHECK(auth_info);
+// void URLRequest::NotifyAuthRequired(
+//     std::unique_ptr<AuthChallengeInfo> auth_info) {
+//   DCHECK(auth_info);
   // Check that there are no callbacks to already failed or cancelled requests.
-  DCHECK(!failed());
+//   DCHECK(!failed());
 
-  delegate_->OnAuthRequired(this, *auth_info.get());
-}
+//   delegate_->OnAuthRequired(this, *auth_info.get());
+// }
 
 void URLRequest::NotifyCertificateRequested(
     SSLCertRequestInfo* cert_request_info) {

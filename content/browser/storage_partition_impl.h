@@ -293,15 +293,15 @@ class CONTENT_EXPORT StoragePartitionImpl
   void Clone(
       mojo::PendingReceiver<network::mojom::URLLoaderNetworkServiceObserver>
           listener) override;
-  void OnAuthRequired(
-      const absl::optional<base::UnguessableToken>& window_id,
-      uint32_t request_id,
-      const GURL& url,
-      bool first_auth_attempt,
-      const net::AuthChallengeInfo& auth_info,
-      const scoped_refptr<net::HttpResponseHeaders>& head_headers,
-      mojo::PendingRemote<network::mojom::AuthChallengeResponder>
-          auth_challenge_responder) override;
+//   void OnAuthRequired(
+//       const absl::optional<base::UnguessableToken>& window_id,
+//       uint32_t request_id,
+//       const GURL& url,
+//       bool first_auth_attempt,
+//       const net::AuthChallengeInfo& auth_info,
+//       const scoped_refptr<net::HttpResponseHeaders>& head_headers,
+//       mojo::PendingRemote<network::mojom::AuthChallengeResponder>
+//           auth_challenge_responder) override;
   void OnClearSiteData(const GURL& url,
                        const std::string& header_value,
                        int load_flags,

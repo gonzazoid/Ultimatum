@@ -73,7 +73,7 @@ interface SSLPrivateKey {
 interface AuthChallengeResponder {
    // Called in response to an authentication request. See
    // URLLoaderNetworkServiceObserver::OnAuthRequired.
-   OnAuthCredentials(AuthCredentials? credentials);
+   // OnAuthCredentials(AuthCredentials? credentials);
 };
 
 // This interface is used by an URLLoaderFactory to provide notification
@@ -116,14 +116,14 @@ interface URLLoaderNetworkServiceObserver {
   // The is not needed for frame based requests because they have their own
   // URLLoaderFactory and a unique URLLoaderNetworkServiceObserver for each
   // frame.
-  OnAuthRequired(
-      mojo_base.mojom.UnguessableToken? window_id,
-      uint32 request_id,
-      url.mojom.Url url,
-      bool first_auth_attempt,
-      AuthChallengeInfo auth_info,
-      HttpResponseHeaders? head_headers,
-      pending_remote<AuthChallengeResponder> auth_challenge_responder);
+//   OnAuthRequired(
+//       mojo_base.mojom.UnguessableToken? window_id,
+//       uint32 request_id,
+//       url.mojom.Url url,
+//       bool first_auth_attempt,
+//       AuthChallengeInfo auth_info,
+//       HttpResponseHeaders? head_headers,
+//       pending_remote<AuthChallengeResponder> auth_challenge_responder);
 
   // Called when the Clear-Site-Data header has been received. The callback
   // should be run after the data is deleted.

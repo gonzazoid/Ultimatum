@@ -442,20 +442,20 @@ class LoginHandlerDelegate {
       : auth_challenge_responder_(std::move(auth_challenge_responder)),
         auth_info_(auth_info),
         request_id_(process_id, request_id),
-        is_request_for_primary_main_frame_(is_request_for_primary_main_frame),
-        creating_login_delegate_(false),
+//         is_request_for_primary_main_frame_(is_request_for_primary_main_frame),
+//         creating_login_delegate_(false),
         url_(url),
         response_headers_(std::move(response_headers)),
-        first_auth_attempt_(first_auth_attempt),
+//         first_auth_attempt_(first_auth_attempt),
         web_contents_getter_(web_contents_getter) {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     auth_challenge_responder_.set_disconnect_handler(base::BindOnce(
         &LoginHandlerDelegate::OnRequestCancelled, base::Unretained(this)));
 
-    DevToolsURLLoaderInterceptor::HandleAuthRequest(
-        request_id_, auth_info_,
-        base::BindOnce(&LoginHandlerDelegate::ContinueAfterInterceptor,
-                       weak_factory_.GetWeakPtr()));
+//     DevToolsURLLoaderInterceptor::HandleAuthRequest(
+//         request_id_, auth_info_,
+//         base::BindOnce(&LoginHandlerDelegate::ContinueAfterInterceptor,
+//                        weak_factory_.GetWeakPtr()));
   }
 
  private:
@@ -466,83 +466,83 @@ class LoginHandlerDelegate {
     delete this;
   }
 
-  void ContinueAfterInterceptor(
-      bool use_fallback,
-      const absl::optional<net::AuthCredentials>& auth_credentials) {
-    DCHECK_CURRENTLY_ON(BrowserThread::UI);
-    DCHECK(!(use_fallback && auth_credentials.has_value()));
-    if (!use_fallback) {
-      OnAuthCredentials(auth_credentials);
-      return;
-    }
+//   void ContinueAfterInterceptor(
+//       bool use_fallback,
+//       const absl::optional<net::AuthCredentials>& auth_credentials) {
+//     DCHECK_CURRENTLY_ON(BrowserThread::UI);
+//     DCHECK(!(use_fallback && auth_credentials.has_value()));
+//     if (!use_fallback) {
+//       OnAuthCredentials(auth_credentials);
+//       return;
+//     }
 
-    WebContents* web_contents = web_contents_getter_.Run();
-    if (!web_contents) {
-      OnAuthCredentials(absl::nullopt);
-      return;
-    }
+//     WebContents* web_contents = web_contents_getter_.Run();
+//     if (!web_contents) {
+//       OnAuthCredentials(absl::nullopt);
+//       return;
+//     }
 
     // WeakPtr is not strictly necessary here due to OnRequestCancelled.
-    creating_login_delegate_ = true;
-    login_delegate_ = GetContentClient()->browser()->CreateLoginDelegate(
-        auth_info_, web_contents, request_id_,
-        is_request_for_primary_main_frame_, url_, response_headers_,
-        first_auth_attempt_,
-        base::BindOnce(&LoginHandlerDelegate::OnAuthCredentials,
-                       weak_factory_.GetWeakPtr()));
-    creating_login_delegate_ = false;
-    if (!login_delegate_) {
-      OnAuthCredentials(absl::nullopt);
-      return;
-    }
-  }
+//     creating_login_delegate_ = true;
+//     login_delegate_ = GetContentClient()->browser()->CreateLoginDelegate(
+//         auth_info_, web_contents, request_id_,
+//         is_request_for_primary_main_frame_, url_, response_headers_,
+//         first_auth_attempt_,
+//         base::BindOnce(&LoginHandlerDelegate::OnAuthCredentials,
+//                        weak_factory_.GetWeakPtr()));
+//     creating_login_delegate_ = false;
+//     if (!login_delegate_) {
+//       OnAuthCredentials(absl::nullopt);
+//       return;
+//     }
+//   }
 
-  void OnAuthCredentials(
-      const absl::optional<net::AuthCredentials>& auth_credentials) {
-    DCHECK_CURRENTLY_ON(BrowserThread::UI);
+//   void OnAuthCredentials(
+//       const absl::optional<net::AuthCredentials>& auth_credentials) {
+//     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     // CreateLoginDelegate must not call the callback reentrantly. For
     // robustness, detect this mistake.
-    CHECK(!creating_login_delegate_);
-    auth_challenge_responder_->OnAuthCredentials(auth_credentials);
-    delete this;
-  }
+//     CHECK(!creating_login_delegate_);
+//     auth_challenge_responder_->OnAuthCredentials(auth_credentials);
+//     delete this;
+//   }
 
   mojo::Remote<network::mojom::AuthChallengeResponder>
       auth_challenge_responder_;
   net::AuthChallengeInfo auth_info_;
   const content::GlobalRequestID request_id_;
-  bool is_request_for_primary_main_frame_;
-  bool creating_login_delegate_;
+//   bool is_request_for_primary_main_frame_;
+//   bool creating_login_delegate_;
   GURL url_;
   const scoped_refptr<net::HttpResponseHeaders> response_headers_;
-  bool first_auth_attempt_;
+//   bool first_auth_attempt_;
   WebContents::Getter web_contents_getter_;
   std::unique_ptr<LoginDelegate> login_delegate_;
   base::WeakPtrFactory<LoginHandlerDelegate> weak_factory_{this};
 };
 
-void OnAuthRequiredContinuation(
-    int32_t process_id,
-    uint32_t request_id,
-    const GURL& url,
-    bool is_request_for_primary_main_frame,
-    bool first_auth_attempt,
-    const net::AuthChallengeInfo& auth_info,
-    const scoped_refptr<net::HttpResponseHeaders>& head_headers,
-    mojo::PendingRemote<network::mojom::AuthChallengeResponder>
-        auth_challenge_responder,
-    base::RepeatingCallback<WebContents*(void)> web_contents_getter) {
-  if (!web_contents_getter || !web_contents_getter.Run()) {
-    mojo::Remote<network::mojom::AuthChallengeResponder>
-        auth_challenge_responder_remote(std::move(auth_challenge_responder));
-    auth_challenge_responder_remote->OnAuthCredentials(absl::nullopt);
-    return;
-  }
-  new LoginHandlerDelegate(
-      std::move(auth_challenge_responder), std::move(web_contents_getter),
-      auth_info, is_request_for_primary_main_frame, process_id, request_id, url,
-      head_headers, first_auth_attempt);  // deletes self
-}
+// void OnAuthRequiredContinuation(
+//     int32_t process_id,
+//     uint32_t request_id,
+//     const GURL& url,
+//     bool is_request_for_primary_main_frame,
+//     bool first_auth_attempt,
+//     const net::AuthChallengeInfo& auth_info,
+//     const scoped_refptr<net::HttpResponseHeaders>& head_headers,
+//     mojo::PendingRemote<network::mojom::AuthChallengeResponder>
+//         auth_challenge_responder,
+//     base::RepeatingCallback<WebContents*(void)> web_contents_getter) {
+//   if (!web_contents_getter || !web_contents_getter.Run()) {
+//     mojo::Remote<network::mojom::AuthChallengeResponder>
+//         auth_challenge_responder_remote(std::move(auth_challenge_responder));
+//     auth_challenge_responder_remote->OnAuthCredentials(absl::nullopt);
+//     return;
+//   }
+//   new LoginHandlerDelegate(
+//       std::move(auth_challenge_responder), std::move(web_contents_getter),
+//       auth_info, is_request_for_primary_main_frame, process_id, request_id, url,
+//       head_headers, first_auth_attempt);  // deletes self
+// }
 
 // Returns true if the request is the primary main frame navigation.
 bool IsPrimaryMainFrameRequest(int process_id, int routing_id) {
@@ -1711,84 +1711,84 @@ void StoragePartitionImpl::BindSessionStorageArea(
       dom_storage_receivers_.GetBadMessageCallback());
 }
 
-void StoragePartitionImpl::OnAuthRequired(
-    const absl::optional<base::UnguessableToken>& window_id,
-    uint32_t request_id,
-    const GURL& url,
-    bool first_auth_attempt,
-    const net::AuthChallengeInfo& auth_info,
-    const scoped_refptr<net::HttpResponseHeaders>& head_headers,
-    mojo::PendingRemote<network::mojom::AuthChallengeResponder>
-        auth_challenge_responder) {
-  int process_id = url_loader_network_observers_.current_context().process_id;
-  int routing_id = url_loader_network_observers_.current_context().routing_id;
-  absl::optional<bool> is_primary_main_frame;
+// void StoragePartitionImpl::OnAuthRequired(
+//     const absl::optional<base::UnguessableToken>& window_id,
+//     uint32_t request_id,
+//     const GURL& url,
+//     bool first_auth_attempt,
+//     const net::AuthChallengeInfo& auth_info,
+//     const scoped_refptr<net::HttpResponseHeaders>& head_headers,
+//     mojo::PendingRemote<network::mojom::AuthChallengeResponder>
+//         auth_challenge_responder) {
+//   int process_id = url_loader_network_observers_.current_context().process_id;
+//   int routing_id = url_loader_network_observers_.current_context().routing_id;
+//   absl::optional<bool> is_primary_main_frame;
 
-  if (window_id) {
+//   if (window_id) {
     // Use `window_id` if it is provided, because this request was sent by a
     // service worker; service workers use `window_id` to identify the frame
     // that sends the request since a worker is shared among multiple frames.
     // TODO(https://crbug.com/1240483): Add a DCHECK here that process_id and
     // routing_id are invalid. It can't be added yet because somehow routing_id
     // is valid here.
-    if (service_worker_context_->context()) {
-      auto* container_host =
-          service_worker_context_->context()->GetContainerHostByWindowId(
-              *window_id);
-      if (container_host) {
-        if (container_host->GetRenderFrameHostId()) {
+//     if (service_worker_context_->context()) {
+//       auto* container_host =
+//           service_worker_context_->context()->GetContainerHostByWindowId(
+//               *window_id);
+//       if (container_host) {
+//         if (container_host->GetRenderFrameHostId()) {
           // Use ServiceWorkerContainerHost's GlobalRenderFrameHostId when
           // the navigation commit has already started.
-          GlobalRenderFrameHostId render_frame_host_id =
-              container_host->GetRenderFrameHostId();
-          process_id = render_frame_host_id.child_id;
-          routing_id = render_frame_host_id.frame_routing_id;
+//           GlobalRenderFrameHostId render_frame_host_id =
+//               container_host->GetRenderFrameHostId();
+//           process_id = render_frame_host_id.child_id;
+//           routing_id = render_frame_host_id.frame_routing_id;
 
           // TODO(crbug.com/963748, crbug.com/1251596): `is_primary_main_frame`
           // should be false because only the request for a sub resource
           // intercepted by a service worker reaches here.
-          auto* render_frame_host_impl =
-              RenderFrameHostImpl::FromID(render_frame_host_id);
-          if (render_frame_host_impl) {
-            is_primary_main_frame =
-                render_frame_host_impl->IsInPrimaryMainFrame();
-          }
-        } else {
+//           auto* render_frame_host_impl =
+//               RenderFrameHostImpl::FromID(render_frame_host_id);
+//           if (render_frame_host_impl) {
+//             is_primary_main_frame =
+//                 render_frame_host_impl->IsInPrimaryMainFrame();
+//           }
+//         } else {
           // Overwrite the process_id and routing_id; set `process_id` to
           // kBrowserProcessId which indicates that `routing_id` is actually a
           // FrameTreeNode ID.
           // TODO(https://crbug.com/1239554): Optimize locating logic.
-          process_id = network::mojom::kBrowserProcessId;
-          routing_id = container_host->GetFrameTreeNodeIdForOngoingNavigation(
-              base::PassKey<StoragePartitionImpl>());
-        }
-      }
-    }
-  }
+//           process_id = network::mojom::kBrowserProcessId;
+//           routing_id = container_host->GetFrameTreeNodeIdForOngoingNavigation(
+//               base::PassKey<StoragePartitionImpl>());
+//         }
+//       }
+//     }
+//   }
 
   // If the request is for a prerendering page, prerendering should be cancelled
   // because the embedder may show UI for auth requests, and it's unsuitable for
   // a hidden page.
-  if (process_id == network::mojom::kBrowserProcessId) {
-    if (CancelIfPrerendering(routing_id,
-                             PrerenderHost::FinalStatus::kLoginAuthRequested)) {
-      return;
-    }
-  } else if (CancelIfPrerendering(
-                 GlobalRenderFrameHostId(process_id, routing_id),
-                 PrerenderHost::FinalStatus::kLoginAuthRequested)) {
-    return;
-  }
+//   if (process_id == network::mojom::kBrowserProcessId) {
+//     if (CancelIfPrerendering(routing_id,
+//                              PrerenderHost::FinalStatus::kLoginAuthRequested)) {
+//       return;
+//     }
+//   } else if (CancelIfPrerendering(
+//                  GlobalRenderFrameHostId(process_id, routing_id),
+//                  PrerenderHost::FinalStatus::kLoginAuthRequested)) {
+//     return;
+//   }
 
-  if (!is_primary_main_frame.has_value())
-    is_primary_main_frame = IsPrimaryMainFrameRequest(process_id, routing_id);
-  auto web_contents_getter =
-      base::BindRepeating(GetWebContents, process_id, routing_id);
-  OnAuthRequiredContinuation(
-      process_id, request_id, url, *is_primary_main_frame, first_auth_attempt,
-      auth_info, head_headers, std::move(auth_challenge_responder),
-      web_contents_getter);
-}
+//   if (!is_primary_main_frame.has_value())
+//     is_primary_main_frame = IsPrimaryMainFrameRequest(process_id, routing_id);
+//   auto web_contents_getter =
+//       base::BindRepeating(GetWebContents, process_id, routing_id);
+//   OnAuthRequiredContinuation(
+//       process_id, request_id, url, *is_primary_main_frame, first_auth_attempt,
+//       auth_info, head_headers, std::move(auth_challenge_responder),
+//       web_contents_getter);
+// }
 
 void StoragePartitionImpl::OnCertificateRequested(
     const absl::optional<base::UnguessableToken>& window_id,

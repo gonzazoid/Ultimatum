@@ -1252,27 +1252,27 @@ bool URLRequestHttpJob::IsSafeRedirect(const GURL& location) {
       request_->context()->job_factory()->IsSafeRedirectTarget(location);
 }
 
-bool URLRequestHttpJob::NeedsAuth() {
-  int code = GetResponseCode();
-  if (code == -1)
-    return false;
+// bool URLRequestHttpJob::NeedsAuth() {
+//   int code = GetResponseCode();
+//   if (code == -1)
+//     return false;
 
   // Check if we need either Proxy or WWW Authentication. This could happen
   // because we either provided no auth info, or provided incorrect info.
-  switch (code) {
-    case 407:
-      if (proxy_auth_state_ == AUTH_STATE_CANCELED)
-        return false;
-      proxy_auth_state_ = AUTH_STATE_NEED_AUTH;
-      return true;
-    case 401:
-      if (server_auth_state_ == AUTH_STATE_CANCELED)
-        return false;
-      server_auth_state_ = AUTH_STATE_NEED_AUTH;
-      return true;
-  }
-  return false;
-}
+//   switch (code) {
+//     case 407:
+//       if (proxy_auth_state_ == AUTH_STATE_CANCELED)
+//         return false;
+//       proxy_auth_state_ = AUTH_STATE_NEED_AUTH;
+//       return true;
+//     case 401:
+//       if (server_auth_state_ == AUTH_STATE_CANCELED)
+//         return false;
+//       server_auth_state_ = AUTH_STATE_NEED_AUTH;
+//       return true;
+//   }
+//   return false;
+// }
 
 std::unique_ptr<AuthChallengeInfo> URLRequestHttpJob::GetAuthChallengeInfo() {
   DCHECK(transaction_.get());
@@ -1314,7 +1314,7 @@ void URLRequestHttpJob::CancelAuth() {
   }
 
   // The above lines should ensure this is the case.
-  DCHECK(!NeedsAuth());
+//   DCHECK(!NeedsAuth());
 
   // Let the consumer read the HTTP error page. NeedsAuth() should now return
   // false, so NotifyHeadersComplete() should not request auth from the client

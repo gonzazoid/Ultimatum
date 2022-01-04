@@ -216,11 +216,11 @@ class NET_EXPORT WebSocketChannel {
 
   // Authentication request from WebSocketStream::CreateAndConnectStream().
   // Forwards the request to the event interface.
-  int OnAuthRequired(const AuthChallengeInfo& auth_info,
-                     scoped_refptr<HttpResponseHeaders> response_headers,
-                     const IPEndPoint& remote_endpoint,
-                     base::OnceCallback<void(const AuthCredentials*)> callback,
-                     absl::optional<AuthCredentials>* credentials);
+//   int OnAuthRequired(const AuthChallengeInfo& auth_info,
+//                      scoped_refptr<HttpResponseHeaders> response_headers,
+//                      const IPEndPoint& remote_endpoint,
+//                      base::OnceCallback<void(const AuthCredentials*)> callback,
+//                      absl::optional<AuthCredentials>* credentials);
 
   // Sets |state_| to |new_state| and updates UMA if necessary.
   void SetState(State new_state);

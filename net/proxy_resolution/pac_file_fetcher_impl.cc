@@ -250,14 +250,14 @@ void PacFileFetcherImpl::OnReceivedRedirect(URLRequest* request,
   }
 }
 
-void PacFileFetcherImpl::OnAuthRequired(URLRequest* request,
-                                        const AuthChallengeInfo& auth_info) {
-  DCHECK_EQ(request, cur_request_.get());
+// void PacFileFetcherImpl::OnAuthRequired(URLRequest* request,
+//                                         const AuthChallengeInfo& auth_info) {
+//   DCHECK_EQ(request, cur_request_.get());
   // TODO(eroman): http://crbug.com/77366
-  LOG(WARNING) << "Auth required to fetch PAC script, aborting.";
-  result_code_ = ERR_NOT_IMPLEMENTED;
-  request->CancelAuth();
-}
+//   LOG(WARNING) << "Auth required to fetch PAC script, aborting.";
+//   result_code_ = ERR_NOT_IMPLEMENTED;
+//   request->CancelAuth();
+// }
 
 void PacFileFetcherImpl::OnSSLCertificateError(URLRequest* request,
                                                int net_error,

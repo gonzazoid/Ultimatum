@@ -163,8 +163,8 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
     // or request->CancelAuth() to cancel the login and display the error page.
     // When it does so, the request will be reissued, restarting the sequence
     // of On* callbacks.
-    virtual void OnAuthRequired(URLRequest* request,
-                                const AuthChallengeInfo& auth_info);
+//     virtual void OnAuthRequired(URLRequest* request,
+//                                 const AuthChallengeInfo& auth_info);
 
     // Called when we receive an SSL CertificateRequest message for client
     // authentication.  The delegate should call
@@ -653,8 +653,8 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // OnAuthRequired() callback (and only then).
   // SetAuth will reissue the request with the given credentials.
   // CancelAuth will give up and display the error page.
-  void SetAuth(const AuthCredentials& credentials);
-  void CancelAuth();
+//   void SetAuth(const AuthCredentials& credentials);
+//   void CancelAuth();
 
   // This method can be called after the user selects a client certificate to
   // instruct this URLRequest to continue with the request with the
@@ -884,7 +884,7 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // meaning of these functions.
   int NotifyConnected(const TransportInfo& info,
                       CompletionOnceCallback callback);
-  void NotifyAuthRequired(std::unique_ptr<AuthChallengeInfo> auth_info);
+//   void NotifyAuthRequired(std::unique_ptr<AuthChallengeInfo> auth_info);
   void NotifyCertificateRequested(SSLCertRequestInfo* cert_request_info);
   void NotifySSLCertificateError(int net_error,
                                  const SSLInfo& ssl_info,

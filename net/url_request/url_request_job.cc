@@ -198,9 +198,9 @@ bool URLRequestJob::IsSafeRedirect(const GURL& location) {
   return true;
 }
 
-bool URLRequestJob::NeedsAuth() {
-  return false;
-}
+// bool URLRequestJob::NeedsAuth() {
+//   return false;
+// }
 
 std::unique_ptr<AuthChallengeInfo> URLRequestJob::GetAuthChallengeInfo() {
   // This will only be called if NeedsAuth() returns true, in which
@@ -484,23 +484,23 @@ void URLRequestJob::NotifyHeadersComplete() {
     return;
   }
 
-  if (NeedsAuth()) {
-    std::unique_ptr<AuthChallengeInfo> auth_info = GetAuthChallengeInfo();
+//   if (NeedsAuth()) {
+//     std::unique_ptr<AuthChallengeInfo> auth_info = GetAuthChallengeInfo();
     // Need to check for a NULL auth_info because the server may have failed
     // to send a challenge with the 401 response.
-    if (auth_info) {
-      request_->NotifyAuthRequired(std::move(auth_info));
+//     if (auth_info) {
+//       request_->NotifyAuthRequired(std::move(auth_info));
       // Wait for SetAuth or CancelAuth to be called.
-      return;
-    }
-  }
+//       return;
+//     }
+//   }
 
   NotifyFinalHeadersReceived();
   // |this| may be destroyed at this point.
 }
 
 void URLRequestJob::NotifyFinalHeadersReceived() {
-  DCHECK(!NeedsAuth() || !GetAuthChallengeInfo());
+//   DCHECK(!NeedsAuth() || !GetAuthChallengeInfo());
 
   if (has_handled_response_)
     return;

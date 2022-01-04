@@ -174,7 +174,7 @@ class NET_EXPORT URLRequestJob {
   // Called to determine if this response is asking for authentication.  Only
   // makes sense for some types of requests.  The caller is responsible for
   // obtaining the credentials passing them to SetAuth.
-  virtual bool NeedsAuth();
+//   virtual bool NeedsAuth();
 
   // Returns a copy of the authentication challenge that came with the server's
   // response.
