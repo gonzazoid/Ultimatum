@@ -306,27 +306,27 @@ bool NeedsHTTPOrigin(net::HttpRequestHeaders* headers,
 // Computes the value that should be set for the User-Agent header, based on the
 // values of relevant headers like Sec-CH-UA-Reduced.  If `user_agent_override`
 // is non-empty, `user_agent_override` is returned as the header value.
-std::string ComputeUserAgentValue(const net::HttpRequestHeaders& headers,
-                                  const std::string& user_agent_override) {
-  if (!user_agent_override.empty()) {
-    base::UmaHistogramEnumeration("Navigation.UserAgentStringType",
-                                  UserAgentStringType::kOverriden);
-    return user_agent_override;
-  }
+// std::string ComputeUserAgentValue(const net::HttpRequestHeaders& headers,
+//                                   const std::string& user_agent_override) {
+//   if (!user_agent_override.empty()) {
+//     base::UmaHistogramEnumeration("Navigation.UserAgentStringType",
+//                                   UserAgentStringType::kOverriden);
+//     return user_agent_override;
+//   }
 
   // If Sec-CH-UA-Reduced is set on the headers, it means that the token for the
   // UserAgentReduction Origin Trial has been validated and we should send a
   // reduced UA string on the request.
-  std::string header = network::GetClientHintToNameMap().at(
-      network::mojom::WebClientHintsType::kUAReduced);
-  std::string value;
-  const bool reduced = headers.GetHeader(header, &value) && value == "?1";
-  base::UmaHistogramEnumeration("Navigation.UserAgentStringType",
-                                reduced ? UserAgentStringType::kReducedVersion
-                                        : UserAgentStringType::kFullVersion);
-  return reduced ? GetContentClient()->browser()->GetReducedUserAgent()
-                 : GetContentClient()->browser()->GetUserAgent();
-}
+//   std::string header = network::GetClientHintToNameMap().at(
+//       network::mojom::WebClientHintsType::kUAReduced);
+//   std::string value;
+//   const bool reduced = headers.GetHeader(header, &value) && value == "?1";
+//   base::UmaHistogramEnumeration("Navigation.UserAgentStringType",
+//                                 reduced ? UserAgentStringType::kReducedVersion
+//                                         : UserAgentStringType::kFullVersion);
+//   return reduced ? GetContentClient()->browser()->GetReducedUserAgent()
+//                  : GetContentClient()->browser()->GetUserAgent();
+// }
 
 // TODO(clamy): This should match what's happening in
 // blink::FrameFetchContext::addAdditionalRequestHeaders.
@@ -358,9 +358,9 @@ void AddAdditionalRequestHeaders(
   // https://w3c.github.io/webappsec/specs/upgrade/#feature-detect
   headers->SetHeaderIfMissing("Upgrade-Insecure-Requests", "1");
 
-  headers->SetHeaderIfMissing(
-      net::HttpRequestHeaders::kUserAgent,
-      ComputeUserAgentValue(*headers, user_agent_override));
+//   headers->SetHeaderIfMissing(
+//       net::HttpRequestHeaders::kUserAgent,
+//       ComputeUserAgentValue(*headers, user_agent_override));
 
   if (!render_prefs.enable_referrers) {
     *referrer =
@@ -3925,9 +3925,9 @@ void NavigationRequest::OnRedirectChecksComplete(
     // the Critical-CH header has Sec-CH-UA-Reduced, then we should send the
     // reduced User-Agent string.
     if (!devtools_user_agent_override_) {
-      modified_headers.SetHeader(
-          net::HttpRequestHeaders::kUserAgent,
-          ComputeUserAgentValue(modified_headers, GetUserAgentOverride()));
+//       modified_headers.SetHeader(
+//           net::HttpRequestHeaders::kUserAgent,
+//           ComputeUserAgentValue(modified_headers, GetUserAgentOverride()));
     }
   }
 
@@ -6444,8 +6444,8 @@ void NavigationRequest::SetIsOverridingUserAgent(bool override_ua) {
         common_params_->url, client_hints_delegate, is_overriding_user_agent(),
         frame_tree_node_, &headers);
   }
-  headers.SetHeader(net::HttpRequestHeaders::kUserAgent,
-                    ComputeUserAgentValue(headers, GetUserAgentOverride()));
+//   headers.SetHeader(net::HttpRequestHeaders::kUserAgent,
+//                     ComputeUserAgentValue(headers, GetUserAgentOverride()));
   begin_params_->headers = headers.ToString();
   // |request_headers_| comes from |begin_params_|. Clear |request_headers_| now
   // so that if |request_headers_| are needed, they will be updated.

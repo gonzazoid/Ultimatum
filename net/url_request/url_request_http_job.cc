@@ -316,20 +316,20 @@ void URLRequestHttpJob::Start() {
   // Strip Referer from request_info_.extra_headers to prevent, e.g., plugins
   // from overriding headers that are controlled using other means. Otherwise a
   // plugin could set a referrer although sending the referrer is inhibited.
-  request_info_.extra_headers.RemoveHeader(HttpRequestHeaders::kReferer);
+//   request_info_.extra_headers.RemoveHeader(HttpRequestHeaders::kReferer);
 
   // Our consumer should have made sure that this is a safe referrer (e.g. via
   // URLRequestJob::ComputeReferrerForPolicy).
-  if (referrer.is_valid()) {
-    std::string referer_value = referrer.spec();
-    request_info_.extra_headers.SetHeader(HttpRequestHeaders::kReferer,
-                                          referer_value);
-  }
+//   if (referrer.is_valid()) {
+//     std::string referer_value = referrer.spec();
+//     request_info_.extra_headers.SetHeader(HttpRequestHeaders::kReferer,
+//                                           referer_value);
+//   }
 
-  request_info_.extra_headers.SetHeaderIfMissing(
-      HttpRequestHeaders::kUserAgent,
-      http_user_agent_settings_ ?
-          http_user_agent_settings_->GetUserAgent() : std::string());
+//   request_info_.extra_headers.SetHeaderIfMissing(
+//       HttpRequestHeaders::kUserAgent,
+//       http_user_agent_settings_ ?
+//           http_user_agent_settings_->GetUserAgent() : std::string());
 
   AddExtraHeaders();
   AddCookieHeaderAndStart();
