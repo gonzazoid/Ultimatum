@@ -2021,8 +2021,8 @@ void URLLoader::SetRawRequestHeadersAndNotify(
     DispatchOnRawRequest(std::move(header_array));
   }
 
-  if (auto* cookie_observer = GetCookieAccessObserver()) {
-    std::vector<mojom::CookieOrLineWithAccessResultPtr> reported_cookies;
+//   if (auto* cookie_observer = GetCookieAccessObserver()) {
+//     std::vector<mojom::CookieOrLineWithAccessResultPtr> reported_cookies;
     // for (const auto& cookie_with_access_result :
     //      url_request_->maybe_sent_cookies()) {
     //   if (ShouldNotifyAboutCookie(
@@ -2033,13 +2033,13 @@ void URLLoader::SetRawRequestHeadersAndNotify(
     //   }
     // }
 
-    if (!reported_cookies.empty()) {
-      cookie_observer->OnCookiesAccessed(mojom::CookieAccessDetails::New(
-          mojom::CookieAccessDetails::Type::kRead, url_request_->url(),
-          url_request_->site_for_cookies(), std::move(reported_cookies),
-          devtools_request_id()));
-    }
-  }
+//     if (!reported_cookies.empty()) {
+//       cookie_observer->OnCookiesAccessed(mojom::CookieAccessDetails::New(
+//           mojom::CookieAccessDetails::Type::kRead, url_request_->url(),
+//           url_request_->site_for_cookies(), std::move(reported_cookies),
+//           devtools_request_id()));
+//     }
+//   }
 }
 
 void URLLoader::DispatchOnRawRequest(

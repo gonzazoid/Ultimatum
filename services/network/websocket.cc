@@ -108,13 +108,13 @@ mojom::WebSocketHandshakeResponsePtr ToMojo(
   std::string headers_text =
       base::StrCat({response->headers->GetStatusLine(), "\r\n"});
   while (response->headers->EnumerateHeaderLines(&iter, &name, &value)) {
-    if (has_raw_headers_access ||
-        !net::HttpResponseHeaders::IsCookieResponseHeader(name)) {
+//     if (has_raw_headers_access ||
+//         !net::HttpResponseHeaders::IsCookieResponseHeader(name)) {
       // We drop cookie-related headers such as "set-cookie" when the
       // renderer doesn't have access.
       response_to_pass->headers.push_back(mojom::HttpHeader::New(name, value));
       base::StrAppend(&headers_text, {name, ": ", value, "\r\n"});
-    }
+//     }
   }
   headers_text.append("\r\n");
   response_to_pass->headers_text = headers_text;

@@ -558,8 +558,8 @@ void WebURLLoader::Context::OnReceivedResponse(
 
   // These headers must be stripped off before entering into the renderer
   // (see also https://crbug.com/1019732).
-  DCHECK(!head->headers || !head->headers->HasHeader("set-cookie"));
-  DCHECK(!head->headers || !head->headers->HasHeader("set-cookie2"));
+//   DCHECK(!head->headers || !head->headers->HasHeader("set-cookie"));
+//   DCHECK(!head->headers || !head->headers->HasHeader("set-cookie2"));
   DCHECK(!head->headers || !head->headers->HasHeader("clear-site-data"));
 
   WebURLResponse response;

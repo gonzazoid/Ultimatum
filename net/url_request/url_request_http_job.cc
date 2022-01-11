@@ -842,34 +842,34 @@ void URLRequestHttpJob::SaveCookiesAndNotifyHeadersComplete(int result) {
 //     NotifyHeadersComplete();
 }
 
-void URLRequestHttpJob::OnSetCookieResult(
-    const CookieOptions& options,
-    absl::optional<CanonicalCookie> cookie,
-    std::string cookie_string,
-    CookieAccessResult access_result) {
-  if (request_->net_log().IsCapturing()) {
-    request_->net_log().AddEvent(NetLogEventType::COOKIE_INCLUSION_STATUS,
-                                 [&](NetLogCaptureMode capture_mode) {
-                                   return CookieInclusionStatusNetLogParams(
-                                       "store",
-                                       cookie ? cookie.value().Name() : "",
-                                       cookie ? cookie.value().Domain() : "",
-                                       cookie ? cookie.value().Path() : "",
-                                       access_result.status, capture_mode);
-                                 });
-  }
+// void URLRequestHttpJob::OnSetCookieResult(
+//     const CookieOptions& options,
+//     absl::optional<CanonicalCookie> cookie,
+//     std::string cookie_string,
+//     CookieAccessResult access_result) {
+//   if (request_->net_log().IsCapturing()) {
+//     request_->net_log().AddEvent(NetLogEventType::COOKIE_INCLUSION_STATUS,
+//                                  [&](NetLogCaptureMode capture_mode) {
+//                                    return CookieInclusionStatusNetLogParams(
+//                                        "store",
+//                                        cookie ? cookie.value().Name() : "",
+//                                        cookie ? cookie.value().Domain() : "",
+//                                        cookie ? cookie.value().Path() : "",
+//                                        access_result.status, capture_mode);
+//                                  });
+//   }
 
-  set_cookie_access_result_list_.emplace_back(
-      std::move(cookie), std::move(cookie_string), access_result);
+//   set_cookie_access_result_list_.emplace_back(
+//       std::move(cookie), std::move(cookie_string), access_result);
 
-  num_cookie_lines_left_--;
+//   num_cookie_lines_left_--;
 
   // If all the cookie lines have been handled, |set_cookie_access_result_list_|
   // now reflects the result of all Set-Cookie lines, and the request can be
   // continued.
-  if (num_cookie_lines_left_ == 0)
-    NotifyHeadersComplete();
-}
+//   if (num_cookie_lines_left_ == 0)
+//     NotifyHeadersComplete();
+// }
 
 void URLRequestHttpJob::ProcessStrictTransportSecurityHeader() {
   DCHECK(response_info_);

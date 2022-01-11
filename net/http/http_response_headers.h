@@ -334,7 +334,7 @@ class NET_EXPORT HttpResponseHeaders
 
   // Returns true if |name| is a cookie related header name. This is consistent
   // with |PERSIST_SANS_COOKIES|.
-  static bool IsCookieResponseHeader(base::StringPiece name);
+//   static bool IsCookieResponseHeader(base::StringPiece name);
 
   // Write a representation of this object into tracing proto.
   void WriteIntoTrace(perfetto::TracedValue context) const;

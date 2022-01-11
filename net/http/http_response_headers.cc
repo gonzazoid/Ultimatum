@@ -1387,13 +1387,13 @@ bool HttpResponseHeaders::IsChunkEncoded() const {
          HasHeaderValue("Transfer-Encoding", "chunked");
 }
 
-bool HttpResponseHeaders::IsCookieResponseHeader(base::StringPiece name) {
-  for (const char* cookie_header : kCookieResponseHeaders) {
-    if (base::EqualsCaseInsensitiveASCII(cookie_header, name))
-      return true;
-  }
-  return false;
-}
+// bool HttpResponseHeaders::IsCookieResponseHeader(base::StringPiece name) {
+//   for (const char* cookie_header : kCookieResponseHeaders) {
+//     if (base::EqualsCaseInsensitiveASCII(cookie_header, name))
+//       return true;
+//   }
+//   return false;
+// }
 
 void HttpResponseHeaders::WriteIntoTrace(perfetto::TracedValue context) const {
   perfetto::TracedDictionary dict = std::move(context).WriteDictionary();

@@ -1397,11 +1397,11 @@ void XMLHttpRequest::setRequestHeader(const AtomicString& name,
 
   // "5. Terminate these steps if |name| is a forbidden header name."
   // No script (privileged or not) can set unsafe headers.
-  if (cors::IsForbiddenHeaderName(name)) {
-    LogConsoleError(GetExecutionContext(),
-                    "Refused to set unsafe header \"" + name + "\"");
-    return;
-  }
+//   if (cors::IsForbiddenHeaderName(name)) {
+//     LogConsoleError(GetExecutionContext(),
+//                     "Refused to set unsafe header \"" + name + "\"");
+//     return;
+//   }
 
   // "6. Combine |name|/|value| in author request headers."
   SetRequestHeaderInternal(name, AtomicString(normalized_value));
@@ -1472,11 +1472,11 @@ String XMLHttpRequest::getAllResponseHeaders() const {
 
   StringBuilder string_builder;
 
-  HTTPHeaderSet access_control_expose_header_set =
-      cors::ExtractCorsExposedHeaderNamesList(
-          with_credentials_ ? network::mojom::CredentialsMode::kInclude
-                            : network::mojom::CredentialsMode::kSameOrigin,
-          response_);
+//   HTTPHeaderSet access_control_expose_header_set =
+//       cors::ExtractCorsExposedHeaderNamesList(
+//           with_credentials_ ? network::mojom::CredentialsMode::kInclude
+//                             : network::mojom::CredentialsMode::kSameOrigin,
+//           response_);
 
   // "Let |headers| be the result of sorting |initialHeaders| in ascending
   // order, with |a| being less than |b| if |a|’s name is legacy-uppercased-byte
@@ -1492,17 +1492,17 @@ String XMLHttpRequest::getAllResponseHeaders() const {
     //
     // TODO: Consider removing canLoadLocalResources() call.
     // crbug.com/567527
-    if (FetchUtils::IsForbiddenResponseHeaderName(it->key) &&
-        !GetExecutionContext()->GetSecurityOrigin()->CanLoadLocalResources()) {
-      continue;
-    }
+//     if (FetchUtils::IsForbiddenResponseHeaderName(it->key) &&
+//         !GetExecutionContext()->GetSecurityOrigin()->CanLoadLocalResources()) {
+//       continue;
+//     }
 
-    if (response_.GetType() == network::mojom::FetchResponseType::kCors &&
-        !cors::IsCorsSafelistedResponseHeader(it->key) &&
-        access_control_expose_header_set.find(it->key.Ascii()) ==
-            access_control_expose_header_set.end()) {
-      continue;
-    }
+//     if (response_.GetType() == network::mojom::FetchResponseType::kCors &&
+//         !cors::IsCorsSafelistedResponseHeader(it->key) &&
+//         access_control_expose_header_set.find(it->key.Ascii()) ==
+//             access_control_expose_header_set.end()) {
+//       continue;
+//     }
 
     headers.push_back(std::make_pair(it->key.UpperASCII(), it->value));
   }
@@ -1529,27 +1529,29 @@ const AtomicString& XMLHttpRequest::getResponseHeader(
     return g_null_atom;
 
   // See comment in getAllResponseHeaders above.
-  if (FetchUtils::IsForbiddenResponseHeaderName(name) &&
-      !GetExecutionContext()->GetSecurityOrigin()->CanLoadLocalResources()) {
-    LogConsoleError(GetExecutionContext(),
-                    "Refused to get unsafe header \"" + name + "\"");
-    return g_null_atom;
-  }
+//   if (FetchUtils::IsForbiddenResponseHeaderName(name) &&
+//       !GetExecutionContext()->GetSecurityOrigin()->CanLoadLocalResources()) {
+//     LogConsoleError(GetExecutionContext(),
+//                     "Refused to get unsafe header \"" + name + "\"");
+//     return g_null_atom;
+//   }
 
-  HTTPHeaderSet access_control_expose_header_set =
-      cors::ExtractCorsExposedHeaderNamesList(
-          with_credentials_ ? network::mojom::CredentialsMode::kInclude
-                            : network::mojom::CredentialsMode::kSameOrigin,
-          response_);
+//   HTTPHeaderSet access_control_expose_header_set =
+//       cors::ExtractCorsExposedHeaderNamesList(
+//           with_credentials_ ? network::mojom::CredentialsMode::kInclude
+//                             : network::mojom::CredentialsMode::kSameOrigin,
+//           response_);
 
-  if (response_.GetType() == network::mojom::FetchResponseType::kCors &&
-      !cors::IsCorsSafelistedResponseHeader(name) &&
-      access_control_expose_header_set.find(name.Ascii()) ==
-          access_control_expose_header_set.end()) {
-    LogConsoleError(GetExecutionContext(),
-                    "Refused to get unsafe header \"" + name + "\"");
-    return g_null_atom;
-  }
+//   if (response_.GetType() == network::mojom::FetchResponseType::kCors &&
+//       !cors::IsCorsSafelistedResponseHeader(name) &&
+//       access_control_expose_header_set.find(name.Ascii()) ==
+//           access_control_expose_header_set.end()) {
+//     LogConsoleError(GetExecutionContext(),
+//                     "Refused to get unsafe header \"" + name + "\"");
+//     return g_null_atom;
+//   }
+  LogConsoleError(GetExecutionContext(),
+                     "GET HEADER: \"" + name + "\" " + response_.HttpHeaderField(name));
   return response_.HttpHeaderField(name);
 }
 

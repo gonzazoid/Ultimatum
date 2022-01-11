@@ -67,8 +67,8 @@ FetchResponseData* FetchResponseData::CreateBasicFilteredResponse() const {
       Type::kBasic, response_source_, status_, status_message_);
   response->SetURLList(url_list_);
   for (const auto& header : header_list_->List()) {
-    if (FetchUtils::IsForbiddenResponseHeaderName(header.first))
-      continue;
+//     if (FetchUtils::IsForbiddenResponseHeaderName(header.first))
+//       continue;
     response->header_list_->Append(header.first, header.second);
   }
   response->buffer_ = buffer_;
