@@ -31,6 +31,7 @@ import("//third_party/blink/renderer/core/editing/build.gni")
 import("//third_party/blink/renderer/core/events/build.gni")
 import("//third_party/blink/renderer/core/execution_context/build.gni")
 import("//third_party/blink/renderer/core/exported/build.gni")
+import("//third_party/blink/renderer/core/runnative/build.gni")
 import("//third_party/blink/renderer/core/fetch/build.gni")
 import("//third_party/blink/renderer/core/fileapi/build.gni")
 import("//third_party/blink/renderer/core/fragment_directive/build.gni")
@@ -226,6 +227,7 @@ component("core") {
   sources += rebase_path(blink_core_sources_permissions_policy,
                          "",
                          "permissions_policy")
+  sources += rebase_path(blink_core_sources_runnative, "", "runnative")
   sources += rebase_path(blink_core_sources_fetch, "", "fetch")
   sources += rebase_path(blink_core_sources_fileapi, "", "fileapi")
   sources += rebase_path(blink_core_sources_fragment_directive,

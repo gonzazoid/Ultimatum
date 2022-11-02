@@ -1,0 +1,4 @@
+blink_core_sources_runnative = [
+  "run_native.cc",
+  "run_native.h",
+]
