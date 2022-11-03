@@ -2,14 +2,17 @@
 
 namespace blink {
 
-String RunNative::runNative(ScriptState* script_state,
+ScriptPromise RunNative::runNative(ScriptState* script_state,
                             LocalDOMWindow& window
                            ) {
   UseCounter::Count(window.GetExecutionContext(), WebFeature::kFetch);
   if (!window.GetFrame()) {
-    return "No way!!!";
+    return ScriptPromise();
   }
-  return "Hello, sailor!!!!";
+  Resolver resolver(script_state);
+  ScriptPromise promise = resolver.Promise();
+  resolver.Resolve(V8String(script_state->GetIsolate(), "Hello, sailor!!!!"));
+  return promise;
 }
 
 }  // namespace blink

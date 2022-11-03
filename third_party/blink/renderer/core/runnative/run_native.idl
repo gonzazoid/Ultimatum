@@ -1,5 +1,5 @@
 [
     ImplementedAs=RunNative
 ] partial interface Window {
-    [CallWith=ScriptState, NewObject] DOMString runNative();
+    [CallWith=ScriptState, NewObject] Promise<DOMString> runNative();
 };
