@@ -129,6 +129,12 @@ URLDataSourceImpl* URLDataManagerBackend::GetDataSourceFromURL(
     return i->second.get();
   }
 
+  if (url.scheme() == kHashNetUIScheme) {
+    auto i = data_sources_.find(kHashNetUIScheme);
+    if (i == data_sources_.end())
+      return nullptr;
+    return i->second.get();
+  }
   // The input usually looks like: chrome://source_name/extra_bits?foo
   // so do a lookup using the host of the URL.
   auto i = data_sources_.find(url.host());
@@ -244,6 +250,7 @@ scoped_refptr<net::HttpResponseHeaders> URLDataManagerBackend::GetHeaders(
 bool URLDataManagerBackend::CheckURLIsValid(const GURL& url) {
   std::vector<std::string> additional_schemes;
   DCHECK(url.SchemeIs(kChromeUIScheme) ||
+         url.SchemeIs(kHashNetUIScheme) ||
          url.SchemeIs(kChromeUIUntrustedScheme) ||
          (GetContentClient()->browser()->GetAdditionalWebUISchemes(
               &additional_schemes),
@@ -280,6 +287,7 @@ std::vector<std::string> URLDataManagerBackend::GetWebUISchemes() {
     std::vector<std::string> schemes;
     schemes.emplace_back(kChromeUIScheme);
     schemes.emplace_back(kChromeUIUntrustedScheme);
+    schemes.emplace_back(kHashNetUIScheme);
     GetContentClient()->browser()->GetAdditionalWebUISchemes(&schemes);
     return schemes;
   }());

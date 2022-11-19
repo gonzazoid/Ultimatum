@@ -1,0 +1,12 @@
+# Copyright 2022 gonzazoid
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+static_library("hash_net_ui") {
+  sources = [
+    "hash_net_handler_helper.cc",
+    "hash_net_handler_helper.h",
+    "hash_net_ui_constants.cc",
+    "hash_net_ui_constants.h",
+  ]
+}

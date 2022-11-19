@@ -170,6 +170,9 @@ BrowserControlsNavigationStateHandler::CalculateStateForReasonOther() {
   if (entry->GetURL().SchemeIs(content::kChromeUIScheme))
     return cc::BrowserControlsState::kShown;
 
+  if (entry->GetURL().SchemeIs(content::kHashNetUIScheme))
+    return cc::BrowserControlsState::kShown;
+
   const security_state::SecurityLevel security_level =
       security_state::GetSecurityLevel(
           *security_state::GetVisibleSecurityState(web_contents()),

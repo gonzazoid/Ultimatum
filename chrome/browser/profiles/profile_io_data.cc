@@ -38,6 +38,7 @@ bool ProfileIOData::IsHandledProtocol(const std::string& scheme) {
 #endif
     content::kChromeUIScheme,
     content::kChromeUIUntrustedScheme,
+    content::kHashNetUIScheme,
     url::kDataScheme,
 #if BUILDFLAG(IS_CHROMEOS_ASH)
     content::kExternalFileScheme,

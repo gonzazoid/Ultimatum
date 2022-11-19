@@ -576,6 +576,7 @@ bool ContentBrowserClientImpl::IsHandledURL(const GURL& url) {
     content::kChromeDevToolsScheme,
     content::kChromeUIScheme,
     content::kChromeUIUntrustedScheme,
+    content::kHashNetUIScheme,
     url::kDataScheme,
 #if BUILDFLAG(IS_ANDROID)
     url::kContentScheme,

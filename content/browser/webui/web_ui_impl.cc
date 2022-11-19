@@ -65,7 +65,7 @@ std::u16string WebUI::GetJavascriptCall(
 
 WebUIImpl::WebUIImpl(WebContentsImpl* contents, RenderFrameHostImpl* frame_host)
     : bindings_(BINDINGS_POLICY_WEB_UI),
-      requestable_schemes_({kChromeUIScheme, url::kFileScheme}),
+      requestable_schemes_({kChromeUIScheme, url::kFileScheme, kHashNetUIScheme}),
       web_contents_(contents),
       frame_host_(frame_host),
       web_contents_observer_(new WebUIMainFrameObserver(this, contents)) {

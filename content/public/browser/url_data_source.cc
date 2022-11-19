@@ -139,6 +139,7 @@ bool URLDataSource::ShouldServiceRequest(const GURL& url,
                                          BrowserContext* browser_context,
                                          int render_process_id) {
   return url.SchemeIs(kChromeDevToolsScheme) || url.SchemeIs(kChromeUIScheme) ||
+         url.SchemeIs(kHashNetUIScheme) ||
          url.SchemeIs(kChromeUIUntrustedScheme);
 }
 

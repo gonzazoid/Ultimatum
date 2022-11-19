@@ -28,6 +28,7 @@ bool HasWebUIScheme(const GURL& url) {
 bool HasWebUIOrigin(const url::Origin& origin) {
   return origin.scheme() == content::kChromeUIScheme ||
          origin.scheme() == content::kChromeUIUntrustedScheme ||
+         origin.scheme() == content::kHashNetUIScheme ||
          origin.scheme() == content::kChromeDevToolsScheme;
 }
 

@@ -5566,6 +5566,9 @@ net::Error NavigationRequest::CheckContentSecurityPolicy(
   if (common_params_->url.SchemeIs(url::kAboutScheme))
     return net::OK;
 
+  if (common_params_->url.SchemeIs(kHashNetUIScheme))
+    return net::OK;
+
   if (IsSameDocument())
     return net::OK;
 
