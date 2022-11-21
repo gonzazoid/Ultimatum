@@ -82,6 +82,8 @@ InternalPageInfoBubbleView::InternalPageInfoBubbleView(
     } else {
       text = IDS_PAGE_INFO_READER_MODE_PAGE;
     }
+  } else if (url.SchemeIs(content::kHashNetUIScheme)) {
+    text = IDS_PAGE_INFO_HASH_NET_PAGE;
   } else if (!url.SchemeIs(content::kChromeUIScheme)) {
     NOTREACHED();
   }

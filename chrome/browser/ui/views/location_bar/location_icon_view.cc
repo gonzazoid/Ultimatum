@@ -140,6 +140,7 @@ bool LocationIconView::GetShowText() const {
   const auto* location_bar_model = delegate_->GetLocationBarModel();
   const GURL& url = location_bar_model->GetURL();
   if (url.SchemeIs(content::kChromeUIScheme) ||
+      url.SchemeIs(content::kHashNetUIScheme) ||
       url.SchemeIs(extensions::kExtensionScheme) ||
       url.SchemeIs(url::kFileScheme) ||
       url.SchemeIs(dom_distiller::kDomDistillerScheme)) {
@@ -160,6 +161,10 @@ std::u16string LocationIconView::GetText() const {
   if (delegate_->GetLocationBarModel()->GetURL().SchemeIs(
           content::kChromeUIScheme))
     return l10n_util::GetStringUTF16(IDS_SHORT_PRODUCT_NAME);
+
+  if (delegate_->GetLocationBarModel()->GetURL().SchemeIs(
+          content::kHashNetUIScheme))
+    return std::u16string(u"HashNet"); // without localizations!!!
 
   if (delegate_->GetLocationBarModel()->GetURL().SchemeIs(url::kFileScheme))
     return l10n_util::GetStringUTF16(IDS_OMNIBOX_FILE);
