@@ -337,6 +337,8 @@ static_library("ui") {
     "webui/hash_net/hash_net_handler.h",
     "webui/hash_net/hash_net_ui.cc",
     "webui/hash_net/hash_net_ui.h",
+    "webui/hash_net/hash_net_background_fetcher.cc",
+    "webui/hash_net/hash_net_background_fetcher.h",
     "webui/webui_load_timer.cc",
     "webui/webui_load_timer.h",
     "webui/webui_util.cc",

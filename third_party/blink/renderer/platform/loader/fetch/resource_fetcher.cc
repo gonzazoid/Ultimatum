@@ -27,6 +27,7 @@
 
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 
+#include <iostream>
 #include <algorithm>
 #include <limits>
 #include <utility>
@@ -2105,7 +2106,7 @@ bool ResourceFetcher::StartLoad(
 
       inflight_keepalive_bytes_ += size;
     }
-
+    std::cout << "MAKE LOADER FOR " << resource->GetResourceRequest().Url().GetString() << "\n";
     loader = MakeGarbageCollected<ResourceLoader>(
         this, scheduler_, resource, std::move(request_body), size);
     // Preload requests should not block the load event. IsLinkPreload()

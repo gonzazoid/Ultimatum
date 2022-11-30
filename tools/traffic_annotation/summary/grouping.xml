@@ -506,6 +506,7 @@ after discussions on the right group.
       <annotation id="drive_service"/>
       <annotation id="ntp_snippets_fetch"/>
       <annotation id="nux_ntp_background_preview"/>
+      <annotation id="hash_net_request"/>
       <annotation id="photos_service"/>
       <annotation id="popular_sites_fetch"/>
       <annotation id="remote_suggestions_provider"/>

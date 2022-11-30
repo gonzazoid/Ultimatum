@@ -9,4 +9,5 @@ namespace hash_net_ui {
 // Resource paths.
 const char kHashNetJS[] = "hash.js";
 
+const char kHashNetRequest[] = "kHashNetRequest";
 }  // namespace hash_net_ui
