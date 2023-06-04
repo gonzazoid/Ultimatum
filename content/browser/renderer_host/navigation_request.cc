@@ -5174,40 +5174,6 @@ void NavigationRequest::CommitNavigation() {
         std::move(subresource_loader_params_->prefetched_signed_exchanges);
   }
 
-  if (common_params->url.SchemeIs(url::kHashNetScheme)) {
-    std::cout << "We are about to commit hash net request!!!\n";
-
-    uint32_t data_pipe_capacity_bytes = 84;
-
-    mojo::ScopedDataPipeProducerHandle producer_handle;
-    mojo::ScopedDataPipeConsumerHandle consumer_handle;
-
-    // auto reader_ = std::make_unique<media::MojoDataPipeReader>(std::move(consumer_handle));
-    CHECK_EQ(mojo::CreateDataPipe(data_pipe_capacity_bytes, producer_handle, consumer_handle),
-             MOJO_RESULT_OK);
-
-    auto writer_ = media::MojoDataPipeWriter(std::move(producer_handle));
-    response_body_ = std::move(consumer_handle);
-
-    // base::MockCallback<MojoDataPipeWriter::DoneCB> mock_write_cb;
-    base::OnceCallback<void(bool)> cb = base::BindOnce([](bool f) {
-      std::cout << "WROTE!!! " << f << "\n";
-    });
-
-    std::string bootstrap = "<div>Hello World??? <a href=\"hash://sha/5678-098-\">first sha link ever!!!</a></div>";
-    std::vector<uint8_t> myVector(bootstrap.begin(), bootstrap.end());
-    uint8_t * buffer = &myVector[0];
-    uint32_t buffer_size = myVector.size();
-    writer_.Write(buffer, buffer_size, std::move(cb));
-
-    std::string contentType = "";
-    response_head_->headers->GetNormalizedHeader("content-type", &contentType);
-    response_head_->headers->SetHeader("content-type", "text/html; charset=utf-8");
-    response_head->headers->SetHeader("content-type", "text/html; charset=utf-8");
-    response_head_->headers->GetNormalizedHeader("content-type", &contentType);
-    response_head->mime_type = "text/html";
-  }
-
   render_frame_host_->CommitNavigation(
       this, std::move(common_params), std::move(commit_params),
       std::move(response_head), std::move(response_body_),

@@ -950,13 +950,6 @@ void URLLoader::ScheduleStart() {
         base::BindOnce(&URLLoader::ResumeStart, base::Unretained(this)));
     resource_scheduler_request_handle_->WillStartRequest(&defer);
   }
-  if (url_request_->url().SchemeIs("hash")) {
-    std::cout << "IT'S HashNet request!!! " << url_request_->url().spec() << "\n";
-    const std::vector<GURL> new_chain = {url_request_->url(), GURL("http://localhost:3000/")};
-    url_request_->SetURLChain(std::move(new_chain));
-    // url_request_->url_chain().push_back(GURL("http://localhost:3000/"));
-    std::cout << "IT'S HashNet request!!! " << url_request_->url().spec() << "\n";
-  }
   if (defer)
     url_request_->LogBlockedBy("ResourceScheduler");
   else

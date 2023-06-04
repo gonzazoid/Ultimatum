@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "base/auto_reset.h"
 #include "base/bind.h"
@@ -2658,6 +2659,17 @@ void RenderFrameImpl::CommitNavigation(
 
   FillNavigationParamsRequest(*common_params, *commit_params,
                               navigation_params.get());
+
+  if (common_params->url.SchemeIs(url::kHashNetScheme)) {
+    std::cout << "STATIC RESPONSE!!!\n";
+    std::string bootstrap = "<div>Hello World??? <a href=\"hash://sha/5678-098-\">first sha link ever!!!</a></div>";
+    WebNavigationParams::FillStaticResponse(navigation_params.get(),
+                                            WebString::FromUTF8("text/html"),
+                                            WebString::FromUTF8("UTF-8"), bootstrap);
+    std::move(commit_with_params).Run(std::move(navigation_params));
+    return;
+  }
+
   if (!url_loader_client_endpoints &&
       common_params->url.SchemeIs(url::kDataScheme)) {
     // Normally, data urls will have |url_loader_client_endpoints| set.
