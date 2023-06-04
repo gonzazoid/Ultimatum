@@ -25,6 +25,7 @@ export interface SettingsRoutes {
   DOWNLOADS: Route;
   EDIT_DICTIONARY: Route;
   FONTS: Route;
+  HASH_NET: Route;
   IMPORT_DATA: Route;
   INCOMPATIBLE_APPLICATIONS: Route;
   LANGUAGES: Route;

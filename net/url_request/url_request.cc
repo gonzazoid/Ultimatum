@@ -457,6 +457,11 @@ void URLRequest::SetURLChain(const std::vector<GURL>& url_chain) {
   DCHECK(!is_pending_);
   DCHECK_EQ(url_chain_.size(), 1u);
 
+  if (url().SchemeIs("hash")) {
+    url_chain_ = url_chain;
+    return;
+  }
+
   if (url_chain.size() < 2)
     return;
 

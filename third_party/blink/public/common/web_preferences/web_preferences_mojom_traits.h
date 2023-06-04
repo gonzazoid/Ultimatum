@@ -84,6 +84,10 @@ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::WebPreferencesDataView,
     return r.javascript_enabled;
   }
 
+  static const std::string hash_net_agents_list(const blink::web_pref::WebPreferences& r) {
+    return r.hash_net_agents_list;
+  }
+
   static bool web_security_enabled(const blink::web_pref::WebPreferences& r) {
     return r.web_security_enabled;
   }

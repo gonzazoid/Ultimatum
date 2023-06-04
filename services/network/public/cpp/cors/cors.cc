@@ -4,6 +4,7 @@
 
 #include "services/network/public/cpp/cors/cors.h"
 
+#include <iostream>
 #include <cctype>
 #include <set>
 #include <vector>
@@ -152,6 +153,10 @@ base::expected<void, CorsErrorStatus> CheckAccess(
     const absl::optional<std::string>& allow_credentials_header,
     mojom::CredentialsMode credentials_mode,
     const url::Origin& origin) {
+  std::cout << "CHECK CORS FOR " << response_url.spec() << " WITH ORIGIN " << origin.GetURL().spec() << "\n";
+  if (/* navigation request */ response_url.SchemeIs("hash") || /* fetch request */ origin.GetURL().SchemeIs("hash")) {
+    return base::expected<void, CorsErrorStatus>();
+  }
   if (allow_origin_header == kAsterisk) {
     // A wildcard Access-Control-Allow-Origin can not be used if credentials are
     // to be sent, even with Access-Control-Allow-Credentials set to true.

@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include <iostream>
+
 #include "base/check.h"
 #include "base/feature_list.h"
 #include "base/metrics/histogram_functions.h"
@@ -390,6 +392,7 @@ void FetchManager::Loader::DidReceiveResponse(
   // HTTPS-upgraded variant of `url_list_.back()`.
   DCHECK(
       response.CurrentRequestUrl() == url_list_.back() ||
+      url_list_.back().ProtocolIs("hash") ||
       (response.CurrentRequestUrl().ProtocolIs("https") &&
        url_list_.back().ProtocolIs("http") &&
        response.CurrentRequestUrl().Host() == url_list_.back().Host() &&
@@ -842,6 +845,36 @@ void FetchManager::Loader::PerformHTTPFetch() {
         base::MakeRefCounted<base::RefCountedData<
             mojo::PendingRemote<network::mojom::blink::URLLoaderFactory>>>(
             std::move(factory_clone));
+  }
+
+  std::string hashNetAgentsList = DynamicTo<LocalDOMWindow>(GetExecutionContext())->GetFrame()->GetHashNetAgents();
+  std::cout << "WHAT DO WE HAVE HERE???? " << hashNetAgentsList << "\n";
+  std::cout << "FOR " << fetch_request_data_->Url().Protocol() << " " << fetch_request_data_->Url().Host() << fetch_request_data_->Url().GetPath() << "\n";
+  std::istringstream f(hashNetAgentsList);
+  if (fetch_request_data_->Url().Protocol() == "hash") {
+    std::string __agent_url;
+    std::getline(f, __agent_url, '\n');
+    std::string _agent_url = __agent_url.replace(__agent_url.find("{{hashFunction}}"), std::string("{{hashFunction}}").size(), fetch_request_data_->Url().Host().Utf8());
+    std::string agent_url = _agent_url.replace(_agent_url.find("{{hashValue}}"), std::string("{{hashvalue}}").size(), fetch_request_data_->Url().GetPath().Utf8().substr(1));
+    std::cout << "SO ITS GONNA BE " << agent_url << "\n";
+    KURL new_url = KURL(String(agent_url));
+    request.SetMode(network::mojom::RequestMode::kNavigate);
+    GURL gurl = GURL(fetch_request_data_->Url().GetString().Utf8());
+    net::SiteForCookies new_site_for_cookies = net::SiteForCookies::FromUrl(gurl);
+    std::unique_ptr<ResourceRequest> new_request = request.CreateRedirectRequest(new_url, "GET", new_site_for_cookies, "", network::mojom::ReferrerPolicy::kNever, request.GetSkipServiceWorker());
+    std::cout << "WE GONNA SET ORIGIN: " << SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString())->ToString() << "\n";
+    scoped_refptr<SecurityOrigin> origin = SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString());
+    new_request->SetRequestorOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
+    new_request->SetTopFrameOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
+    // new_request->SetIsolatedWorldOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
+    new_request->SetReferrerString(fetch_request_data_->Url().GetString());
+    new_request->ClearHTTPOrigin();
+    new_request->SetHTTPOrigin(origin.get());
+
+    threadable_loader_ = MakeGarbageCollected<ThreadableLoader>(
+      *execution_context_, this, resource_loader_options);
+    threadable_loader_->Start(std::move(*new_request));
+    return;
   }
 
   threadable_loader_ = MakeGarbageCollected<ThreadableLoader>(

@@ -268,6 +268,12 @@ Settings* Frame::GetSettings() const {
   return nullptr;
 }
 
+std::string Frame::GetHashNetAgents() {
+  Settings* settings = GetSettings();
+  std::string hashNetAgentsList = settings->GetHashNetAgentsList().Utf8();
+  return hashNetAgentsList;
+}
+
 WindowProxy* Frame::GetWindowProxy(DOMWrapperWorld& world) {
   return window_proxy_manager_->GetWindowProxy(world);
 }

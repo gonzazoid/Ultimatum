@@ -91,6 +91,7 @@ AutocompleteMatch VerbatimMatchForInput(AutocompleteProvider* provider,
         client->GetTemplateURLService()->GetDefaultSearchProvider();
     match.allowed_to_be_default_match =
         (input.type() == metrics::OmniboxInputType::URL) ||
+        destination_url.SchemeIs("hash") ||
         !has_default_search_provider;
     // NOTE: Don't set match.inline_autocompletion to something non-empty here;
     // it's surprising and annoying.

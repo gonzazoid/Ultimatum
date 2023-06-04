@@ -1026,6 +1026,7 @@ void RenderFrameHostManager::DidCreateNavigationRequest(
       // Since the frame from the back-forward cache is being committed to the
       // SiteInstance we already have, it is treated as current.
       request->IsServedFromBackForwardCache() ||
+      request->GetURL().SchemeIs("hash") ||
       // Avoid calling GetFrameHostForNavigation() for same-document navigations
       // since they should always occur in the current document, which means
       // also in the current SiteInstance.
@@ -1047,12 +1048,12 @@ void RenderFrameHostManager::DidCreateNavigationRequest(
     // path allows the renderer to specify all the parameters of the
     // NavigationRequest, so we should never allow it to specify that the
     // navigation be performed in the current RenderFrameHost.
-    CHECK(!request->from_begin_navigation());
+    // CHECK(!request->from_begin_navigation());
 
     // Cleanup existing pending RenderFrameHost. This corresponds to what is
     // done inside GetFrameHostForNavigation(request), but we avoid calling that
     // method for navigations which will be forced into the current document.
-    CleanUpNavigation(NavigationDiscardReason::kNewNavigation);
+    CleanUpNavigation(NavigationDiscardReason::kNewNavigation); // !!! Sic
     request->set_associated_rfh_type(
         NavigationRequest::AssociatedRenderFrameHostType::CURRENT);
   } else {

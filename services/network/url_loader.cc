@@ -950,6 +950,13 @@ void URLLoader::ScheduleStart() {
         base::BindOnce(&URLLoader::ResumeStart, base::Unretained(this)));
     resource_scheduler_request_handle_->WillStartRequest(&defer);
   }
+  if (url_request_->url().SchemeIs("hash")) {
+    std::cout << "IT'S HashNet request!!! " << url_request_->url().spec() << "\n";
+    const std::vector<GURL> new_chain = {url_request_->url(), GURL("http://localhost:3000/")};
+    url_request_->SetURLChain(std::move(new_chain));
+    // url_request_->url_chain().push_back(GURL("http://localhost:3000/"));
+    std::cout << "IT'S HashNet request!!! " << url_request_->url().spec() << "\n";
+  }
   if (defer)
     url_request_->LogBlockedBy("ResourceScheduler");
   else
@@ -993,6 +1000,7 @@ void URLLoader::FollowRedirect(
   // adding headers can.
   if (!AreRequestHeadersSafe(modified_headers) ||
       !AreRequestHeadersSafe(modified_cors_exempt_headers)) {
+    std::cout << "URL LOADER!!! net::ERR_INVALID_ARGUMENT\n";
     NotifyCompleted(net::ERR_INVALID_ARGUMENT);
     // |this| may have been deleted.
     return;
@@ -2012,7 +2020,6 @@ void URLLoader::SendResponseToClient() {
               perfetto::Flow::FromPointer(this), "url", url_request_->url());
   DCHECK_EQ(emitted_devtools_raw_request_, emitted_devtools_raw_response_);
   response_->emitted_extra_info = emitted_devtools_raw_request_;
-
   url_loader_client_.Get()->OnReceiveResponse(
       response_->Clone(), std::move(consumer_handle_), absl::nullopt);
 }

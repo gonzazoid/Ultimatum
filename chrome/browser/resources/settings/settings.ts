@@ -15,6 +15,7 @@ export {CrToolbarElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_too
 export {CrToolbarSearchFieldElement} from 'chrome://resources/cr_elements/cr_toolbar/cr_toolbar_search_field.js';
 export {PluralStringProxyImpl as SettingsPluralStringProxyImpl} from 'chrome://resources/js/plural_string_proxy.js';
 export {SettingsAboutPageElement} from './about_page/about_page.js';
+export {HashNetPageElement} from './hashnet_page/hashnet_page.js';
 export {AboutPageBrowserProxy, AboutPageBrowserProxyImpl, UpdateStatus} from './about_page/about_page_browser_proxy.js';
 // <if expr="_google_chrome and is_macosx">
 export {PromoteUpdaterStatus} from './about_page/about_page_browser_proxy.js';

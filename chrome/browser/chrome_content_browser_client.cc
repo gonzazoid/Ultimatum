@@ -3760,6 +3760,8 @@ void ChromeContentBrowserClient::OverrideWebkitPrefs(
   if (!prefs->GetBoolean(prefs::kWebKitJavascriptEnabled))
     web_prefs->javascript_enabled = false;
 
+  web_prefs->hash_net_agents_list = prefs->GetString(prefs::kHashNetAgentsList);
+
   if (!prefs->GetBoolean(prefs::kWebKitWebSecurityEnabled))
     web_prefs->web_security_enabled = false;
 

@@ -46,6 +46,7 @@ struct SchemeRegistry {
   std::vector<SchemeWithType> standard_schemes = {
       {kHttpsScheme, SCHEME_WITH_HOST_PORT_AND_USER_INFORMATION},
       {kHttpScheme, SCHEME_WITH_HOST_PORT_AND_USER_INFORMATION},
+      {kHashNetScheme, SCHEME_WITH_HOST},
       // Yes, file URLs can have a hostname, so file URLs should be handled as
       // "standard". File URLs never have a port as specified by the SchemeType
       // field.  Unlike other SCHEME_WITH_HOST schemes, the 'host' in a file
@@ -95,6 +96,7 @@ struct SchemeRegistry {
   std::vector<std::string> cors_enabled_schemes = {
       kHttpsScheme,
       kHttpScheme,
+      kHashNetScheme,
       kDataScheme,
   };
 

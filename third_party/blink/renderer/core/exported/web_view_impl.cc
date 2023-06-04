@@ -33,6 +33,8 @@
 #include <memory>
 #include <utility>
 
+#include <iostream>
+
 #include "base/command_line.h"
 #include "base/debug/crash_logging.h"
 #include "base/debug/dump_without_crashing.h"
@@ -228,6 +230,8 @@ static const float leftBoxRatio = 0.3f;
 static const int caretPadding = 10;
 
 namespace blink {
+
+class WebString;
 
 using mojom::blink::EffectiveConnectionType;
 
@@ -1456,6 +1460,9 @@ void WebViewImpl::PaintContent(cc::PaintCanvas* canvas, const gfx::Rect& rect) {
 // static
 void WebView::ApplyWebPreferences(const web_pref::WebPreferences& prefs,
                                   WebView* web_view) {
+
+  std::cout << "APPLY WEB PREFERENCES!!! " << prefs.hash_net_agents_list << "\n";
+
   WebViewImpl* web_view_impl = To<WebViewImpl>(web_view);
   WebSettings* settings = web_view->GetSettings();
   ApplyFontsFromMap(prefs.standard_font_family_map,
@@ -1479,6 +1486,7 @@ void WebView::ApplyWebPreferences(const web_pref::WebPreferences& prefs,
   settings->SetDefaultTextEncodingName(
       WebString::FromASCII(prefs.default_encoding));
   settings->SetJavaScriptEnabled(prefs.javascript_enabled);
+  settings->SetHashNetAgentsList(WebString::FromUTF8(prefs.hash_net_agents_list));
   settings->SetWebSecurityEnabled(prefs.web_security_enabled);
   settings->SetLoadsImagesAutomatically(prefs.loads_images_automatically);
   settings->SetImagesEnabled(prefs.images_enabled);

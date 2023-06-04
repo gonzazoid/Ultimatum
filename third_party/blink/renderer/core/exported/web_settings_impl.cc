@@ -176,6 +176,10 @@ void WebSettingsImpl::SetJavaScriptEnabled(bool enabled) {
   dev_tools_emulator_->SetScriptEnabled(enabled);
 }
 
+void WebSettingsImpl::SetHashNetAgentsList(const WebString agentsList) {
+  settings_->SetHashNetAgentsList((String)agentsList);
+}
+
 void WebSettingsImpl::SetWebSecurityEnabled(bool enabled) {
   settings_->SetWebSecurityEnabled(enabled);
 }

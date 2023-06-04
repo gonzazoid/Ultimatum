@@ -44,7 +44,10 @@
       name: "defaultTextEncodingName",
       type: "String",
     },
-
+    {
+      name: "hashNetAgentsList",
+      type: "String",
+    },
     // Do not hide chars typed in password fields immediately, but let the last char stay
     // visible for N seconds, configured by the passwordEchoDurationInSeconds setting
     // FIXME: Enable automatically if passwordEchoDurationInSeconds is set to a positive value.

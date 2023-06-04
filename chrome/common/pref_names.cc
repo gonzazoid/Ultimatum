@@ -20,6 +20,9 @@ namespace prefs {
 // *************** PROFILE PREFS ***************
 // These are attached to the user profile
 
+const char kHashNetOn[] = "settings.hashnet.on";
+const char kHashNetAgentsList[] = "settings.hashnet.agents_list";
+
 // A bool pref that keeps whether the child status for this profile was already
 // successfully checked via ChildAccountService.
 const char kChildAccountStatusKnown[] = "child_account_status_known";

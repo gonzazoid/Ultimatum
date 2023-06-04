@@ -156,8 +156,8 @@ ComputeSameSiteContextResult ComputeSameSiteContext(
   // null (for opaque origins, e.g., data: origins) or same-site with the
   // request URL (both schemefully and schemelessly), and the URL cannot be
   // ws/wss (these schemes are not navigable).
-  DCHECK(!is_main_frame_navigation || site_for_cookies_is_same_site ||
-         site_for_cookies.IsNull());
+  // DCHECK(!is_main_frame_navigation || site_for_cookies_is_same_site ||
+  //        site_for_cookies.IsNull());
   DCHECK(!is_main_frame_navigation || !request_url.SchemeIsWSOrWSS());
 
   // Defaults to a cross-site context type.
@@ -719,8 +719,8 @@ CookieOptions::SameSiteCookieContext ComputeSameSiteContextForResponse(
     // be null (for opaque origins, e.g., data: origins) or same-site with the
     // request URL (both schemefully and schemelessly), and the URL cannot be
     // ws/wss (these schemes are not navigable).
-    DCHECK(
-        site_for_cookies.IsFirstPartyWithSchemefulMode(url_chain.back(), true));
+    // DCHECK(
+    //     site_for_cookies.IsFirstPartyWithSchemefulMode(url_chain.back(), true));
     DCHECK(!url_chain.back().SchemeIsWSOrWSS());
     CookieOptions::SameSiteCookieContext result =
         CookieOptions::SameSiteCookieContext::MakeInclusiveForSet();

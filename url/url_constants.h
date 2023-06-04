@@ -42,6 +42,8 @@ COMPONENT_EXPORT(URL) extern const char kHttpScheme[];
 COMPONENT_EXPORT(URL) extern const char16_t kHttpScheme16[];
 COMPONENT_EXPORT(URL) extern const char kHttpsScheme[];
 COMPONENT_EXPORT(URL) extern const char16_t kHttpsScheme16[];
+COMPONENT_EXPORT(URL) extern const char kHashNetScheme[];
+COMPONENT_EXPORT(URL) extern const char16_t kHashNetScheme16[];
 COMPONENT_EXPORT(URL) extern const char kJavaScriptScheme[];
 COMPONENT_EXPORT(URL) extern const char16_t kJavaScriptScheme16[];
 COMPONENT_EXPORT(URL) extern const char kMailToScheme[];
