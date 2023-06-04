@@ -300,6 +300,11 @@
         You're viewing a secure Chrome page
       </message>
 
+      <!-- HashNet Page Info -->
+      <message name="IDS_PAGE_INFO_HASH_NET_PAGE" desc="Message to display in the page info bubble when the page you are on is a hash:// .">
+        You're viewing a secure HashNet page
+      </message>
+
       <!-- Session Crash -->
       <message name="IDS_SESSION_CRASHED_VIEW_MESSAGE" desc="Message shown when the last session didn't exit cleanly.">
         Chrome didn't shut down correctly.
