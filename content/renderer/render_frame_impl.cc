@@ -2662,7 +2662,21 @@ void RenderFrameImpl::CommitNavigation(
 
   if (common_params->url.SchemeIs(url::kHashNetScheme)) {
     std::cout << "STATIC RESPONSE!!!\n";
-    std::string bootstrap = "<div>Hello World??? <a href=\"hash://sha/5678-098-\">first sha link ever!!!</a></div>";
+    std::string bootstrap = "<html>\
+			     <head></head>\
+			     <body>\
+                               <script>\
+                                 const load = async () => {\
+                                   const url = window.location.toString();\
+                                   const response = await fetch(url);\
+                                   const body = await response.text();\
+                                   document.open();\
+                                   document.write(body);\
+                                   document.close();\
+				 };\
+                                 load();\
+			       </script>\
+			     </body></html>";
     WebNavigationParams::FillStaticResponse(navigation_params.get(),
                                             WebString::FromUTF8("text/html"),
                                             WebString::FromUTF8("UTF-8"), bootstrap);
