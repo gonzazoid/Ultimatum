@@ -83,6 +83,7 @@
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+#include "third_party/blink/renderer/platform/wtf/text/base64.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 #include "v8/include/v8.h"
@@ -852,6 +853,14 @@ void FetchManager::Loader::PerformHTTPFetch() {
   std::cout << "FOR " << fetch_request_data_->Url().Protocol() << " " << fetch_request_data_->Url().Host() << fetch_request_data_->Url().GetPath() << "\n";
   std::istringstream f(hashNetAgentsList);
   if (fetch_request_data_->Url().Protocol() == "hash") {
+    auto hexHash = fetch_request_data_->Url().GetPath().Utf8().substr(1);
+    std::array<uint8_t, 64> rawData = {{}};
+    auto binHash = base::make_span(rawData.data(), 64);
+    bool success = base::HexStringToSpan(hexHash, binHash);
+    std::cout << "SUCCESS??? " << success << " " << binHash.size() << "\n"; // TODO
+    String base64Hash = Base64Encode(binHash);
+    std::string integrity = base::StringPrintf("%s-%s", fetch_request_data_->Url().Host().Utf8().c_str(), base64Hash.Utf8().c_str());
+    fetch_request_data_->SetIntegrity(String(integrity));
     std::string __agent_url;
     std::getline(f, __agent_url, '\n');
     std::string _agent_url = __agent_url.replace(__agent_url.find("{{hashFunction}}"), std::string("{{hashFunction}}").size(), fetch_request_data_->Url().Host().Utf8());
