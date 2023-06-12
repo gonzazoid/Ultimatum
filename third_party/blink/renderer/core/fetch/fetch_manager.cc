@@ -228,7 +228,7 @@ class FetchManager::Loader final
         if (check_result) {
           updater_->Update(MakeGarbageCollected<FormDataBytesConsumer>(
               buffer_.data(), buffer_.size()));
-          loader_->resolver_->Resolve(response_);
+          loader_->resolver_->Resolve(response_); // !!!
           loader_->resolver_.Clear();
           return;
         }
@@ -265,6 +265,68 @@ class FetchManager::Loader final
     bool finished_;
   };
 
+  class HashNetRequestManager final : public GarbageCollected<HashNetRequestManager> {
+   public:
+    HashNetRequestManager(FetchRequestData* fetch_request_data, std::string agentsList)
+        : fetch_request_data(fetch_request_data),
+          attempt_(0),
+          agents_() {
+      std::string url;
+      std::istringstream f(agentsList);
+      while(std::getline(f, url, '\n')) {
+        agents_.push_back(url);
+      }
+    }
+
+    void Trace(Visitor* visitor) const {
+      visitor->Trace(fetch_request_data);
+    }
+
+    std::unique_ptr<ResourceRequest> GetNextRequest(ResourceRequest &request) {
+      auto hexHash = fetch_request_data->Url().GetPath().Utf8().substr(1);
+      std::array<uint8_t, 64> rawData = {{}};
+      auto binHash = base::make_span(rawData.data(), 64);
+      bool success = base::HexStringToSpan(hexHash, binHash);
+      std::cout << "SUCCESS??? " << success << " " << binHash.size() << "\n"; // TODO
+      String base64Hash = Base64Encode(binHash);
+      std::string integrity = base::StringPrintf("%s-%s", fetch_request_data->Url().Host().Utf8().c_str(), base64Hash.Utf8().c_str());
+      fetch_request_data->SetIntegrity(String(integrity));
+      std::string __agent_url = agents_[attempt_];
+      // std::getline(f, __agent_url, '\n');
+      std::string _agent_url = __agent_url.replace(__agent_url.find("{{hashFunction}}"), std::string("{{hashFunction}}").size(), fetch_request_data->Url().Host().Utf8());
+      std::string agent_url = _agent_url.replace(_agent_url.find("{{hashValue}}"), std::string("{{hashvalue}}").size(), fetch_request_data->Url().GetPath().Utf8().substr(1));
+      std::cout << "SO ITS GONNA BE " << agent_url << "\n";
+      KURL new_url = KURL(String(agent_url));
+      // request.SetMode(network::mojom::RequestMode::kNavigate);
+      GURL gurl = GURL(fetch_request_data->Url().GetString().Utf8());
+      net::SiteForCookies new_site_for_cookies = net::SiteForCookies::FromUrl(gurl);
+      std::unique_ptr<ResourceRequest> new_request = request.CreateRedirectRequest(new_url, "GET", new_site_for_cookies, "", network::mojom::ReferrerPolicy::kNever, request.GetSkipServiceWorker());
+      std::cout << "WE GONNA SET ORIGIN: " << SecurityOrigin::CreateFromString(fetch_request_data->Url().GetString())->ToString() << "\n";
+      scoped_refptr<SecurityOrigin> origin = SecurityOrigin::CreateFromString(fetch_request_data->Url().GetString());
+      new_request->SetRequestorOrigin(SecurityOrigin::CreateFromString(fetch_request_data->Url().GetString()));
+      new_request->SetTopFrameOrigin(SecurityOrigin::CreateFromString(fetch_request_data->Url().GetString()));
+      // new_request->SetIsolatedWorldOrigin(SecurityOrigin::CreateFromString(fetch_request_data->Url().GetString()));
+      new_request->SetReferrerString(fetch_request_data->Url().GetString());
+      new_request->ClearHTTPOrigin();
+      new_request->SetHTTPOrigin(origin.get());
+
+      attempt_++;
+
+      return new_request;
+    }
+
+    bool Failed() {
+      failed_++;
+      return agents_.size() == failed_;
+    }
+
+   private:
+    Member<FetchRequestData> fetch_request_data;
+    unsigned int attempt_;
+    unsigned int failed_;
+    std::vector<std::string> agents_;
+  };
+
  private:
   void PerformSchemeFetch();
   void PerformNetworkError(
@@ -293,6 +355,7 @@ class FetchManager::Loader final
   int response_http_status_code_;
   bool response_has_no_store_header_ = false;
   Member<SRIVerifier> integrity_verifier_;
+  Member<HashNetRequestManager> hashnet_manager_;
   scoped_refptr<const DOMWrapperWorld> world_;
   Member<AbortSignal> signal_;
   Member<AbortSignal::AlgorithmHandle> abort_handle_;
@@ -315,6 +378,7 @@ FetchManager::Loader::Loader(ExecutionContext* execution_context,
       finished_(false),
       response_http_status_code_(0),
       integrity_verifier_(nullptr),
+      hashnet_manager_(nullptr),
       world_(std::move(world)),
       signal_(signal),
       abort_handle_(signal->AddAlgorithm(
@@ -344,6 +408,7 @@ void FetchManager::Loader::Trace(Visitor* visitor) const {
   visitor->Trace(threadable_loader_);
   visitor->Trace(place_holder_body_);
   visitor->Trace(integrity_verifier_);
+  visitor->Trace(hashnet_manager_);
   visitor->Trace(signal_);
   visitor->Trace(abort_handle_);
   visitor->Trace(execution_context_);
@@ -473,6 +538,24 @@ void FetchManager::Loader::DidReceiveResponse(
   } else {
     DCHECK(!integrity_verifier_);
     // We have another place holder body for SRI.
+    std::cout << "WE ARE ABOUT TO START INTEGRITY CHECK for " << response.CurrentRequestUrl() << "\n";
+    std::cout << "with " << url_list_.back().GetString() << "\n";
+    if (url_list_.back().ProtocolIs("hash") && response.HttpStatusCode() != 200) {
+      std::cout << "WE SHOULD START NEW REQUEST!!!\n";
+      // Prevent notification
+      auto tmp_fetch_manager = fetch_manager_;
+      auto tmp_execution_context = execution_context_;
+      Dispose();
+      fetch_manager_ = tmp_fetch_manager;
+      execution_context_ = tmp_execution_context;
+
+      // =========================================
+
+      PerformHTTPFetch();
+      return;
+
+      // =========================================
+    }
     PlaceHolderBytesConsumer* verified = place_holder_body_;
     place_holder_body_ = MakeGarbageCollected<PlaceHolderBytesConsumer>();
     BytesConsumer* underlying = place_holder_body_;
@@ -848,38 +931,12 @@ void FetchManager::Loader::PerformHTTPFetch() {
             std::move(factory_clone));
   }
 
-  std::string hashNetAgentsList = DynamicTo<LocalDOMWindow>(GetExecutionContext())->GetFrame()->GetHashNetAgents();
-  std::cout << "WHAT DO WE HAVE HERE???? " << hashNetAgentsList << "\n";
-  std::cout << "FOR " << fetch_request_data_->Url().Protocol() << " " << fetch_request_data_->Url().Host() << fetch_request_data_->Url().GetPath() << "\n";
-  std::istringstream f(hashNetAgentsList);
   if (fetch_request_data_->Url().Protocol() == "hash") {
-    auto hexHash = fetch_request_data_->Url().GetPath().Utf8().substr(1);
-    std::array<uint8_t, 64> rawData = {{}};
-    auto binHash = base::make_span(rawData.data(), 64);
-    bool success = base::HexStringToSpan(hexHash, binHash);
-    std::cout << "SUCCESS??? " << success << " " << binHash.size() << "\n"; // TODO
-    String base64Hash = Base64Encode(binHash);
-    std::string integrity = base::StringPrintf("%s-%s", fetch_request_data_->Url().Host().Utf8().c_str(), base64Hash.Utf8().c_str());
-    fetch_request_data_->SetIntegrity(String(integrity));
-    std::string __agent_url;
-    std::getline(f, __agent_url, '\n');
-    std::string _agent_url = __agent_url.replace(__agent_url.find("{{hashFunction}}"), std::string("{{hashFunction}}").size(), fetch_request_data_->Url().Host().Utf8());
-    std::string agent_url = _agent_url.replace(_agent_url.find("{{hashValue}}"), std::string("{{hashvalue}}").size(), fetch_request_data_->Url().GetPath().Utf8().substr(1));
-    std::cout << "SO ITS GONNA BE " << agent_url << "\n";
-    KURL new_url = KURL(String(agent_url));
-    request.SetMode(network::mojom::RequestMode::kNavigate);
-    GURL gurl = GURL(fetch_request_data_->Url().GetString().Utf8());
-    net::SiteForCookies new_site_for_cookies = net::SiteForCookies::FromUrl(gurl);
-    std::unique_ptr<ResourceRequest> new_request = request.CreateRedirectRequest(new_url, "GET", new_site_for_cookies, "", network::mojom::ReferrerPolicy::kNever, request.GetSkipServiceWorker());
-    std::cout << "WE GONNA SET ORIGIN: " << SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString())->ToString() << "\n";
-    scoped_refptr<SecurityOrigin> origin = SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString());
-    new_request->SetRequestorOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
-    new_request->SetTopFrameOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
-    // new_request->SetIsolatedWorldOrigin(SecurityOrigin::CreateFromString(fetch_request_data_->Url().GetString()));
-    new_request->SetReferrerString(fetch_request_data_->Url().GetString());
-    new_request->ClearHTTPOrigin();
-    new_request->SetHTTPOrigin(origin.get());
-
+    if (!hashnet_manager_) {
+      std::string hashNetAgentsList = DynamicTo<LocalDOMWindow>(GetExecutionContext())->GetFrame()->GetHashNetAgents();
+      hashnet_manager_ = MakeGarbageCollected<HashNetRequestManager>(fetch_request_data_, hashNetAgentsList);
+    }
+    auto new_request = hashnet_manager_->GetNextRequest(request);
     threadable_loader_ = MakeGarbageCollected<ThreadableLoader>(
       *execution_context_, this, resource_loader_options);
     threadable_loader_->Start(std::move(*new_request));
@@ -925,6 +982,11 @@ void FetchManager::Loader::Failed(
     DOMException* dom_exception,
     absl::optional<String> devtools_request_id,
     absl::optional<base::UnguessableToken> issue_id) {
+  if (hashnet_manager_) {
+    if (!hashnet_manager_->Failed()) {
+      return;
+    }
+  }
   if (failed_ || finished_)
     return;
   failed_ = true;
