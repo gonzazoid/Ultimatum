@@ -5,6 +5,7 @@
 #include "net/url_request/url_request_job.h"
 
 #include <utility>
+#include <iostream>
 
 #include "base/bind.h"
 #include "base/callback_helpers.h"
@@ -414,6 +415,31 @@ void URLRequestJob::NotifyHeadersComplete() {
   GetResponseInfo(&request_->response_info_);
 
   request_->OnHeadersComplete();
+
+  std::cout << "URLRequestJob::NotifyHeadersComplete before request_->OnHeadersComplete();\n";
+  std::cout << "URLRequest::NotifyHeadersComplete " << request_->original_url().spec() << "\n";
+  std::cout << "URLRequest::NotifyHeadersComplete " << this->GetResponseCode() << "\n";
+  if (request_->IsHashNetRequest()) {
+    if (this->GetResponseCode() == 404) {
+      auto* headers = request_->response_headers();
+      std::cout << "URL REQUEST OnHeadersComplete\n";
+      // status_ = 307;
+      // is_redirecting_ = true;
+      std::string new_location = request_->hash_net_request_manager->GetNextHashNetAgentRequestUrl(request_->original_url());
+      if (new_location != "") {
+        std::string status_line = "HTTP/1.1 307 Temporary Redirect";
+        if (!headers) {
+          std::cout << "URLRequestJob::NotifyHeadersComplete no headers\n";
+        } else {
+          headers->ReplaceStatusLine(status_line); // set response status
+          headers->SetHeader("Location", new_location); // set location
+          std::cout << "NEW LOCATION!!! " << new_location << "\n";
+        }
+      } else {
+        // request_->hash_net_request_manager->Reset();
+      }
+    }
+  }
 
   GURL new_location;
   int http_status_code;

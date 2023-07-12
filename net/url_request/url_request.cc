@@ -5,6 +5,7 @@
 #include "net/url_request/url_request.h"
 
 #include <utility>
+#include <iostream>
 
 #include "base/bind.h"
 #include "base/callback.h"
@@ -137,6 +138,37 @@ NetLogWithSource CreateNetLogWithSource(
 }
 
 }  // namespace
+
+///////////////////////////////////////////////////////////////////////////////
+// URLRequest::HashNetRequestManager
+URLRequest::HashNetRequestManager::HashNetRequestManager(std::string agentsList)
+    : attempt_(0),
+      agents_() {
+  std::string url;
+  std::istringstream f(agentsList);
+  while(std::getline(f, url, '\n')) {
+    agents_.push_back(url);
+  }
+}
+
+URLRequest::HashNetRequestManager::~HashNetRequestManager() = default;
+
+bool URLRequest::HashNetRequestManager::Failed() {
+  failed_++;
+  return agents_.size() == failed_;
+}
+
+std::string URLRequest::HashNetRequestManager::GetNextHashNetAgentRequestUrl(GURL hash_net_url) {
+  if(attempt_ == agents_.size()) return "";
+
+  std::string __agent_url = agents_[attempt_];
+  attempt_++;
+
+  std::string _agent_url = __agent_url.replace(__agent_url.find("{{hashFunction}}"), std::string("{{hashFunction}}").size(), hash_net_url.host());
+  std::string agent_url = _agent_url.replace(_agent_url.find("{{hashValue}}"), std::string("{{hashvalue}}").size(), hash_net_url.path().substr(1));
+  std::cout << "url loader factory SO ITS GONNA BE " << agent_url << "\n";
+  return agent_url;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // URLRequest::Delegate
@@ -455,12 +487,12 @@ void URLRequest::SetDefaultCookiePolicyToBlock() {
 void URLRequest::SetURLChain(const std::vector<GURL>& url_chain) {
   DCHECK(!job_);
   DCHECK(!is_pending_);
-  DCHECK_EQ(url_chain_.size(), 1u);
-
-  if (url().SchemeIs("hash")) {
+  if (url().SchemeIs("hash") || (url_chain.size() > 0u && url_chain[0].SchemeIs("hash"))) { // first condition has to be removed
     url_chain_ = url_chain;
     return;
   }
+
+  DCHECK_EQ(url_chain_.size(), 1u);
 
   if (url_chain.size() < 2)
     return;
@@ -597,6 +629,13 @@ URLRequest::URLRequest(const GURL& url,
       traffic_annotation_(traffic_annotation) {
   // Sanity check out environment.
   DCHECK(base::ThreadTaskRunnerHandle::IsSet());
+  std::cout << "URL REQUEST FOR " << url.spec() << "\n";
+  hash_net_request_manager = std::make_unique<HashNetRequestManager>(context_->GetHashNetAgentsList());
+  if (url.SchemeIs("hash")) {
+    std::string new_location = hash_net_request_manager->GetNextHashNetAgentRequestUrl(url);
+    GURL new_url = GURL(new_location);
+    url_chain_.push_back(new_url);
+  }
 
   context->url_requests()->insert(this);
   net_log_.BeginEvent(NetLogEventType::REQUEST_ALIVE, [&] {
@@ -1241,6 +1280,10 @@ void URLRequest::SetEarlyResponseHeadersCallback(
   DCHECK(!job_.get());
   DCHECK(early_response_headers_callback_.is_null());
   early_response_headers_callback_ = std::move(callback);
+}
+
+bool URLRequest::IsHashNetRequest() const {
+  return original_url().SchemeIs("hash"); // TODO if not - there can be redirects to hash:// link
 }
 
 void URLRequest::set_socket_tag(const SocketTag& socket_tag) {

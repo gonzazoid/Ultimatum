@@ -22,6 +22,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include <iostream>
+
 #include "third_party/blink/renderer/core/script/script_loader.h"
 
 #include "base/feature_list.h"
@@ -659,7 +661,7 @@ PendingScript* ScriptLoader::PrepareScript(
   // the empty string.</spec>
   String integrity_attr = element_->IntegrityAttributeValue();
   IntegrityMetadataSet integrity_metadata;
-  if (!integrity_attr.empty()) {
+  if (!integrity_attr.empty()) { // !!!
     SubresourceIntegrity::IntegrityFeatures integrity_features =
         SubresourceIntegrityHelper::GetFeatures(
             element_->GetExecutionContext());
@@ -794,12 +796,14 @@ PendingScript* ScriptLoader::PrepareScript(
     // event named error at el, and return. Otherwise, let url be the resulting
     // URL record.</spec>
     if (!url.IsValid()) {
+      // std::cout << "NOT VALID URL!!! " << url.GetString() << "\n";
       element_document.GetTaskRunner(TaskType::kDOMManipulation)
           ->PostTask(FROM_HERE,
                      WTF::BindOnce(&ScriptElementBase::DispatchErrorEvent,
                                    WrapPersistent(element_.Get())));
       return nullptr;
     }
+    // std::cout << "VALID URL!!! " << url.GetString() << "\n"; // We are getting here
 
     // TODO(apaseltiner): Propagate the element instead of passing nullptr.
     if (element_->HasAttributionsrcAttribute() &&

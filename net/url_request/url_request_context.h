@@ -100,6 +100,9 @@ class NET_EXPORT URLRequestContext final {
       URLRequest::Delegate* delegate) const;
 #endif
 
+  void SetHashNetAgentsList(const std::string&);
+  std::string GetHashNetAgentsList() const;
+
   // `traffic_annotation` is metadata about the network traffic send via this
   // URLRequest, see net::DefineNetworkTrafficAnnotation. Note that:
   // - net provides the API for tagging requests with an opaque identifier.
@@ -319,6 +322,8 @@ class NET_EXPORT URLRequestContext final {
   std::unique_ptr<SCTAuditingDelegate> sct_auditing_delegate_;
   std::unique_ptr<QuicContext> quic_context_;
   std::unique_ptr<ClientSocketFactory> client_socket_factory_;
+
+  std::string hash_net_agents_;
 
   // The storage duplication for URLRequestJobFactory is needed because of
   // SetJobFactoryForTesting. Once this method is removable, we can only store a

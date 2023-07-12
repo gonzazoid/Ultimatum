@@ -129,7 +129,7 @@ class ProfileNetworkContextService
   // Forwards changes to |pref_accept_language_| to the NetworkContext, after
   // formatting them as appropriate.
   void UpdateAcceptLanguage();
-
+  void UpdateHashNetAgentsList();
   // Computes appropriate value of Accept-Language header based on
   // |pref_accept_language_|
   std::string ComputeAcceptLanguage() const;
@@ -203,6 +203,7 @@ class ProfileNetworkContextService
   BooleanPrefMember enable_referrers_;
   IntegerPrefMember preload_allowed_;
   PrefChangeRegistrar pref_change_registrar_;
+  StringPrefMember pref_hash_net_agents_list_;
 
   scoped_refptr<content_settings::CookieSettings> cookie_settings_;
   base::ScopedObservation<content_settings::CookieSettings,

@@ -91,6 +91,20 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // https://fetch.spec.whatwg.org/#http-redirect-fetch
   static constexpr int kMaxRedirects = 20;
 
+  // HashNet manager
+  class HashNetRequestManager {
+   public:
+    HashNetRequestManager(std::string agentsList);
+    ~HashNetRequestManager();
+    std::string GetNextHashNetAgentRequestUrl(GURL hash_net_url);
+    bool Failed();
+
+   private:
+    unsigned int attempt_;
+    unsigned int failed_;
+    std::vector<std::string> agents_;
+  };
+
   // The delegate's methods are called from the message loop of the thread
   // on which the request's Start() method is called. See above for the
   // ordering of callbacks.
@@ -931,6 +945,9 @@ class NET_EXPORT URLRequest : public base::SupportsUserData {
   // NetworkAnonymiationKey.
   net::IsolationInfo CreateIsolationInfoFromNetworkAnonymizationKey(
       const NetworkAnonymizationKey& network_anonymization_key);
+
+  bool IsHashNetRequest() const;
+  std::unique_ptr<net::URLRequest::HashNetRequestManager> hash_net_request_manager;
 
   // Contextual information used for this request. Cannot be NULL. This contains
   // most of the dependencies which are shared between requests (disk cache,

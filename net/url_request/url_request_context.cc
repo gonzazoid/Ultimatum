@@ -132,6 +132,14 @@ std::unique_ptr<URLRequest> URLRequestContext::CreateRequest(
                                          net_log_source));
 }
 
+void URLRequestContext::SetHashNetAgentsList(const std::string& new_hash_net_agents) {
+  hash_net_agents_ = new_hash_net_agents;
+}
+
+std::string URLRequestContext::GetHashNetAgentsList() const {
+  return hash_net_agents_;
+}
+
 void URLRequestContext::AssertNoURLRequests() const {
   int num_requests = url_requests_->size();
   if (num_requests != 0) {

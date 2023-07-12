@@ -253,6 +253,15 @@ ProfileNetworkContextService::ProfileNetworkContextService(Profile* profile)
       language::prefs::kAcceptLanguages, profile_prefs,
       base::BindRepeating(&ProfileNetworkContextService::UpdateAcceptLanguage,
                           base::Unretained(this)));
+
+  std::string agents_list = profile_prefs->GetString(prefs::kHashNetAgentsList);
+  pref_hash_net_agents_list_.Init(
+      prefs::kHashNetAgentsList, profile_prefs,
+      base::BindRepeating(&ProfileNetworkContextService::UpdateHashNetAgentsList,
+                          base::Unretained(this)));
+  pref_hash_net_agents_list_.SetValue(agents_list);
+  // g_browser_process->system_network_context_manager()->GetContext()->SetHashNetAgentsList(agents_list);
+
   enable_referrers_.Init(
       prefs::kEnableReferrers, profile_prefs,
       base::BindRepeating(&ProfileNetworkContextService::UpdateReferrersEnabled,
@@ -397,6 +406,18 @@ void ProfileNetworkContextService::UpdateAcceptLanguage() {
       },
       ComputeAcceptLanguage()));
 }
+
+void ProfileNetworkContextService::UpdateHashNetAgentsList() {
+  profile_->ForEachStoragePartition(base::BindRepeating(
+      [](const std::string& agents_list,
+         content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetAgentsList(
+            agents_list);
+      },
+      pref_hash_net_agents_list_.GetValue()));
+  g_browser_process->system_network_context_manager()->GetContext()->SetHashNetAgentsList(pref_hash_net_agents_list_.GetValue());
+}
+
 
 void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
     bool block_third_party_cookies) {
@@ -767,6 +788,7 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
       ->ConfigureDefaultNetworkContextParams(network_context_params);
 
   network_context_params->accept_language = ComputeAcceptLanguage();
+  network_context_params->hash_net_agents_list = profile_->GetPrefs()->GetString(prefs::kHashNetAgentsList);
   network_context_params->enable_referrers = enable_referrers_.GetValue();
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
