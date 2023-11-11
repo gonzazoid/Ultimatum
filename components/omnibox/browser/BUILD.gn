@@ -50,6 +50,7 @@ aggregate_vector_icons("omnibox_vector_icons") {
     "drive_video.icon",
     "extension_app.icon",
     "find_in_page.icon",
+    "hash_net.icon",
     "http.icon",
     "https_valid_in_chip.icon",
     "incognito.icon",

@@ -66,6 +66,10 @@ void RegisterBrowserUserPrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(prefs::kShowHomeButton, false,
                                 GetHomeButtonAndHomePageIsNewTabPageFlags());
 
+  registry->RegisterBooleanPref(prefs::kHashNetOn, true);
+  registry->RegisterStringPref(prefs::kHashNetAgentsList, "");
+  registry->RegisterStringPref(prefs::kHashNetPrivateKey, "");
+
   registry->RegisterInt64Pref(prefs::kDefaultBrowserLastDeclined, 0);
   bool reset_check_default = false;
 #if BUILDFLAG(IS_WIN)

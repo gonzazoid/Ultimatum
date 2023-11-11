@@ -17,6 +17,43 @@ namespace crypto {
 
 namespace {
 
+class SecureHashSHA1 : public SecureHash {
+ public:
+  SecureHashSHA1() {
+    // Ensure that CPU features detection is performed before using
+    // BoringSSL. This will enable hw accelerated implementations.
+    EnsureOpenSSLInit();
+    SHA1_Init(&ctx_);
+  }
+
+  SecureHashSHA1(const SecureHashSHA1& other) {
+    memcpy(&ctx_, &other.ctx_, sizeof(ctx_));
+  }
+
+  ~SecureHashSHA1() override {
+    OPENSSL_cleanse(&ctx_, sizeof(ctx_));
+  }
+
+  void Update(const void* input, size_t len) override {
+    SHA1_Update(&ctx_, static_cast<const unsigned char*>(input), len);
+  }
+
+  void Finish(void* output, size_t len) override {
+    ScopedOpenSSLSafeSizeBuffer<SHA_DIGEST_LENGTH> result(
+        static_cast<unsigned char*>(output), len);
+    SHA1_Final(result.safe_buffer(), &ctx_);
+  }
+
+  std::unique_ptr<SecureHash> Clone() const override {
+    return std::make_unique<SecureHashSHA1>(*this);
+  }
+
+  size_t GetHashLength() const override { return SHA_DIGEST_LENGTH; }
+
+ private:
+  SHA_CTX ctx_;
+};
+
 class SecureHashSHA256 : public SecureHash {
  public:
   SecureHashSHA256() {
@@ -93,6 +130,8 @@ class SecureHashSHA512 : public SecureHash {
 
 std::unique_ptr<SecureHash> SecureHash::Create(Algorithm algorithm) {
   switch (algorithm) {
+    case SHA1:
+      return std::make_unique<SecureHashSHA1>();
     case SHA256:
       return std::make_unique<SecureHashSHA256>();
     case SHA512:

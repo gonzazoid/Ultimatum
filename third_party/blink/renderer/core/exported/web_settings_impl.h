@@ -108,6 +108,7 @@ class CORE_EXPORT WebSettingsImpl final : public WebSettings {
   void SetInlineTextBoxAccessibilityEnabled(bool) override;
   void SetJavaScriptCanAccessClipboard(bool) override;
   void SetJavaScriptEnabled(bool) override;
+  void SetHashNetPublicKey(const WebString) override;
   void SetLoadsImagesAutomatically(bool) override;
   void SetLoadWithOverviewMode(bool) override;
   void SetShouldReuseGlobalForUnownedMainFrame(bool) override;

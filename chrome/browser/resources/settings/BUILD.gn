@@ -107,6 +107,7 @@ build_webui("build") {
     "a11y_page/a11y_page.ts",
     "a11y_page/live_caption_section.ts",
     "about_page/about_page.ts",
+    "hashnet_page/hashnet_page.ts",
     "appearance_page/appearance_fonts_page.ts",
     "appearance_page/appearance_page.ts",
     "appearance_page/home_url_input.ts",

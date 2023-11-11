@@ -176,6 +176,10 @@ void WebSettingsImpl::SetJavaScriptEnabled(bool enabled) {
   dev_tools_emulator_->SetScriptEnabled(enabled);
 }
 
+void WebSettingsImpl::SetHashNetPublicKey(const WebString publicKey) {
+  settings_->SetHashNetPublicKey((String)publicKey);
+}
+
 void WebSettingsImpl::SetWebSecurityEnabled(bool enabled) {
   settings_->SetWebSecurityEnabled(enabled);
 }

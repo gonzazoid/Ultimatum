@@ -57,6 +57,7 @@ struct BLINK_COMMON_EXPORT WebPreferences {
   std::string default_encoding;
   bool context_menu_on_mouse_up;
   bool javascript_enabled;
+  std::string hash_net_public_key;
   bool web_security_enabled;
   bool loads_images_automatically;
   bool images_enabled;

@@ -253,6 +253,30 @@ ProfileNetworkContextService::ProfileNetworkContextService(Profile* profile)
       language::prefs::kAcceptLanguages, profile_prefs,
       base::BindRepeating(&ProfileNetworkContextService::UpdateAcceptLanguage,
                           base::Unretained(this)));
+
+  bool hash_net_on = profile_prefs->GetBoolean(prefs::kHashNetOn);
+  pref_hash_net_on_.Init(
+      prefs::kHashNetOn, profile_prefs,
+      base::BindRepeating(&ProfileNetworkContextService::UpdateHashNetOn,
+                          base::Unretained(this)));
+  pref_hash_net_on_.SetValue(hash_net_on);
+
+  std::string agents_list = profile_prefs->GetString(prefs::kHashNetAgentsList);
+  pref_hash_net_agents_list_.Init(
+      prefs::kHashNetAgentsList, profile_prefs,
+      base::BindRepeating(&ProfileNetworkContextService::UpdateHashNetAgentsList,
+                          base::Unretained(this)));
+  pref_hash_net_agents_list_.SetValue(agents_list);
+
+  std::string private_key = profile_prefs->GetString(prefs::kHashNetPrivateKey);
+  pref_hash_net_private_key_.Init(
+      prefs::kHashNetPrivateKey, profile_prefs,
+      base::BindRepeating(&ProfileNetworkContextService::UpdateHashNetPrivateKey,
+                          base::Unretained(this)));
+  pref_hash_net_private_key_.SetValue(private_key);
+
+  // g_browser_process->system_network_context_manager()->GetContext()->SetHashNetAgentsList(agents_list);
+
   enable_referrers_.Init(
       prefs::kEnableReferrers, profile_prefs,
       base::BindRepeating(&ProfileNetworkContextService::UpdateReferrersEnabled,
@@ -396,6 +420,37 @@ void ProfileNetworkContextService::UpdateAcceptLanguage() {
             accept_language);
       },
       ComputeAcceptLanguage()));
+}
+
+void ProfileNetworkContextService::UpdateHashNetOn() {
+  profile_->ForEachStoragePartition(base::BindRepeating(
+      [](const bool hash_net_on,
+         content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetOn(hash_net_on);
+      },
+      pref_hash_net_on_.GetValue()));
+}
+
+void ProfileNetworkContextService::UpdateHashNetAgentsList() {
+  profile_->ForEachStoragePartition(base::BindRepeating(
+      [](const std::string& agents_list,
+         content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetAgentsList(
+            agents_list);
+      },
+      pref_hash_net_agents_list_.GetValue()));
+  // g_browser_process->system_network_context_manager()->GetContext()->SetHashNetAgentsList(pref_hash_net_agents_list_.GetValue());
+}
+
+void ProfileNetworkContextService::UpdateHashNetPrivateKey() {
+  profile_->ForEachStoragePartition(base::BindRepeating(
+      [](const std::string& private_key,
+         content::StoragePartition* storage_partition) {
+        storage_partition->GetNetworkContext()->SetHashNetPrivateKey(
+            private_key);
+      },
+      pref_hash_net_private_key_.GetValue()));
+  g_browser_process->system_network_context_manager()->GetContext()->SetHashNetPrivateKey(pref_hash_net_private_key_.GetValue());
 }
 
 void ProfileNetworkContextService::OnThirdPartyCookieBlockingChanged(
@@ -767,6 +822,11 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
       ->ConfigureDefaultNetworkContextParams(network_context_params);
 
   network_context_params->accept_language = ComputeAcceptLanguage();
+
+  network_context_params->hash_net_on = profile_->GetPrefs()->GetBoolean(prefs::kHashNetOn);
+  network_context_params->hash_net_agents_list = profile_->GetPrefs()->GetString(prefs::kHashNetAgentsList);
+  network_context_params->hash_net_private_key = profile_->GetPrefs()->GetString(prefs::kHashNetPrivateKey);
+
   network_context_params->enable_referrers = enable_referrers_.GetValue();
 
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();

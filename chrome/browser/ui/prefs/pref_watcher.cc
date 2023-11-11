@@ -64,6 +64,9 @@ const char* const kWebPrefsToObserve[] = {
 #else
     prefs::kAccessibilityFocusHighlightEnabled,
 #endif
+    prefs::kHashNetOn,
+    prefs::kHashNetAgentsList,
+    prefs::kHashNetPrivateKey,
 };
 
 const int kWebPrefsToObserveLength = std::size(kWebPrefsToObserve);

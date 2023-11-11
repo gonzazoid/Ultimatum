@@ -188,6 +188,12 @@ const gfx::VectorIcon* ChromeLocationBarModelDelegate::GetVectorIconOverride()
   if (url.SchemeIs(content::kChromeUIScheme))
     return &omnibox::kProductIcon;
 
+  if (url.SchemeIs(url::kHashNetHashScheme))
+    return &omnibox::kHashNetIcon;
+
+  if (url.SchemeIs(url::kHashNetSignedScheme))
+    return &omnibox::kHashNetIcon;
+
   if (url.SchemeIs(extensions::kExtensionScheme))
     return &omnibox::kExtensionAppIcon;
 #endif

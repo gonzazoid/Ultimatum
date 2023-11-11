@@ -652,6 +652,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) URLLoader
 
   mojo::Remote<mojom::AcceptCHFrameObserver> accept_ch_frame_observer_;
 
+  std::unique_ptr<crypto::SecureHash> hash_checker_;
+  bool gather_response_ = false;
+  bool splash_response_ = false;
+  std::vector<std::pair<scoped_refptr<net::IOBuffer>, int>> response_acc_ = {};
+  base::Value::List signed_responses_ = {};
+  size_t current_chunk_ = 0;
+  int current_offset_ = 0;
+  bool IsValidHashNetResponse() const;
+  void StartSignedSplashing();
+  void ReadMoreHashNetHelper();
+
   base::WeakPtrFactory<URLLoader> weak_ptr_factory_{this};
 };
 

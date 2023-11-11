@@ -2076,6 +2076,8 @@ bool NavigationRequest::MaybeStartPrerenderingActivationChecks() {
   if (!blink::features::IsPrerender2Enabled())
     return false;
 
+  if (GetURL().SchemeIsHash() || GetURL().SchemeIsSigned()) return false;
+
   // Find an available prerendered page for this request. If it's found, this
   // request may activate it instead of loading a page via network.
   int candidate_prerender_frame_tree_node_id =

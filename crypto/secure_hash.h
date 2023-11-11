@@ -19,8 +19,10 @@ namespace crypto {
 class CRYPTO_EXPORT SecureHash {
  public:
   enum Algorithm {
+    SHA1,
     SHA256,
     SHA512,
+    NOT_IMPLEMENTED,
   };
 
   SecureHash(const SecureHash&) = delete;

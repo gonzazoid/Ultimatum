@@ -920,6 +920,12 @@ const PrefsUtil::TypedPrefMap& PrefsUtil::GetAllowlistedKeys() {
   // the value in ash can be controlled by extensions.
   (*s_allowlist)[prefs::kAccessibilityFocusHighlightEnabled] =
       settings_api::PrefType::PREF_TYPE_BOOLEAN;
+  (*s_allowlist)[prefs::kHashNetOn] =
+      settings_api::PrefType::PREF_TYPE_BOOLEAN;
+  (*s_allowlist)[prefs::kHashNetAgentsList] =
+      settings_api::PrefType::PREF_TYPE_STRING;
+  (*s_allowlist)[prefs::kHashNetPrivateKey] =
+      settings_api::PrefType::PREF_TYPE_STRING;
 #endif
 
   // Proxy settings.

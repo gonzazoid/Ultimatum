@@ -45,6 +45,7 @@ WebPreferences::WebPreferences()
       context_menu_on_mouse_up(false),
 #endif
       javascript_enabled(true),
+      hash_net_public_key(""),
       web_security_enabled(true),
       loads_images_automatically(true),
       images_enabled(true),

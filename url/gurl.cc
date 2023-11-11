@@ -20,6 +20,14 @@
 #include "url/url_canon_stdstring.h"
 #include "url/url_util.h"
 
+size_t GetHashLength(const std::string& hash_func) {
+  if (hash_func == "sha1") return 40;
+  if (hash_func == "sha256") return 64;
+  if (hash_func == "sha512") return 128;
+
+  return 0;
+}
+
 GURL::GURL() : is_valid_(false) {
 }
 
@@ -371,6 +379,9 @@ bool GURL::SchemeIsCryptographic(base::StringPiece lower_ascii_scheme) {
   DCHECK(base::ToLowerASCII(lower_ascii_scheme) == lower_ascii_scheme);
 
   return lower_ascii_scheme == url::kHttpsScheme ||
+         lower_ascii_scheme == url::kHashNetHashScheme ||
+         lower_ascii_scheme == url::kHashNetSignedScheme ||
+         lower_ascii_scheme == url::kHashNetRelatedScheme ||
          lower_ascii_scheme == url::kWssScheme;
 }
 
@@ -379,6 +390,105 @@ bool GURL::SchemeIsLocal() const {
   // supports it in large part. It should be treated as a local scheme too.
   return SchemeIs(url::kAboutScheme) || SchemeIs(url::kBlobScheme) ||
          SchemeIs(url::kDataScheme) || SchemeIs(url::kFileSystemScheme);
+}
+
+bool GURL::SchemeIsHash() const {
+  return SchemeIs(url::kHashNetHashScheme);
+}
+
+bool GURL::SchemeIsSigned() const {
+  return SchemeIs(url::kHashNetSignedScheme);
+}
+
+bool GURL::SchemeIsRelated() const {
+  return SchemeIs(url::kHashNetRelatedScheme);
+}
+
+bool GURL::SchemeIsHashNetScheme() const {
+  return SchemeIsHash() || SchemeIsSigned() || SchemeIsRelated();
+}
+
+std::string GURL::GetHashFuncName() const {
+  std::string host_ = host();
+  std::string hash_func;
+  std::string delimiter = ".";
+
+  if (SchemeIsHash()) {
+    hash_func = host_;
+  }
+
+  if (SchemeIsSigned()) {
+    auto pos = host_.find(delimiter);
+    if (pos == std::string::npos) return "";
+    hash_func = host_.substr(pos + 1);
+  }
+
+  if (SchemeIsRelated()) {
+    size_t offset = host_.find(delimiter);
+    if (offset == std::string::npos) hash_func = host_;
+    else hash_func = host_.substr(offset + 1);
+  }
+
+  if (hash_func == "sha1") return hash_func;
+  if (hash_func == "sha256") return hash_func;
+  if (hash_func == "sha512") return hash_func;
+
+  return "";
+}
+
+std::string GURL::GetHash() const {
+  if (SchemeIsHash()) {
+    return path().substr(1);
+  }
+  return "";
+}
+
+std::string GURL::GetSignAlgorithm() const {
+  std::string delimiter = ".";
+
+  std::string host_ = host();
+  auto pos = host_.find(delimiter);
+  if (pos == std::string::npos) return "";
+
+  std::string sig_func = host_.substr(0, pos);
+
+  if (sig_func == "secp256k1") return "secp256k1";
+  if (sig_func == "secp256r1") return "secp256r1";
+
+  return "";
+}
+
+bool GURL::IsValidHashNetUrl(const std::string& method) const {
+  // valid hash function
+  std::string hash_func = GetHashFuncName();
+  if (hash_func.empty() && (!SchemeIsSigned() || (SchemeIsSigned() && method != "POST"))) return false;
+
+  // no user information
+  // no query
+  if (!(SchemeIsHash() || SchemeIsSigned() || SchemeIsRelated())) return false;
+
+  // only path, not other parts
+  // what about refs??? do we allow them?
+  // when navigation - why not
+  if (has_username() || has_password() || has_port() || has_query()) return false;
+
+  if (SchemeIsHash()) {
+    // valid hash length
+    size_t hash_length = GetHashLength(hash_func);
+    std::string hash = GetHash();
+    if (hash_length != hash.length()) return false;
+    // only hex symbols => only hash in path
+    if (hash.find_first_not_of("0123456789abcdef") != std::string::npos) return false;
+  }
+
+  if (SchemeIsSigned()) {
+    if (method == "POST") return true;
+    std::string sign_function = GetSignAlgorithm();
+    if (sign_function.empty()) return false;
+    // check public key
+  }
+
+  return true;
 }
 
 int GURL::IntPort() const {

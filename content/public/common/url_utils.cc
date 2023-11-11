@@ -42,6 +42,8 @@ bool IsSavableURL(const GURL& url) {
 bool IsURLHandledByNetworkStack(const GURL& url) {
   // Javascript URLs, srcdoc, schemes that don't load data should not send a
   // request to the network stack.
+  if (url.SchemeIsHash()) return false; // IS USING BY NAVIGATION, FIX AMBIGUITY
+  if (url.SchemeIsSigned()) return false; // IS USING BY NAVIGATION, FIX AMBIGUITY
   if (url.SchemeIs(url::kJavaScriptScheme) || url.is_empty() ||
       url.IsAboutSrcdoc()) {
     return false;

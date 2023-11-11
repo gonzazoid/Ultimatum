@@ -270,6 +270,17 @@ class COMPONENT_EXPORT(URL) GURL {
   // https://fetch.spec.whatwg.org/#local-scheme
   bool SchemeIsLocal() const;
 
+  // Returns true if the scheme is "hash".
+  bool SchemeIsHash() const;
+  bool SchemeIsSigned() const;
+  bool SchemeIsRelated() const;
+  bool SchemeIsHashNetScheme() const;
+
+  std::string GetHashFuncName() const;
+  std::string GetHash() const;
+  std::string GetSignAlgorithm() const;
+  bool IsValidHashNetUrl(const std::string& method) const;
+
   // For most URLs, the "content" is everything after the scheme (skipping the
   // scheme delimiting colon) and before the fragment (skipping the fragment
   // delimiting octothorpe). For javascript URLs the "content" also includes the

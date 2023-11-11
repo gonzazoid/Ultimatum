@@ -240,6 +240,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CorsURLLoader
 
   // Corresponds to the Fetch spec, https://fetch.spec.whatwg.org/.
   bool fetch_cors_flag_ = false;
+  bool is_hash_net_request_ = false;
 
   net::RedirectInfo redirect_info_;
 
