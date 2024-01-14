@@ -1069,6 +1069,7 @@ void URLRequestHttpJob::OnStartCompleted(int result) {
         override_response_headers_ = HttpResponseHeaders::TryToCreate("HTTP/1.1 200 Ok\n\n");
       }
       request()->SetAgentFailed();
+      result = OK;
     }
 
     scoped_refptr<HttpResponseHeaders> headers = GetResponseHeaders();
